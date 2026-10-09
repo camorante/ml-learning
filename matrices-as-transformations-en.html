@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Matrices as transformations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.verdict{display:inline-block;border-radius:999px;padding:1px 9px;font-size:.78rem;font-weight:600;white-space:nowrap}
+.verdict.ok{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.verdict.no{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.sum{font-family:var(--f-mono);font-size:.95rem;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;overflow-x:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
+.mat{display:inline-grid!important;grid-template-columns:auto auto;gap:0 16px;padding:2px 12px!important;border:0!important;border-left:3px solid var(--ink)!important;border-right:3px solid var(--ink)!important;border-radius:9px!important;background:transparent!important;font-family:var(--f-mono);font-size:1.3rem;font-weight:500;font-variant-numeric:tabular-nums;width:fit-content;justify-items:end}
+.mat i{font-style:normal}
+.mat .c1{color:var(--mean)}.mat .c2{color:var(--sample)}
+.cmp{display:grid;gap:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:.92rem}
+.cmp .r{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr);gap:8px;padding:8px 14px;border-top:1px solid var(--line);align-items:center;font-variant-numeric:tabular-nums}
+.cmp .r:first-child{border-top:0;font-family:var(--f-mono);font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.cmp .r span.m{font-family:var(--f-mono)}
+@media (max-width:520px){.cmp .r{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr);padding:8px 10px;font-size:.84rem}.cmp .r>:last-child{grid-column:1/-1}.cmp .r:first-child>:last-child{display:none}}
+.fig.sq svg{max-width:640px;margin:0 auto}
+.msum{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;font-family:var(--f-mono);font-size:.92rem;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.msum .mat{font-size:1rem}
+.msum{overflow-x:auto}
+.msum .grp{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+svg .drag{cursor:grab;touch-action:none}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#en" target="_self">← Main menu</a> · The math under ML · topic 3 · explained with drawings · <a href="matrices-as-transformations-technical-en.html" target="_self">see the technical version</a> · <a href="math-under-ml-en.html" target="_self">all topics</a> · <a href="matrices-como-transformaciones-es.html" target="_self">en español</a></p>
+  <h1>Matrices as transformations</h1>
+  <p class="lede">A matrix looks like a table of numbers, but it is a way to move the whole plane at once: rotate it, stretch it, mirror it, tilt it or flatten it. With four numbers and one simple idea you can understand what it does, when it can be undone, and why a layer of a neural network is almost the same thing.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="situ col">
+    <p class="eyebrow">The setup</p>
+    <p>On the grid there is a <strong>truck</strong> drawn, plus the positions of <strong>five trucks</strong> from the fleet (the dots). We are going to move all of it at once with a <strong>matrix</strong>: a table of four numbers, in two columns of two.</p>
+    <p>The trick to reading it: watch two arrows, <b style="color:var(--mean)">→ one step to the right</b> and <b style="color:var(--sample)">↑ one step up</b>. The <strong>first column</strong> of the matrix says where the → arrow ends up, and the <strong>second column</strong> says where the ↑ arrow ends up. Everything else (the grid, the truck, the dots) moves by following those two arrows.</p>
+  </div>
+  <figure class="fig sq"><svg id="toy" role="img" aria-label="Grid, truck and fleet dots transformed by the matrix"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The light gray grid and the truck with a dashed outline are the <b>before</b>. The bluish grid and the <b style="color:var(--point)">orange</b> truck are the <b>after</b>. The <b style="color:var(--mean)">blue →</b> arrow and the <b style="color:var(--sample)">purple ↑</b> arrow are the two columns of the matrix. The little gray square with side 1 turns into the shaded area: its size tells you how much every area changes.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>First column: where <span style="color:var(--mean)">→</span> ends up</h3>
+      <p>At the start, the blue arrow is one step to the right: (1, 0).</p>
+      <div class="slider"><label for="t-a">Steps to the right <output id="t-a-o"></output></label><input type="range" id="t-a" min="-2" max="2" step="0.1" value="1"></div>
+      <div class="slider"><label for="t-c">Steps up <output id="t-c-o"></output></label><input type="range" id="t-c" min="-2" max="2" step="0.1" value="0"></div>
+    </div>
+    <div class="dec">
+      <h3>Second column: where <span style="color:var(--sample)">↑</span> ends up</h3>
+      <p>At the start, the purple arrow is one step up: (0, 1).</p>
+      <div class="slider"><label for="t-b">Steps to the right <output id="t-b-o"></output></label><input type="range" id="t-b" min="-2" max="2" step="0.1" value="0"></div>
+      <div class="slider"><label for="t-d">Steps up <output id="t-d-o"></output></label><input type="range" id="t-d" min="-2" max="2" step="0.1" value="1"></div>
+    </div>
+    <div class="dec">
+      <h3>Examples to start with</h3>
+      <p>Each button sets the four numbers of a typical transformation.</p>
+      <div class="chips" id="t-pre" role="group" aria-label="Example matrices"></div>
+    </div>
+  </div>
+  <div class="big3 col" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Try this, in order:</strong></p>
+    <ol class="try">
+      <li>With “identity” (→ at (1, 0) and ↑ at (0, 1)) nothing moves. Raise the first number, “steps to the right” of the → arrow, up to 2: the truck stretches sideways and its area doubles.</li>
+      <li>Press “rotate”: the truck turns about 37° without changing shape. The area does not change (× 1).</li>
+      <li>Press “mirror”: the truck faces the other way, as in a mirror. The area factor comes out negative: the minus sign warns you that the figure has been flipped over.</li>
+      <li>Press “flatten”: both arrows point in the same direction and the whole plane collapses onto a line. Area × 0.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">What you just saw</p>
+    <h2>A matrix is a recipe for moving the plane</h2>
+    <p>You moved a whole plane by changing just four numbers. It works because this kind of movement (mathematicians call them <strong>linear transformations</strong>) follows two rules: straight lines stay straight and parallel to each other, and the center (0, 0) does not move. With those rules, as soon as you know where the two arrows → and ↑ end up, you know where any point ends up.</p>
+    <ul>
+      <li>The matrix is written with <strong>the two arrows as columns</strong>: first where → ends up, then where ↑ ends up.</li>
+      <li>The <strong>area factor</strong> (mathematicians call it the <strong>determinant</strong>) says how much every surface grows or shrinks. If it is negative, the figure has also been flipped over. If it is 0, everything has been flattened.</li>
+    </ul>
+    <p>Vectors (the data arrows from <a href="vectors-and-distances-en.html" target="_self">topic 1</a>) were the data; matrices are what you do to the data. The five ideas below explain how it is computed, what is preserved, what happens when you chain several, when it can be undone and what it has to do with neural networks.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 5</p>
+    <h2>Matrix times point: so many steps of one column and so many of the other</h2>
+    <p>Where does any point end up, for example (3, 2)? That point means “3 steps → and 2 steps ↑”. After the transformation, each → step has turned into the first column and each ↑ step into the second. So the point ends up at <strong>3 times the first column plus 2 times the second</strong>. That is all “multiplying a matrix by a vector” does.</p>
+    <p>Here the matrix is fixed: the → arrow ends up at (2, 1) and the ↑ arrow at (−1, 1).</p>
+  </div>
+  <figure class="fig sq"><svg id="mv" role="img" aria-label="A point and its image as a sum of steps along the two columns"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The <b>gray</b> square is the starting point (drag it or use the sliders); the dashed gray line shows its → and ↑ steps. The <b style="color:var(--point)">orange</b> dot is where it ends up: you get there by taking the same steps, but now each → step is the <b style="color:var(--mean)">blue</b> arrow (first column) and each ↑ step is the <b style="color:var(--sample)">purple</b> one (second column).</p>
+  <div class="decs">
+    <div class="dec"><h3>The point’s → steps</h3><div class="slider"><label for="m-x">x <output id="m-x-o"></output></label><input type="range" id="m-x" min="-3" max="3" step="0.5" value="3"></div></div>
+    <div class="dec"><h3>The point’s ↑ steps</h3><div class="slider"><label for="m-y">y <output id="m-y-o"></output></label><input type="range" id="m-y" min="-3" max="3" step="0.5" value="2"></div></div>
+  </div>
+  <p class="sum col" id="m-sum"></p>
+  <p class="qcard col" id="m-msg"></p>
+  <div class="col stack">
+    <p><strong>The same math with fleet data.</strong> One hour of truck driving in the city burns 14 liters of diesel and $0 in tolls; one hour on the highway, 25 liters and $9 in tolls. Those are the two columns of a matrix: (14, 0) and (25, 9). A truck that does 3 hours of city and 2 of highway uses 3 × (14, 0) + 2 × (25, 9) = (42, 0) + (50, 18) = <strong>92 liters and $18</strong>. The matrix turns “hours per road type” into “liters and dollars”.</p>
+    <p>You can also do it <strong>by rows</strong>: the liters are 14 × 3 + 25 × 2 = 92, which is the dot product of the first row with the hours (we saw it in <a href="dot-product-and-cosine-en.html" target="_self">topic 2</a>). They are two ways of doing the same calculation.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 5</p>
+    <h2>What each transformation preserves</h2>
+    <p>A depot (at the center), a customer and a gas station form a triangle, with positions in kilometers east and north. Each transformation respects some things and changes others. Knowing which is what lets you use them without fear:</p>
+    <ul>
+      <li>A <strong>rotation</strong> preserves distances, angles and areas: it only changes which way you are facing.</li>
+      <li>A <strong>scaling equal in every direction</strong> (changing units) changes distances and areas, but not angles.</li>
+      <li><strong>Stretching just one direction</strong> changes the angles too. A <strong>tilt</strong> (shear) distorts angles and distances but preserves area.</li>
+      <li>A <strong>mirror</strong> preserves everything except the orientation: what went counterclockwise now goes clockwise.</li>
+    </ul>
+  </div>
+  <div class="chips col" id="g-chips" role="group" aria-label="Transformation"></div>
+  <figure class="fig"><svg id="geo" role="img" aria-label="Depot, customer and gas station triangle before and after the transformation"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The triangle with a dashed outline is the original; the <b style="color:var(--point)">orange</b> one is the transformed one. The gray band is the road from the depot to the customer. The arc marks the angle at the depot. The corners of the chart tell you what the axes mean now.</p>
+  <div class="cmp col" id="g-tab"></div>
+  <p class="qcard col" id="g-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 5</p>
+    <h2>Chaining transformations: order matters</h2>
+    <p>If you do one transformation and then another, the result is another transformation, with its own matrix. Computing that combined matrix is called <strong>multiplying the two matrices</strong>. But, unlike multiplying numbers, here the order changes the result: rotating and then stretching sideways is not the same as stretching sideways and then rotating.</p>
+  </div>
+  <div class="decs">
+    <div class="dec"><h3>First step</h3><div class="chips" id="o-a" role="group" aria-label="First step"></div></div>
+    <div class="dec"><h3>Second step</h3><div class="chips" id="o-b" role="group" aria-label="Second step"></div></div>
+    <div class="dec"><h3>And the other way around?</h3><p>Swap the two steps and compare the final truck.</p><div class="btns"><button type="button" class="primary" id="o-sw">Swap the order</button></div></div>
+  </div>
+  <figure class="fig"><svg id="ord" role="img" aria-label="The truck at the start, after the first step and after the second"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> From left to right (or top to bottom on a phone): the truck at the start, after the first step and after the second. The <b style="color:var(--mean)">→</b> and <b style="color:var(--sample)">↑</b> arrows show where the two starting arrows ended up: they are the columns of the combined matrix.</p>
+  <div class="msum col" id="o-sum"></div>
+  <p class="qcard col" id="o-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 5</p>
+    <h2>Undoing a transformation, and when it is impossible</h2>
+    <p>Many transformations can be <strong>undone</strong>: if you know where a point ended up, you can work out where it came from. The transformation that undoes it is called the <strong>inverse</strong>. But if the matrix flattens the plane onto a line (area factor 0), two different points can end up in the same place, and then there is no way to know which one it came from. The information is lost.</p>
+    <p>And there is a warning before you reach 0: when the area factor is very small, undoing works, but it <strong>magnifies any error</strong>. A tiny measurement error in the final point becomes a huge error when you work out where it came from.</p>
+  </div>
+  <figure class="fig"><svg id="inv" role="img" aria-label="Unit square, fleet dots and their image; when undoing, recovered points with error"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The <b style="color:var(--mean)">blue</b> and <b style="color:var(--sample)">purple</b> arrows are the two columns. The shaded area is what the square with side 1 turns into. The <b style="color:var(--point)">orange</b> dots are the positions of five trucks after transforming. In “undo” mode, the gray rings are the true positions and the <b style="color:var(--mean)">blue</b> crosses are the ones recovered by undoing when each final point was measured with an error of just 0.08.</p>
+  <div class="decs">
+    <div class="dec"><h3>How alike are the two columns?</h3><div class="slider"><label for="i-t">The purple arrow turns toward the blue one <output id="i-t-o"></output></label><input type="range" id="i-t" min="0" max="100" step="1" value="0"><div class="ends"><span>0% (very different)</span><span>100% (same direction)</span></div></div></div>
+    <div class="dec"><h3>What do you want to see?</h3><div class="seg" role="group" aria-label="Mode"><button type="button" id="i-m0" aria-pressed="true">The transformation</button><button type="button" id="i-m1" aria-pressed="false">Undo it</button></div></div>
+  </div>
+  <div class="big3 col" id="i-big"></div>
+  <p class="qcard col" id="i-msg"></p>
+  <div class="col stack">
+    <p><strong>The same thing happens with data.</strong> Imagine a table of trips with two columns: the distance in kilometers and the same distance in miles. They look like two pieces of data, but they are one: the second is the first multiplied by 0.621. It is like a matrix with two columns pointing in the same direction. A model that tries to split the importance between the two cannot decide (any split gives the same result), and if the columns are <em>almost</em> equal, the weights it computes change wildly with any noise. That is why it pays to look for redundant columns before training, in the <a href="exploratory-data-analysis-en.html" target="_self">exploratory analysis</a>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 5</p>
+    <h2>A neural network layer: matrix, shift and fold</h2>
+    <p>Each dot is a truck: horizontally, how far the <strong>engine temperature</strong> is from normal; vertically, how far the <strong>oil</strong> temperature is. Normally the two rise or fall together (the <b style="color:var(--sample)">purple</b> dots, in a diagonal band). If one drifts far from the other, on either side, something is wrong (a sensor, the thermostat, a leak): the <b style="color:var(--point)">orange</b> dots.</p>
+    <p>No straight line separates the two groups, because the odd ones are on both sides of the band. And matrices alone cannot fix it: rotating, stretching or tilting the cloud never turns a straight line into something else. A <strong>layer of a neural network</strong> does three things: it multiplies by a matrix, adds a shift and then <strong>folds</strong> the plane (it sets everything negative to 0; this is called ReLU). That fold is what a matrix cannot do.</p>
+  </div>
+  <div class="seg col" role="group" aria-label="Layer step"><button type="button" id="n-0" aria-pressed="true">1 · The data</button><button type="button" id="n-1" aria-pressed="false">2 · Matrix and shift</button><button type="button" id="n-2" aria-pressed="false">3 · The fold</button><button type="button" id="n-3" aria-pressed="false">4 · Back to the data</button></div>
+  <figure class="fig sq"><svg id="nn" role="img" aria-label="Normal and odd trucks at each step of a neural network layer"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Go through the four steps with the buttons. The axes change at each step: in steps 2 and 3, each axis is one of the layer’s two outputs. The <b style="color:var(--good)">green</b> line is the best straight boundary in each chart; dots with a red ring are errors. The gray area in step 2 is the one the fold sends to the corner.</p>
+  <div class="dec col"><h3>The shift: how much difference is tolerated</h3><div class="slider"><label for="n-c">Margin <output id="n-c-o"></output></label><input type="range" id="n-c" min="0" max="2" step="0.05" value="0.8"><div class="ends"><span>0 (none)</span><span>2 (a lot)</span></div></div></div>
+  <p class="qcard col" id="n-msg"></p>
+  <div class="col stack">
+    <p>A neural network stacks many layers like this, with much bigger matrices, and learns the numbers of each matrix and each shift on its own. Without the fold, stacking layers would be useless: several matrices in a row are a single matrix (idea 3). Neural networks will get their own collection.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The full recipe</h2>
+    <ol class="steps">
+      <li><div><strong>A matrix moves the whole plane at once</strong>, without bending straight lines and without moving the center.</div></li>
+      <li><div><strong>Its columns say where → and ↑ end up.</strong> That is enough to know what it does.</div></li>
+      <li><div><strong>Matrix times point = x steps of the first column + y steps of the second.</strong> By rows, they are dot products.</div></li>
+      <li><div><strong>Each type preserves different things</strong>: rotation, distances and angles; tilt, area; a mirror flips things over.</div></li>
+      <li><div><strong>Chaining is multiplying matrices</strong>, and order matters.</div></li>
+      <li><div><strong>The area factor (determinant) says whether it can be undone</strong>: 0 means lost information; almost 0, magnified errors.</div></li>
+      <li><div><strong>Matrix + shift + fold is a neural network layer.</strong></div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where it shows up in fleet telemetry</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 32L34 10"/><path d="M8 20a12 12 0 0 1 10-10"/><path d="M20 30h12M30 26l4 4-4 4"/></svg><h3>Road axes</h3><p>GPS gives positions east and north. A rotation turns them into “along the road” and “toward the shoulder”: that is how you measure whether the truck drifts out of its lane or onto the shoulder.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="9" y="12" width="22" height="16" rx="3"/><path d="M15 20h10M21 16l4 4-4 4"/><path d="M14 8v4M26 8v4"/></svg><h3>A badly mounted accelerometer</h3><p>The telemetry box gets bolted wherever it fits, rotated relative to the truck. A rotation matrix converts its readings to the vehicle’s axes: forward, sideways and up. Without it, hard braking looks like a sharp turn.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 28h24M8 12h24"/><path d="M12 28V12M28 28V12"/><path d="M16 20h8"/></svg><h3>Units and combinations</h3><p>Going from km to miles or from liters to gallons is a scaling. Going from hours per road type to liters and dollars is a cost matrix, as in idea 1.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="13" cy="15" r="2"/><circle cx="20" cy="20" r="2"/><circle cx="27" cy="25" r="2"/><circle cx="17" cy="24" r="2"/><path d="M6 33L34 7" stroke-dasharray="3 3"/></svg><h3>Compressing data</h3><p>Dozens of signals per truck are summarized into two or three numbers by multiplying by a matrix that projects onto the most important directions: that is what principal component analysis does.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Connections</p>
+    <h2>With the models of the ML series and the other topics</h2>
+    <p><a href="pca-en.html" target="_self">Principal component analysis</a> is a matrix that rotates the data and then keeps the first directions (a projection, which deliberately flattens what does not matter). <a href="linear-and-polynomial-regression-en.html" target="_self">Linear regression</a> solves a system of equations with matrices, and suffers with redundant columns (idea 4). <a href="support-vector-machines-en.html" target="_self">Support vector machines</a> separate with a straight line, and their trick for separating what a line cannot is similar to the fold in idea 5: taking the data to another space. All of this rests on the vectors and distances of <a href="vectors-and-distances-en.html" target="_self">topic 1</a> and the dot product of <a href="dot-product-and-cosine-en.html" target="_self">topic 2</a>.</p>
+    <p>Coming soon in this collection: topic 4, <strong>least squares as a projection</strong> (why linear regression has an exact formula), and topic 5, <strong>eigenvectors and eigenvalues</strong> (the directions a matrix does not rotate).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>What helps and where it misleads</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>What helps</h3><ul class="pc">
+      <li>Four numbers (or a few hundred, in more dimensions) describe a movement of all the data at once.</li>
+      <li>Computers multiply matrices incredibly fast: it is the foundation of all modern machine learning.</li>
+      <li>Looking at the columns, the area factor and what is preserved is enough to understand almost any matrix.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Where it misleads</h3><ul class="pc">
+      <li>The order of the steps matters, and chaining them the wrong way around is a very common mistake.</li>
+      <li>An almost-flattened matrix seems to work, but it magnifies errors when you undo it.</li>
+      <li>It only makes “straight” movements: to separate twisted things you need something more, like the fold in neural networks.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Matrix</dt><dd>A table of numbers. Here, the recipe for a movement: each column says where one of the starting arrows ends up.</dd>
+      <dt>Linear transformation</dt><dd>A movement of the plane that keeps straight lines straight and parallel and does not move the center.</dd>
+      <dt>Matrix times vector</dt><dd>Where a point ends up: x times the first column plus y times the second.</dd>
+      <dt>Matrix product</dt><dd>The matrix for doing one transformation and then another. Order matters.</dd>
+      <dt>Determinant</dt><dd>The area factor: how much surfaces grow. Negative if the figure is flipped over; 0 if everything is flattened.</dd>
+      <dt>Inverse</dt><dd>The matrix that undoes another one. It only exists if the determinant is not 0.</dd>
+      <dt>Shear (tilt)</dt><dd>Slides each row of the grid a little more than the one before, like a deck of cards pushed sideways.</dd>
+      <dt>ReLU</dt><dd>The fold of neural networks: it leaves positive values as they are and sets negative ones to 0.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the math behind it</summary>
+    <p style="padding-top:10px">You don’t need it to understand the idea:</p>
+    <div class="formula">matrix             | a  b |     → ends up at (a, c)
+                   | c  d |     ↑ ends up at (b, d)
+
+matrix times point | a  b | | x |   | a·x + b·y |
+                   | c  d | | y | = | c·x + d·y |  = x·(a, c) + y·(b, d)
+
+area factor        determinant = a·d − b·c
+
+undo               inverse = 1 / (a·d − b·c) × |  d  −b |
+                                                | −c   a |
+
+chain              first B, then A  →  matrix A·B  (read right to left)
+
+example from idea 1
+   | 2  −1 | | 3 |   | 2·3 − 1·2 |   | 4 |
+   | 1   1 | | 2 | = | 1·3 + 1·2 | = | 5 |      determinant = 2·1 − (−1)·1 = 3
+
+neural network layer   output = ReLU(matrix × input + shift)</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in one minute</h2>
+    <p>An animated recap: a matrix moving the whole plane, its columns as the destination of the two arrows, rotating, stretching, mirroring and tilting, why order matters, the flattening that cannot be undone and the fold of a neural network layer. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xACYAAEAAQUBAQAAAAAAAAAAAAAAAQcFAwIGCAQBAQEBAQAAAAAAAAAAAAAAAAABAgMQAAICAQMCBAMDBgkHCgcBAAABAwIEEhEFIQZBBzETFCJRcWEygTYVdSORcnQWslJCM7O0oYJzCDWxJMGSg0NjF3ZTYjTDJkSlxNOiVREBAQEBAQADAQAAAAAAAAAAABEBITFRAqFB/8AAEQgCHAPAAwEiAAIRAAMRAP/aAAwDAQACEQMRAD8AoiADo5gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJBVQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAH/9k=" aria-label="Animation: matrices as transformations">
+      <source src="matrices-as-transformations-with-audio-en.mp4" type="video/mp4">
+      Your browser cannot play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"X": [[-1.77, -1.49], [-0.08, 0.08], [0.21, 0.69], [-1.87, -2.28], [-1.47, -1.62], [1.7, 2.07], [-1.89, -1.89], [-1.86, -1.4], [2.03, 1.91], [0.39, 0.68], [-0.83, -0.32], [-0.16, 0.26], [0.75, 0.69], [-0.91, -1.06], [-1.69, -1.5], [1.35, 1.19], [0.67, 0.83], [-0.15, 0.26], [1.29, 1.5], [0.16, 0.27], [2.34, 1.89], [-1.51, -1.09], [0.01, 0.46], [-0.04, -0.11], [-0.39, -0.9], [0.63, 0.18], [-1.05, -1.27], [1.09, 1.57], [1.78, 1.45], [-1.53, -1.73], [-0.34, 0.05], [-1.0, -0.96], [-2.08, -1.59], [1.91, 1.58], [-0.19, -0.43], [-1.38, -1.72], [0.91, 0.62], [-1.44, -1.18], [1.93, 1.61], [-1.38, -1.11], [-2.25, -1.86], [-1.38, -1.26], [-0.68, -0.68], [-0.25, -0.02], [1.85, 1.73], [0.92, 0.81], [-0.85, -0.56], [-2.06, -2.19], [-1.58, -1.42], [2.31, 2.06], [-0.29, -0.06], [1.0, 0.68], [-2.01, -1.91], [-2.02, -2.08], [1.62, 1.43], [0.4, 0.38], [-0.97, -0.71], [-0.54, -1.07], [-2.03, -1.59], [-1.54, -1.34], [-2.06, -2.12], [1.23, 1.75], [-0.34, 0.04], [-1.48, -1.8], [1.21, 0.9], [-1.26, -1.41], [-1.71, -2.15], [0.57, 0.29], [1.63, 1.85], [-2.0, -2.16], [1.25, 1.43], [-1.23, -1.5], [-1.85, -1.73], [-2.31, -1.93], [-0.7, -1.12], [1.1, 0.89], [0.1, -0.16], [1.59, 1.52], [-1.09, -1.4], [-0.84, -0.78], [-1.03, -1.1], [1.86, 2.35], [1.97, 1.91], [-0.53, -0.87], [-0.17, -0.39], [-0.65, -0.98], [1.08, 1.09], [-1.81, -2.23], [-2.12, -1.69], [-0.22, -0.63], [-1.19, -1.05], [1.29, 1.74], [1.13, 1.0], [0.18, 0.23], [0.67, 0.75], [1.04, 0.65], [1.04, 1.44], [1.95, 1.82], [-1.59, -1.49], [0.57, 0.54], [-1.57, -1.57], [-0.45, -0.05], [1.27, 1.25], [1.94, 1.54], [0.96, 1.32], [-2.31, -1.78], [-0.86, -0.38], [-1.5, -1.46], [2.46, 1.93], [-1.82, -1.32], [0.97, 2.95], [-0.67, 0.96], [-0.68, -2.36], [-1.09, 0.44], [-1.94, -0.4], [1.43, 0.28], [-0.82, 1.16], [-1.53, -0.16], [-1.54, -0.41], [2.27, 0.66], [2.01, 0.12], [0.53, -1.05], [-1.13, 0.37], [0.04, 1.86], [2.52, 1.24], [-1.13, -2.24], [-0.49, -2.24], [-1.39, 0.29], [-1.0, 1.06], [-2.49, -0.94], [-2.77, -0.8], [-1.68, -0.56], [-1.02, 0.11], [1.84, 0.08], [1.11, -0.23], [-2.47, -1.3], [-1.2, -2.44], [-0.95, 0.56], [2.23, 0.76], [0.8, 2.52], [-1.58, 0.5], [2.3, 0.8], [2.37, 1.07], [-1.24, 0.49], [0.43, 1.54], [-1.3, 0.22], [-0.66, -2.11], [-0.46, 1.06], [-2.23, -1.08], [-0.2, 1.51], [2.13, 0.34], [2.62, 0.7], [-1.28, 0.87], [-0.79, -2.28], [2.52, 0.7], [2.27, 0.69], [2.54, 1.2], [1.42, -0.66], [-0.27, 1.65], [0.56, -1.58]], "y": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], "line": [2.27329, 0.59776]};
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g,",");s=fr?i+"."+fr:i;return (v<0&&+s.replace(/,/g,"")!==0?"−":"")+s;};
+const ft=(v,d)=>{d=d??2;let s=(Math.round(v*10**d)/10**d).toString();if(s==="-0")s="0";return s.replace("-","−");};
+const $=id=>document.getElementById(id);
+const deg=Math.PI/180;
+const ap=(M,p)=>[M[0][0]*p[0]+M[0][1]*p[1],M[1][0]*p[0]+M[1][1]*p[1]];
+const mul=(A,B)=>[[A[0][0]*B[0][0]+A[0][1]*B[1][0],A[0][0]*B[0][1]+A[0][1]*B[1][1]],[A[1][0]*B[0][0]+A[1][1]*B[1][0],A[1][0]*B[0][1]+A[1][1]*B[1][1]]];
+const det=M=>M[0][0]*M[1][1]-M[0][1]*M[1][0];
+const matHtml=M=>`<span class="mat"><i class="c1">${ft(M[0][0])}</i><i class="c2">${ft(M[0][1])}</i><i class="c1">${ft(M[1][0])}</i><i class="c2">${ft(M[1][1])}</i></span>`;
+const pt=(a,b,d)=>{const A=ft(a,d),B=ft(b,d);return `(${A}, ${B})`;};
+const matTxt=M=>`[${ft(M[0][0])} ${ft(M[0][1])} | ${ft(M[1][0])} ${ft(M[1][1])}]`;
+function arrow(g,x1,y1,x2,y2,col,w,head){head=head??14;const a=Math.atan2(y2-y1,x2-x1),L=Math.hypot(x2-x1,y2-y1);if(L<2)return;const h=Math.min(head,L*0.6);
+  const xb=x2-h*Math.cos(a),yb=y2-h*Math.sin(a);el("line",{x1,y1,x2:xb,y2:yb,stroke:col,"stroke-width":w,"stroke-linecap":"round"},g);
+  el("path",{d:`M${x2} ${y2}L${xb-h*0.5*Math.sin(a)} ${yb+h*0.5*Math.cos(a)}L${xb+h*0.5*Math.sin(a)} ${yb-h*0.5*Math.cos(a)}Z`,fill:col},g);}
+function svgPt(svg,e){const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+function dragger(svg,onMove){let on=false;svg.addEventListener("pointerdown",e=>{if(!e.target.classList.contains("drag"))return;on=true;svg.setPointerCapture(e.pointerId);e.preventDefault();});
+  svg.addEventListener("pointermove",e=>{if(!on)return;const p=svgPt(svg,e);if(p)onMove(p);});const off=()=>{on=false;};svg.addEventListener("pointerup",off);svg.addEventListener("pointercancel",off);}
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+/* truck: body, cab (facing right), window and wheels as polygons so they deform like everything else */
+const circ=(cx,cy,r)=>{const p=[];for(let k=0;k<18;k++){const a=k/18*2*Math.PI;p.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]);}return p;};
+const TRUCK={body:[[-1.7,0.35],[0.55,0.35],[0.55,1.6],[-1.7,1.6]],cab:[[0.65,0.35],[1.45,0.35],[1.45,0.85],[1.18,1.22],[0.65,1.22]],win:[[0.92,0.82],[1.3,0.82],[1.12,1.08],[0.92,1.08]],wheels:[circ(-1.25,0.3,0.27),circ(-0.6,0.3,0.27),circ(1.05,0.3,0.27)]};
+function truck(g,M,X,Y,o){o=o||{};const dy=o.dy||0,P=pts=>"M"+pts.map(p=>{const q=ap(M,[p[0],p[1]+dy]);return X(q[0]).toFixed(1)+" "+Y(q[1]).toFixed(1);}).join("L")+"Z";
+  const ghost=o.ghost,sw=o.sw??3;
+  const st=ghost?{fill:"none",stroke:"var(--muted)","stroke-width":2,"stroke-dasharray":"6 5"}:null;
+  el("path",Object.assign({d:P(TRUCK.body)},st||{fill:"var(--point)","fill-opacity":.28,stroke:"var(--point)","stroke-width":sw,"stroke-linejoin":"round"}),g);
+  el("path",Object.assign({d:P(TRUCK.cab)},st||{fill:"var(--point)","fill-opacity":.55,stroke:"var(--point)","stroke-width":sw,"stroke-linejoin":"round"}),g);
+  if(!ghost)el("path",{d:P(TRUCK.win),fill:"var(--surface)",stroke:"var(--point)","stroke-width":1.5},g);
+  TRUCK.wheels.forEach(w=>el("path",Object.assign({d:P(w)},st||{fill:"var(--ink)",stroke:"var(--surface)","stroke-width":2}),g));}
+function grid(g,M,X,Y,n,col,op,w){for(let k=-n;k<=n;k++){for(const [a,b] of [[[k,-n],[k,n]],[[-n,k],[n,k]]]){const p=ap(M,a),q=ap(M,b);el("line",{x1:X(p[0]),y1:Y(p[1]),x2:X(q[0]),y2:Y(q[1]),stroke:col,"stroke-opacity":k===0?Math.min(1,op*2.2):op,"stroke-width":k===0?w*1.8:w},g);}}}
+
+
+/* ---------- toy ---------- */
+(function(){const svg=$("toy");let W,H,U,O,FS;
+  const X=x=>O[0]+x*U,Y=y=>O[1]-y*U;
+  const ins={a:$("t-a"),b:$("t-b"),c:$("t-c"),d:$("t-d")};
+  const FLEET=[[-2.6,-1.4],[2.1,-2.2],[-1.0,-2.6],[3.0,2.2],[-3.2,2.4]];
+  const PRE=[["identity",[1,0,0,1]],["stretch",[2,0,0,1]],["rotate",[0.8,0.6,-0.6,0.8]],["mirror",[-1,0,0,1]],["tilt",[1,0,1,1]],["flatten",[1,0.5,2,1]]];
+  const pb=chips($("t-pre"),PRE.map(p=>p[0]),i=>{const v=PRE[i][1];ins.a.value=v[0];ins.c.value=v[1];ins.b.value=v[2];ins.d.value=v[3];draw(i);});
+  function draw(pi){const a=+ins.a.value,b=+ins.b.value,c=+ins.c.value,d=+ins.d.value,M=[[a,b],[c,d]],dt=det(M);
+    const nw=narrowOf(svg);W=nw?600:900;H=nw?640:700;U=nw?70:100;O=[W/2,nw?340:370];FS=nw?34:26;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+    if(pi===undefined){const k=PRE.findIndex(p=>p[1][0]===a&&p[1][1]===c&&p[1][2]===b&&p[1][3]===d);pb.forEach((x,j)=>x.setAttribute("aria-pressed",String(j===k)));}
+    svg.textContent="";const cp=el("clipPath",{id:"toyclip"},el("defs",null,svg));el("rect",{x:0,y:0,width:W,height:H},cp);const g=el("g",{"clip-path":"url(#toyclip)"},svg);
+    grid(g,[[1,0],[0,1]],X,Y,6,"var(--muted)",.16,1);
+    grid(g,M,X,Y,10,"var(--mean)",.22,1.4);
+    const sq=[[0,0],[1,0],[1,1],[0,1]];el("path",{d:"M"+sq.map(p=>X(p[0])+" "+Y(p[1])).join("L")+"Z",fill:"none",stroke:"var(--muted)","stroke-width":2},g);
+    el("path",{d:"M"+sq.map(p=>{const q=ap(M,p);return X(q[0])+" "+Y(q[1]);}).join("L")+"Z",fill:dt<0?"var(--warn)":"var(--mean)","fill-opacity":.18,stroke:dt<0?"var(--warn)":"var(--mean)","stroke-width":1.5,"stroke-opacity":.6},g);
+    truck(g,[[1,0],[0,1]],X,Y,{ghost:true,dy:1.35});truck(g,M,X,Y,{dy:1.35});
+    FLEET.forEach(p=>{el("circle",{cx:X(p[0]),cy:Y(p[1]),r:6,fill:"none",stroke:"var(--muted)","stroke-width":2},g);const q=ap(M,p);el("circle",{cx:X(q[0]),cy:Y(q[1]),r:9,fill:"var(--point)",stroke:"var(--point-ring)","stroke-width":2.5},g);});
+    arrow(g,X(0),Y(0),X(a),Y(c),"var(--mean)",6,22);arrow(g,X(0),Y(0),X(b),Y(d),"var(--sample)",6,22);
+    const lab=(x,y,s,col,ox,oy)=>{let L=Math.hypot(x,y),ux=L>0.05?x/L:ox,uy=L>0.05?y/L:oy;let nx=-uy,ny=ux;const o=[ox,oy];if(nx*o[0]+ny*o[1]>0){nx=-nx;ny=-ny;}
+      const tx=X(x)+nx*22+ux*10,ty=Y(y)-ny*22-uy*10+9;txt(g,Math.max(10,Math.min(W-10,tx)),Math.max(30,Math.min(H-12,ty)),s,{"text-anchor":nx<-0.3?"end":nx>0.3?"start":"middle","font-size":FS,"font-weight":700,style:`fill:${col}`,"paint-order":"stroke",stroke:"var(--surface)","stroke-width":7});};
+    lab(a,c,"→ "+pt(a,c,1),"var(--mean)",b,d);lab(b,d,"↑ "+pt(b,d,1),"var(--sample)",a,c);
+    ["a","b","c","d"].forEach(k=>$("t-"+k+"-o").textContent=ft(+ins[k].value,1));
+    const flip=dt<-1e-9,zero=Math.abs(dt)<1e-9;
+    $("t-big").innerHTML=`<div>${matHtml(M)}<span>the matrix: column <b style="display:inline;font:inherit;color:var(--mean)">→</b> and column <b style="display:inline;font:inherit;color:var(--sample)">↑</b></span></div><div><b style="color:${zero?"var(--warn)":"var(--ink)"}">× ${ft(dt,2)}</b><span>area factor (determinant): ${zero?"everything flattened":Math.abs(Math.abs(dt)-1)<1e-9?"areas do not change":Math.abs(dt)>1?"areas grow":"areas shrink"}</span></div><div><b style="color:${flip?"var(--warn)":"var(--good)"}">${zero?"—":flip?"Yes":"No"}</b><span>flipped over? ${zero?"flattened, impossible to tell":flip?"the area factor is negative":"the area factor is positive"}</span></div>`;
+    const isI=a===1&&b===0&&c===0&&d===1,orth=Math.abs(a*a+c*c-1)<1e-6&&Math.abs(b*b+d*d-1)<1e-6&&Math.abs(a*b+c*d)<1e-6;let m;
+    const cols=`The → arrow ends up at ${pt(a,c,1)} and the ↑ arrow at ${pt(b,d,1)}.`;
+    if(isI)m=`The <b>identity</b>: each arrow ends up where it started, so nothing moves. It is the “1” of matrices: multiplying by it changes nothing. Try raising “steps to the right” of the → arrow.`;
+    else if(zero&&a===0&&b===0&&c===0&&d===0)m=`All the numbers at 0: both arrows stay at the center and the whole plane collapses into a single point. It is the ultimate flattening.`;
+    else if(zero)m=`${cols} The two arrows lie on the same line, so the whole plane collapses onto that line: the truck loses all its thickness and its area is <b>0</b>. Points that were in different places now coincide: this transformation <b>cannot be undone</b> (idea 4).`;
+    else if(orth&&dt>0)m=`A <b>rotation</b> of ${f1(Math.atan2(c,a)/deg,0)}°: both arrows still have length 1 and form a right angle. The truck changes orientation but not shape or size: area × 1.`;
+    else if(orth&&dt<0)m=`A <b>mirror</b>: the arrows still have length 1 and form a right angle, but they have swapped order (the ↑ arrow is now to the right of the →). The truck ${a<0&&d>0?"now faces left":"looks as if in a mirror"}: same size, but flipped over, and that is why the area factor is −1.`;
+    else if(b===0&&c===0)m=`A <b>stretch</b>: × ${ft(a,1)} in width and × ${ft(d,1)} in height. ${a<0||d<0?"A negative number also mirrors. ":""}The area is multiplied by ${ft(a,1)} × ${ft(d,1)} = ${ft(dt,2)}.${a!==d?" Since it stretches differently in each direction, angles change: the little square with side 1 becomes a rectangle.":""}`;
+    else if(a===1&&d===1&&(b===0||c===0))m=`A <b>tilt</b> (shear): ${c===0?"the ↑ arrow leans to one side and each row of the grid slides further the higher it is":"the → arrow lifts up and each column of the grid slides further the farther right it is"}, like a deck of cards pushed sideways. The truck is distorted, but its area does not change: × 1.`;
+    else m=`${cols} It is a mix: ${flip?"it flips over and ":""}areas are multiplied by ${ft(dt,2)}. Any point (x, y) ends up at x times the → arrow plus y times the ↑ arrow: we look at this in idea 1.`;
+    $("t-msg").innerHTML=m;}
+  Object.values(ins).forEach(i=>i.addEventListener("input",()=>draw()));window.addEventListener("resize",()=>draw());draw();})();
+
+/* ---------- idea 1: matrix times vector = combining columns ---------- */
+(function(){const svg=$("mv"),ix=$("m-x"),iy=$("m-y"),A=[[2,-1],[1,1]];let W,H,U,O,F;
+  const X=x=>O[0]+x*U,Y=y=>O[1]-y*U;
+  function draw(){const nw=narrowOf(svg);W=nw?600:900;H=nw?600:640;U=nw?30:46;O=[W/2,nw?300:330];F=nw?1.45:1;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+    const x=+ix.value,y=+iy.value,c1=[2,1],c2=[-1,1],s1=[x*c1[0],x*c1[1]],r=ap(A,[x,y]);svg.textContent="";
+    const cp=el("clipPath",{id:"mvclip"},el("defs",null,svg));el("rect",{x:0,y:0,width:W,height:H},cp);const g=el("g",{"clip-path":"url(#mvclip)"},svg);
+    grid(g,[[1,0],[0,1]],X,Y,12,"var(--muted)",.13,1);grid(g,A,X,Y,12,"var(--mean)",.12,1.2);
+    el("path",{d:`M${X(0)} ${Y(0)}L${X(x)} ${Y(0)}L${X(x)} ${Y(y)}`,fill:"none",stroke:"var(--muted)","stroke-width":3,"stroke-dasharray":"7 6"},g);
+    arrow(g,X(0),Y(0),X(c1[0]),Y(c1[1]),"var(--mean)",3,14);arrow(g,X(0),Y(0),X(c2[0]),Y(c2[1]),"var(--sample)",3,14);
+    const halo={"paint-order":"stroke",stroke:"var(--surface)","stroke-width":6};
+    if(x!==0)arrow(g,X(0),Y(0),X(s1[0]),Y(s1[1]),"var(--mean)",7,20);
+    if(y!==0)arrow(g,X(s1[0]),Y(s1[1]),X(r[0]),Y(r[1]),"var(--sample)",7,20);
+    const segLab=(p0,p1,away,s,col)=>{const a0=[X(p0[0]),Y(p0[1])],a1=[X(p1[0]),Y(p1[1])],m=[(a0[0]+a1[0])/2,(a0[1]+a1[1])/2],L=Math.hypot(a1[0]-a0[0],a1[1]-a0[1])||1;let n=[-(a1[1]-a0[1])/L,(a1[0]-a0[0])/L];
+      const aw=[X(away[0])-m[0],Y(away[1])-m[1]];if(n[0]*aw[0]+n[1]*aw[1]>0)n=[-n[0],-n[1]];
+      const len=s.length*13.5*F;if((n[0]>0.3&&m[0]+len>W-4)||(n[0]<-0.3&&m[0]-len<4))n=[-n[0],-n[1]];
+      txt(g,m[0]+n[0]*16*F,m[1]+n[1]*16*F+(n[1]>0.3?18*F:n[1]<-0.3?0:8*F),s,Object.assign({"font-size":22*F,"font-weight":700,"text-anchor":n[0]>0.3?"start":n[0]<-0.3?"end":"middle",style:`fill:${col}`},halo));};
+    if(Math.abs(x)>=1)segLab([0,0],s1,[x,y],`${ft(x)} × (2, 1)`,"var(--mean)");
+    if(Math.abs(y)>=1)segLab(s1,r,[0,0],`${ft(y)} × (−1, 1)`,"var(--sample)");
+    el("circle",{cx:X(r[0]),cy:Y(r[1]),r:11,fill:"var(--point)",stroke:"var(--point-ring)","stroke-width":3},g);
+    const tr=pt(r[0],r[1]),right=X(r[0])<W-150;txt(g,X(r[0])+(right?16:-16),Y(r[1])-14,tr,{"font-size":26*F,"font-weight":700,"text-anchor":right?"start":"end",style:"fill:var(--point)","paint-order":"stroke",stroke:"var(--surface)","stroke-width":6});
+    el("rect",{x:X(x)-10,y:Y(y)-10,width:20,height:20,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":3,class:"drag"},g);el("circle",{cx:X(x),cy:Y(y),r:26,fill:"transparent",class:"drag"},g);
+    if(!nw)txt(g,X(x),Y(y)+(y>=0?-20:38),pt(x,y),{"font-size":22*F,"text-anchor":"middle",class:"t-ink","paint-order":"stroke",stroke:"var(--surface)","stroke-width":6});
+    $("m-x-o").textContent=ft(x);$("m-y-o").textContent=ft(y);
+    $("m-sum").innerHTML=`${ft(x)} × (2, 1) + ${ft(y)} × (−1, 1) = ${pt(s1[0],s1[1])} + ${pt(y*c2[0],y*c2[1])} = <b>${pt(r[0],r[1])}</b>`;
+    let m=`The point ${pt(x,y)} means “${ft(x)} steps → and ${ft(y)} steps ↑”. After the transformation, each → step is worth (2, 1) and each ↑ step is worth (−1, 1), so it ends up at <b>${pt(r[0],r[1])}</b>. `;
+    if(x===3&&y===2)m+=`By rows you get the same: 2 × 3 + (−1) × 2 = 4 and 1 × 3 + 1 × 2 = 5. Each row takes a dot product with the point.`;
+    else if(x===0&&y===0)m+="The center never moves: 0 times anything is 0.";
+    else if(x===1&&y===0)m+="It is exactly the starting → arrow: it ends up at the first column, (2, 1). That is why the columns tell you where the arrows end up.";
+    else if(x===0&&y===1)m+="It is exactly the starting ↑ arrow: it ends up at the second column, (−1, 1).";
+    else if(x<0||y<0)m+="A negative number of steps means going the opposite way along that column.";
+    else m+=`The bluish grid is the original grid transformed: the orange dot sits on the same crossing of that grid as the gray square does on the original one.`;
+    $("m-msg").innerHTML=m;}
+  dragger(svg,p=>{ix.value=Math.max(-3,Math.min(3,Math.round((p.x-O[0])/U*2)/2));iy.value=Math.max(-3,Math.min(3,Math.round((O[1]-p.y)/U*2)/2));draw();});
+  [ix,iy].forEach(i=>i.addEventListener("input",draw));window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 2: what is preserved ---------- */
+(function(){const svg=$("geo"),W=900,U=88,x0=-1.1,x1=W/U+x0,y0=-0.9,y1=5.1,H=Math.round((y1-y0)*U);svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const X=x=>(x-x0)*U,Y=y=>(y1-y)*U;const P=[[0,0],[4,1],[1,3]],NAMES=["depot","customer","gas station"];
+  const c=4/Math.sqrt(17),s=1/Math.sqrt(17),K=0.621371;
+  const T=[{n:"No transformation",M:[[1,0],[0,1]],ax:["east (km)","north (km)"],u:"km"},
+    {n:"Rotate to the road",M:[[c,s],[-s,c]],ax:["along the road (km)","to the side (km)"],u:"km"},
+    {n:"Switch to miles",M:[[K,0],[0,K]],ax:["east (miles)","north (miles)"],u:"miles"},
+    {n:"Stretch only east",M:[[2,0],[0,1]],ax:["east × 2","north (km)"],u:"units"},
+    {n:"Tilt",M:[[1,1],[0,1]],ax:["east + north","north (km)"],u:"units"},
+    {n:"Swap east and north",M:[[0,1],[1,0]],ax:["north (km)","east (km)"],u:"km"}];
+  let cur=0;chips($("g-chips"),T.map(t=>t.n),i=>{cur=i;draw();});
+  const meas=Q=>{const ab=[Q[1][0]-Q[0][0],Q[1][1]-Q[0][1]],ac=[Q[2][0]-Q[0][0],Q[2][1]-Q[0][1]],L=Math.hypot(...ab),ang=Math.acos((ab[0]*ac[0]+ab[1]*ac[1])/L/Math.hypot(...ac))/deg,ar=(ab[0]*ac[1]-ab[1]*ac[0])/2;return {L,ang,ar};};
+  function draw(){const t=T[cur],M=t.M,Q=P.map(p=>ap(M,p)),F=narrowOf(svg)?1.6:1;svg.textContent="";
+    for(let k=Math.ceil(x0);k<=Math.floor(x1);k++){el("line",{x1:X(k),x2:X(k),y1:0,y2:H,class:"g-line"},svg);}for(let k=Math.ceil(y0);k<=Math.floor(y1);k++)el("line",{x1:0,x2:W,y1:Y(k),y2:Y(k),class:"g-line"},svg);
+    el("line",{x1:X(x0),x2:X(x1),y1:Y(0),y2:Y(0),class:"g-axis"},svg);el("line",{x1:X(0),x2:X(0),y1:0,y2:H,class:"g-axis"},svg);
+    const r0=ap(M,[-1.5*4,-1.5]),r1=ap(M,[3*4,3]);el("line",{x1:X(r0[0]),y1:Y(r0[1]),x2:X(r1[0]),y2:Y(r1[1]),stroke:"var(--muted)","stroke-width":16,"stroke-opacity":.18,"stroke-linecap":"round"},svg);
+    if(cur)el("path",{d:"M"+P.map(p=>X(p[0])+" "+Y(p[1])).join("L")+"Z",fill:"none",stroke:"var(--muted)","stroke-width":2,"stroke-dasharray":"6 5"},svg);
+    el("path",{d:"M"+Q.map(p=>X(p[0])+" "+Y(p[1])).join("L")+"Z",fill:"var(--point)","fill-opacity":.18,stroke:"var(--point)","stroke-width":3.5,"stroke-linejoin":"round"},svg);
+    const a1=Math.atan2(Q[1][1],Q[1][0]),a2=Math.atan2(Q[2][1],Q[2][0]),r=44;let da=a2-a1;da=Math.atan2(Math.sin(da),Math.cos(da));
+    el("path",{d:`M${X(0)+r*Math.cos(a1)} ${Y(0)-r*Math.sin(a1)}A${r} ${r} 0 0 ${da>0?0:1} ${X(0)+r*Math.cos(a1+da)} ${Y(0)-r*Math.sin(a1+da)}`,fill:"none",stroke:"var(--ink)","stroke-width":2.5},svg);
+    const m=meas(Q),m0=meas(P);
+    txt(svg,X(0)+(r+30)*Math.cos(a1+da/2),Y(0)-(r+30)*Math.sin(a1+da/2)+8,f1(m.ang,1)+"°",{"text-anchor":"middle","font-size":22*F,"font-weight":700,class:"t-ink","paint-order":"stroke",stroke:"var(--surface)","stroke-width":6});
+    Q.forEach((q,i)=>{el("circle",{cx:X(q[0]),cy:Y(q[1]),r:10,fill:i?"var(--point)":"var(--ink)",stroke:"var(--point-ring)","stroke-width":3},svg);
+      const left=i!==0&&X(q[0])>W-170,up=i!==0;txt(svg,X(q[0])+(left?-16:16),Y(q[1])+(up?-16:34),NAMES[i],{"font-size":24*F,"font-weight":700,"text-anchor":left?"end":"start",class:"t-ink","paint-order":"stroke",stroke:"var(--surface)","stroke-width":6});});
+    txt(svg,W-10,Y(0)-10,t.ax[0]+" →",{"text-anchor":"end","font-size":20*F,style:"fill:var(--mean)","paint-order":"stroke",stroke:"var(--surface)","stroke-width":5});
+    txt(svg,X(0)+12,20+12*F,"↑ "+t.ax[1],{"font-size":20*F,style:"fill:var(--mean)","paint-order":"stroke",stroke:"var(--surface)","stroke-width":5});
+    const same=(a,b,e)=>Math.abs(a-b)<(e??1e-6),v=ok=>`<span class="verdict ${ok?"ok":"no"}">${ok?"preserved":"changes"}</span>`;
+    const sense=x=>x>0?"counter&shy;clockwise":"clockwise";
+    $("g-tab").innerHTML=`<div class="r"><span>measure</span><span>before</span><span>after</span><span></span></div>`+
+      `<div class="r"><span>depot–customer distance</span><span class="m">${f1(m0.L,2)} km</span><span class="m">${f1(m.L,2)} ${t.u}</span><span>${v(same(m.L,m0.L))}</span></div>`+
+      `<div class="r"><span>angle at the depot</span><span class="m">${f1(m0.ang,1)}°</span><span class="m">${f1(m.ang,1)}°</span><span>${v(same(m.ang,m0.ang,0.05))}</span></div>`+
+      `<div class="r"><span>triangle area</span><span class="m">${f1(Math.abs(m0.ar),2)} km²</span><span class="m">${f1(Math.abs(m.ar),2)} ${t.u==="km"?"km²":t.u==="miles"?"miles²":"units²"}</span><span>${v(same(Math.abs(m.ar),Math.abs(m0.ar)))}</span></div>`+
+      `<div class="r"><span>direction depot → customer → gas station</span><span>${sense(m0.ar)}</span><span>${sense(m.ar)}</span><span>${v(m.ar>0)}</span></div>`;
+    $("g-msg").innerHTML=["The original triangle: the customer is 4.12 km from the depot, the gas station makes an angle of 57.5° with it, and the triangle covers 5.5 km². Pick a transformation above.",
+      `A 14° rotation makes the road horizontal. Now the first number of each point is “how far you travel along the road” and the second, “how far it is off the road”: the gas station is ${f1(Q[2][0],2)} km along and ${f1(Q[2][1],2)} km to one side. Distances, angles and area do not change: only the direction the axes face changes. This is how a truck’s position relative to its lane is measured.`,
+      `Changing units multiplies everything by 0.621: distances turn into miles (4.12 km = ${f1(m.L,2)} miles) and the area is multiplied by 0.621 × 0.621 = 0.386. Angles do not change: the shape is the same, only the size changes.`,
+      `Stretching only to the east changes the shape: the angle goes from 57.5° to ${f1(m.ang,1)}° and the area doubles. This really happens when longitude and latitude are drawn as if they were kilometers: in Spain, one degree of longitude is about 85 km and one degree of latitude, 111 km, so maps come out distorted and distances come out wrong.`,
+      `The tilt slides each point east by as much as it is high. Distances and angles change (the angle becomes ${f1(m.ang,1)}°), but the area is still exactly ${f1(Math.abs(m.ar),2)}: the triangle’s base and height do not change.`,
+      `Swapping east and north is a <b>mirror</b> (a mirror along the diagonal). Distances, angle and area are preserved, but the route depot → customer → gas station now goes clockwise: the figure has been flipped over (area factor −1). It is the classic bug of storing (latitude, longitude) where (longitude, latitude) was expected.`][cur];}
+  window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 3: order matters ---------- */
+(function(){const svg=$("ord"),OPS=[["rotate 90°",[[0,-1],[1,0]],"rotate 90°"],["stretch × 2 →",[[2,0],[0,1]],"stretch × 2 sideways"],["mirror ↔",[[-1,0],[0,1]],"mirror"],["tilt",[[1,0.5],[0,1]],"tilt"]];
+  let A=0,B=1;const ca=chips($("o-a"),OPS.map(o=>o[0]),i=>{A=i;draw();},0),cb=chips($("o-b"),OPS.map(o=>o[0]),i=>{B=i;draw();},1);
+  $("o-sw").onclick=()=>{[A,B]=[B,A];ca.forEach((x,j)=>x.setAttribute("aria-pressed",String(j===A)));cb.forEach((x,j)=>x.setAttribute("aria-pressed",String(j===B)));draw();};
+  function panel(g,ox,oy,S,M,title){const U=S/7.4,X=x=>ox+S/2+x*U,Y=y=>oy+S/2-y*U;
+    el("rect",{x:ox,y:oy,width:S,height:S,rx:12,fill:"none",stroke:"var(--line)"},g);
+    const id="oc"+Math.round(ox)+"_"+Math.round(oy);const cp=el("clipPath",{id},el("defs",null,g));el("rect",{x:ox,y:oy,width:S,height:S,rx:12},cp);const h=el("g",{"clip-path":`url(#${id})`},g);
+    grid(h,[[1,0],[0,1]],X,Y,4,"var(--muted)",.15,1);el("circle",{cx:X(0),cy:Y(0),r:4,fill:"var(--ink)"},h);truck(h,[[1,0],[0,1]],X,Y,{ghost:true});truck(h,M,X,Y,{sw:2.5});
+    arrow(h,X(0),Y(0),X(M[0][0]),Y(M[1][0]),"var(--mean)",4.5,15);arrow(h,X(0),Y(0),X(M[0][1]),Y(M[1][1]),"var(--sample)",4.5,15);
+    txt(g,ox+S/2,oy+S+30,title,{"text-anchor":"middle","font-size":22,"font-weight":700,class:"t-ink"});}
+  function draw(){const MA=OPS[A][1],MB=OPS[B][1],P1=MA,P2=mul(MB,MA),Q2=mul(MA,MB);svg.textContent="";
+    const narrow=svg.clientWidth>0&&svg.clientWidth<560;
+    if(narrow){const W=420,S=300,gap=60;svg.setAttribute("viewBox",`0 0 ${W} ${3*(S+gap)}`);[[I2,"at the start"],[P1,"1st "+OPS[A][0]],[P2,"2nd "+OPS[B][0]]].forEach(([M,t],k)=>{panel(svg,(W-S)/2,k*(S+gap)+4,S,M,t);if(k<2)txt(svg,W/2+(S/2)+18,k*(S+gap)+S+44,"↓",{"font-size":28,"text-anchor":"middle",class:"t-ink"});});}
+    else{const S=262,gap=57,W=3*S+2*gap+12,H=S+50;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);[[I2,"at the start"],[P1,"1st "+OPS[A][0]],[P2,"2nd "+OPS[B][0]]].forEach(([M,t],k)=>{panel(svg,6+k*(S+gap),4,S,M,t);if(k<2)txt(svg,6+k*(S+gap)+S+gap/2,4+S/2+10,"→",{"font-size":34,"text-anchor":"middle",class:"t-ink"});});}
+    const eq=P2.every((r,i)=>r.every((v,j)=>Math.abs(v-Q2[i][j])<1e-9));
+    $("o-sum").innerHTML=`<span class="grp">2nd ${matHtml(MB)} · 1st ${matHtml(MA)} = ${matHtml(P2)}</span><span class="grp">reversed: ${matHtml(Q2)}</span>`;
+    let m;
+    if(A===B)m=`Repeating the same step twice: here there is no order to change. ${A===0?"Two 90° rotations make a 180° rotation: the truck ends up upside down.":A===2?"Two mirrors cancel out: the truck faces right again.":A===1?"Stretching × 2 twice is stretching × 4.":"Tilting twice is tilting twice as much."}`;
+    else if(eq)m=`In this case the order <b>does not matter</b>: the two combined matrices are equal. It happens with stretching and mirroring because each one acts on the axes separately (one changes the width; the other, the sign). It is the exception, not the rule.`;
+    else m=`The order <b>matters</b>: doing “${OPS[A][0]}” first and then “${OPS[B][0]}” gives a different combined matrix than the other way around (compare the two above). Press “Swap the order” and look at the final truck. ${(A===0&&B===1)?"If you rotate first, the sideways stretch lengthens the truck from top to bottom (it is now standing up); if you stretch first, you lengthen the truck along its length and then stand it up.":(A===1&&B===0)?"When you stretch first, the truck gets longer along its length and then stands up: it ends up tall. When you rotate first, it ends up fat.":""} Watch how it is written: the matrix of the second step goes on the left (above, “2nd · 1st”), the opposite of the order you read it in.`;
+    $("o-msg").innerHTML=m;}
+  const I2=[[1,0],[0,1]];window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 4: undoing ---------- */
+(function(){const svg=$("inv"),it=$("i-t"),W=900,U=110,x0=-2.2,x1=W/U+x0,y0=-1.5,y1=2.6,H=Math.round((y1-y0)*U);svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const X=x=>(x-x0)*U,Y=y=>(y1-y)*U;let mode=0;
+  const PTS=[[1,1],[2,-1],[-0.6,1.4],[0.4,-0.6],[-1.2,0.2]],ERR=[[0.08,0],[-0.057,0.057],[0,-0.08],[0.057,0.057],[-0.08,0]];
+  seg(["i-m0","i-m1"],i=>{mode=i;draw();});
+  function draw(){const F=narrowOf(svg)?1.7:1,t=+it.value/100,c1=[1.5,0.5],c2=[(1-t)*-0.5+t*0.75,(1-t)*1.2+t*0.25],M=[[c1[0],c2[0]],[c1[1],c2[1]]],dt=det(M);svg.textContent="";
+    const cp=el("clipPath",{id:"invclip"},el("defs",null,svg));el("rect",{x:0,y:0,width:W,height:H},cp);const g=el("g",{"clip-path":"url(#invclip)"},svg);
+    for(let k=Math.ceil(x0);k<=Math.floor(x1);k++)el("line",{x1:X(k),x2:X(k),y1:0,y2:H,class:"g-line"},g);for(let k=Math.ceil(y0);k<=Math.floor(y1);k++)el("line",{x1:0,x2:W,y1:Y(k),y2:Y(k),class:"g-line"},g);
+    el("line",{x1:0,x2:W,y1:Y(0),y2:Y(0),class:"g-axis"},g);el("line",{x1:X(0),x2:X(0),y1:0,y2:H,class:"g-axis"},g);
+    const sq=[[0,0],[1,0],[1,1],[0,1]].map(p=>ap(M,p));el("path",{d:"M"+sq.map(p=>X(p[0])+" "+Y(p[1])).join("L")+"Z",fill:"var(--mean)","fill-opacity":.16,stroke:"var(--mean)","stroke-opacity":.5},g);
+    const zero=Math.abs(dt)<1e-9;
+    if(zero){const L=6;el("line",{x1:X(-L*1.5),y1:Y(-L*0.5),x2:X(L*1.5),y2:Y(L*0.5),stroke:"var(--warn)","stroke-width":3,"stroke-dasharray":"8 6"},g);}
+    arrow(g,X(0),Y(0),X(c1[0]),Y(c1[1]),"var(--mean)",6,20);arrow(g,X(0),Y(0),X(c2[0]),Y(c2[1]),"var(--sample)",6,20);
+    let worst=0;
+    if(mode===0){PTS.forEach(p=>{const q=ap(M,p);el("circle",{cx:X(q[0]),cy:Y(q[1]),r:10,fill:"var(--point)",stroke:"var(--point-ring)","stroke-width":3},g);});
+      if(zero){const q=ap(M,PTS[0]);el("circle",{cx:X(q[0]),cy:Y(q[1]),r:22,fill:"none",stroke:"var(--warn)","stroke-width":3},g);txt(g,X(q[0])+(F>1?-120:28),Y(q[1])+36*F,"two trucks end up here",{"font-size":22*F,"font-weight":700,style:"fill:var(--warn)","paint-order":"stroke",stroke:"var(--surface)","stroke-width":6});}}
+    else if(!zero){const inv=[[M[1][1]/dt,-M[0][1]/dt],[-M[1][0]/dt,M[0][0]/dt]];
+      PTS.forEach((p,i)=>{const q=ap(M,p),qm=[q[0]+ERR[i][0],q[1]+ERR[i][1]],rp=ap(inv,qm),e=Math.hypot(rp[0]-p[0],rp[1]-p[1]);worst=Math.max(worst,e/0.08);
+        el("line",{x1:X(p[0]),y1:Y(p[1]),x2:X(rp[0]),y2:Y(rp[1]),stroke:"var(--mean)","stroke-width":2,"stroke-dasharray":"4 4"},g);
+        el("circle",{cx:X(p[0]),cy:Y(p[1]),r:11,fill:"none",stroke:"var(--muted)","stroke-width":3},g);
+        const s=9;el("path",{d:`M${X(rp[0])-s} ${Y(rp[1])-s}L${X(rp[0])+s} ${Y(rp[1])+s}M${X(rp[0])-s} ${Y(rp[1])+s}L${X(rp[0])+s} ${Y(rp[1])-s}`,stroke:"var(--mean)","stroke-width":4,"stroke-linecap":"round"},g);});}
+    else{PTS.forEach(p=>el("circle",{cx:X(p[0]),cy:Y(p[1]),r:11,fill:"none",stroke:"var(--muted)","stroke-width":3},g));txt(g,W/2,40*F,"cannot be undone",{"text-anchor":"middle","font-size":30*F,"font-weight":800,style:"fill:var(--warn)","paint-order":"stroke",stroke:"var(--surface)","stroke-width":7});}
+    $("i-t-o").textContent=it.value+"%";
+    $("i-big").innerHTML=`<div><b style="color:${zero?"var(--warn)":"var(--ink)"}">× ${f1(dt,2)}</b><span>area factor (determinant)</span></div><div><b>${zero?"impossible":mode?"× "+f1(worst,1):"—"}</b><span>${mode?"how much the worst error grows when undoing":"press “Undo it” to see the effect on errors"}</span></div>`;
+    let m;
+    if(zero)m=mode?`With both columns in the same direction, the area factor is 0 and <b>the inverse does not exist</b>. It is not that it is hard to compute: two different trucks, at (1, 1) and at (2, −1), have ended up at exactly the same point, (2.25, 0.75). Looking at that point, nobody can tell which of the two it came from.`:`Both columns point in the same direction: the whole plane collapses onto the dashed red line and the square with side 1 is left with no area. The trucks at (1, 1) and (2, −1) end up at the same point. Press “Undo it”.`;
+    else if(mode===0)m=`Area factor ${f1(dt,2)}: the square with side 1 ${dt>1?"grows":"shrinks"} and nothing is lost. ${t<0.5?"Raise the slider so the purple arrow gets closer to the blue one.":"The shaded area is getting thinner and thinner: almost the whole plane is being squeezed against a line."}`;
+    else m=worst<2?`With clearly different columns (area factor ${f1(dt,2)}), undoing recovers the positions almost exactly: a measurement error of 0.08 stays at most ${f1(worst*0.08,2)}, about ${f1(worst,1)} times.`:`Area factor ${f1(dt,2)}: undoing still works, but the measurement error of 0.08 becomes one of up to ${f1(worst*0.08,2)} (× ${f1(worst,1)}). The blue crosses drift away from their spot along the direction the matrix was flattening. The closer to 0, the worse.`;
+    $("i-msg").innerHTML=m;}
+  it.addEventListener("input",draw);window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 5: neural network layer ---------- */
+(function(){const svg=$("nn"),ic=$("n-c"),W=640,H=640,R=3.2,U=W/(2*R),X=x=>W/2+x*U,Y=y=>H/2-y*U;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  let stage=0,shown=null,anim=null;const N=D.y.length;
+  seg(["n-0","n-1","n-2","n-3"],i=>{stage=i;go();});
+  const pos=(s,c)=>D.X.map(([a,b])=>{if(s===0||s===3)return [a,b];const z=[a-b-c,b-a-c];return s===1?z:[Math.max(0,z[0]),Math.max(0,z[1])];});
+  function frame(P){const c=+ic.value,F=narrowOf(svg)?1.45:1;svg.textContent="";
+    for(let k=-3;k<=3;k++){el("line",{x1:X(k),x2:X(k),y1:0,y2:H,class:"g-line"},svg);el("line",{x1:0,x2:W,y1:Y(k),y2:Y(k),class:"g-line"},svg);}
+    if(stage===1)el("rect",{x:0,y:Y(0),width:X(0),height:H-Y(0),fill:"var(--muted)","fill-opacity":.13},svg);
+    el("line",{x1:0,x2:W,y1:Y(0),y2:Y(0),class:"g-axis"},svg);el("line",{x1:X(0),x2:X(0),y1:0,y2:H,class:"g-axis"},svg);
+    const lab=[["engine temperature →","↑ oil temperature"],["output 1 →","↑ output 2"],["output 1 folded →","↑ output 2 folded"],["engine temperature →","↑ oil temperature"]][stage];
+    txt(svg,W-8,Y(0)+26*F,lab[0],{"text-anchor":"end","font-size":19*F,class:"t-ink","paint-order":"stroke",stroke:"var(--surface)","stroke-width":5});txt(svg,X(0)+8,22*F,lab[1],{"font-size":19*F,class:"t-ink","paint-order":"stroke",stroke:"var(--surface)","stroke-width":5});
+    let wrong=[];
+    if(stage===0){const [th,t]=D.line,ct=Math.cos(th),st=Math.sin(th),px=t*ct,py=t*st;el("line",{x1:X(px-st*9),y1:Y(py+ct*9),x2:X(px+st*9),y2:Y(py-ct*9),stroke:"var(--good)","stroke-width":3.5},svg);
+      D.X.forEach((p,i)=>{if(((p[0]*ct+p[1]*st)>t)!==!!D.y[i])wrong.push(i);});}
+    else if(stage===3){for(const s of [1,-1])el("line",{x1:X(-5),y1:Y(-5-s*c),x2:X(5),y2:Y(5-s*c),stroke:"var(--good)","stroke-width":3.5},svg);
+      D.X.forEach((p,i)=>{if((Math.abs(p[0]-p[1])>c)!==!!D.y[i])wrong.push(i);});}
+    else{if(stage===2)el("line",{x1:X(-1),y1:Y(1.12),x2:X(1.12),y2:Y(-1),stroke:"var(--good)","stroke-width":3.5},svg);
+      D.X.forEach((p,i)=>{if((Math.abs(p[0]-p[1])>c)!==!!D.y[i])wrong.push(i);});}
+    const order=[...Array(N).keys()].sort((a,b)=>D.y[a]-D.y[b]);
+    order.forEach(i=>{const p=P[i];el("circle",{cx:X(p[0]),cy:Y(p[1]),r:6.5,fill:D.y[i]?"var(--point)":"var(--sample)","fill-opacity":.8,stroke:"var(--point-ring)","stroke-width":1.5},svg);});
+    if(stage!==1)wrong.forEach(i=>{const p=P[i];el("circle",{cx:X(p[0]),cy:Y(p[1]),r:11,fill:"none",stroke:"var(--warn)","stroke-width":2.5},svg);});
+    if(stage===2){const nz=D.X.filter((p,i)=>Math.abs(p[0]-p[1])<=c).length;const ls={"font-size":18*F,"font-weight":700,"text-anchor":"end",style:"fill:var(--sample)","paint-order":"stroke",stroke:"var(--surface)","stroke-width":6};txt(svg,X(0)-16,Y(0)+30*F,`${nz} normal trucks,`,ls);txt(svg,X(0)-16,Y(0)+56*F,"all in the corner",ls);}
+    return wrong.length;}
+  function msg(nw){const c=+ic.value;$("n-c-o").textContent=f1(c,2);
+    $("n-msg").innerHTML=[`The best possible straight line gets ${N-nw} trucks right and <b>${nw} of ${N}</b> wrong: the odd ones on one side end up mixed with the normal ones. No matrix fixes this, because it moves the cloud but the boundary is still a straight line.`,
+      `The matrix computes two outputs for each truck: output 1 is “engine minus oil” and output 2, “oil minus engine”; the shift subtracts the margin (${f1(c,2)}) from both. The whole cloud collapses onto a line: here only the difference between the two temperatures matters, so losing the other direction is exactly what we want (as in idea 4, but on purpose). Trucks in the gray area have both outputs negative: their difference is smaller than the margin.`,
+      `The fold sets everything negative to 0. The normal trucks (difference smaller than the margin) all go to the corner (0, 0); the odd ones stay on the two axes, far from it. Now a straight line (the green one) separates them: <b>${nw} errors</b>.${nw?" Change the margin: if it is too small, it raises alerts for normal trucks; if it is too large, odd ones slip through.":""}`,
+      `Back to the original data: the layer’s boundary is <b>two straight lines</b>, one margin away on each side of the diagonal. A single layer with one fold has achieved a boundary that no matrix alone can give. Errors: <b>${nw}</b>${nw?"":", versus 23 for the best straight line"}.`][stage];}
+  function go(){const c=+ic.value,target=pos(stage,c);if(!shown){shown=target;msg(frame(shown));return;}
+    const from=shown.map(p=>p.slice()),t0=performance.now();if(anim)cancelAnimationFrame(anim);
+    const step=now=>{const u=Math.min(1,(now-t0)/650),e=u<.5?2*u*u:1-2*(1-u)*(1-u);shown=from.map((p,i)=>[p[0]+(target[i][0]-p[0])*e,p[1]+(target[i][1]-p[1])*e]);const nw=frame(shown);if(u<1)anim=requestAnimationFrame(step);else{anim=null;msg(nw);}};anim=requestAnimationFrame(step);}
+  ic.addEventListener("input",()=>{shown=pos(stage,+ic.value);msg(frame(shown));});go();})();
+})();
+</script>
+</body>
+</html>
