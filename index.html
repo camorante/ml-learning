@@ -54,14 +54,16 @@ footer{margin-top:36px;color:var(--muted);font-size:.9rem}
   <div class="grid">
     <article class="card">
       <svg viewBox="0 0 320 120" aria-hidden="true">
-        <path d="M10 80 C60 75 80 15 130 25 S220 85 310 10 L310 40 C220 115 180 55 130 55 S60 105 10 110 Z" fill="var(--mean)" fill-opacity=".12"/>
-        <path d="M10 95 C60 90 80 30 130 40 S220 100 310 25" fill="none" stroke="var(--mean)" stroke-width="4" stroke-linecap="round"/>
-        <circle cx="60" cy="80" r="6" fill="var(--point)"/><circle cx="130" cy="40" r="6" fill="var(--point)"/><circle cx="220" cy="78" r="6" fill="var(--point)"/><circle cx="290" cy="32" r="6" fill="var(--point)"/>
+        <g stroke="var(--line)" stroke-width="1.5"><path d="M20 10V110M70 10V110M120 10V110M170 10V110M220 10V110M270 10V110M20 110H300M20 60H300M20 10H300"/></g>
+        <path d="M20 110C90 110 110 20 160 20S230 110 300 110" fill="var(--sample)" fill-opacity=".12" stroke="var(--sample)" stroke-width="3"/>
+        <path d="M40 100L170 35" stroke="var(--mean)" stroke-width="4" stroke-linecap="round"/><circle cx="170" cy="35" r="6" fill="var(--mean)"/>
+        <path d="M40 100L250 70" stroke="var(--point)" stroke-width="4" stroke-linecap="round"/><circle cx="250" cy="70" r="6" fill="var(--point)"/>
+        <path d="M170 35L250 70" stroke="var(--good, #1C8A5A)" stroke-width="3" stroke-dasharray="6 4"/>
       </svg>
-      <h2 data-i="ml_t">Serie ML visual</h2>
-      <p data-i="ml_d">Catorce algoritmos de machine learning: regresión, árboles, boosting, vecinos, k-means, PCA, SVM, Bayes, procesos gaussianos, Markov y Kalman.</p>
-      <p class="meta" data-i="ml_m">14 temas · 28 páginas · 14 vídeos</p>
-      <a class="go" data-href="ml" href="serie-ml-visual-es.html" data-i="open">Abrir la colección →</a>
+      <h2 data-i="mt_t">Las matemáticas debajo del ML</h2>
+      <p data-i="mt_d">Los cimientos: vectores, distancias, productos punto, matrices, estadística, probabilidad y el cálculo que hay detrás de cómo aprende un modelo.</p>
+      <p class="meta" data-i="mt_m">2 de 16 temas · 4 páginas · 2 vídeos</p>
+      <a class="go" data-href="mt" href="matematicas-del-ml-es.html" data-i="open">Abrir la colección →</a>
     </article>
 
     <article class="card">
@@ -80,16 +82,14 @@ footer{margin-top:36px;color:var(--muted);font-size:.9rem}
 
     <article class="card">
       <svg viewBox="0 0 320 120" aria-hidden="true">
-        <g stroke="var(--line)" stroke-width="1.5"><path d="M20 10V110M70 10V110M120 10V110M170 10V110M220 10V110M270 10V110M20 110H300M20 60H300M20 10H300"/></g>
-        <path d="M20 110C90 110 110 20 160 20S230 110 300 110" fill="var(--sample)" fill-opacity=".12" stroke="var(--sample)" stroke-width="3"/>
-        <path d="M40 100L170 35" stroke="var(--mean)" stroke-width="4" stroke-linecap="round"/><circle cx="170" cy="35" r="6" fill="var(--mean)"/>
-        <path d="M40 100L250 70" stroke="var(--point)" stroke-width="4" stroke-linecap="round"/><circle cx="250" cy="70" r="6" fill="var(--point)"/>
-        <path d="M170 35L250 70" stroke="var(--good, #1C8A5A)" stroke-width="3" stroke-dasharray="6 4"/>
+        <path d="M10 80 C60 75 80 15 130 25 S220 85 310 10 L310 40 C220 115 180 55 130 55 S60 105 10 110 Z" fill="var(--mean)" fill-opacity=".12"/>
+        <path d="M10 95 C60 90 80 30 130 40 S220 100 310 25" fill="none" stroke="var(--mean)" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="60" cy="80" r="6" fill="var(--point)"/><circle cx="130" cy="40" r="6" fill="var(--point)"/><circle cx="220" cy="78" r="6" fill="var(--point)"/><circle cx="290" cy="32" r="6" fill="var(--point)"/>
       </svg>
-      <h2 data-i="mt_t">Las matemáticas debajo del ML</h2>
-      <p data-i="mt_d">Los cimientos: vectores, distancias, productos punto, matrices, estadística, probabilidad y el cálculo que hay detrás de cómo aprende un modelo.</p>
-      <p class="meta" data-i="mt_m">2 de 16 temas · 4 páginas · 2 vídeos</p>
-      <a class="go" data-href="mt" href="matematicas-del-ml-es.html" data-i="open">Abrir la colección →</a>
+      <h2 data-i="ml_t">Serie ML visual</h2>
+      <p data-i="ml_d">Catorce algoritmos de machine learning: regresión, árboles, boosting, vecinos, k-means, PCA, SVM, Bayes, procesos gaussianos, Markov y Kalman.</p>
+      <p class="meta" data-i="ml_m">14 temas · 28 páginas · 14 vídeos</p>
+      <a class="go" data-href="ml" href="serie-ml-visual-es.html" data-i="open">Abrir la colección →</a>
     </article>
   </div>
 
@@ -121,6 +121,7 @@ function set(l){var t=T[l];document.documentElement.lang=l;document.title=t.titl
   try{localStorage.setItem("gauss-lang",l);}catch(e){}}
 document.querySelectorAll("[data-lang]").forEach(function(b){b.addEventListener("click",function(){set(b.getAttribute("data-lang"));});});
 var saved=null;try{saved=localStorage.getItem("gauss-lang");}catch(e){}
+var h=location.hash.slice(1);if(h==="es"||h==="en")saved=h;
 set(saved||((navigator.language||"es").toLowerCase().indexOf("es")===0?"es":"en"));
 })();
 </script>
