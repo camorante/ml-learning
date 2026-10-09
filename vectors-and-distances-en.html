@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vectors and distances</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.segs{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.segs .lab{font-size:.9rem;color:var(--muted)}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:210px minmax(0,1fr) 72px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden}
+.meter2 .bar i{display:block;height:100%;border-radius:7px;transition:width .35s}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.meter2 .row{grid-template-columns:118px minmax(0,1fr) 58px;font-size:.84rem}}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.verdict{display:inline-block;border-radius:999px;padding:2px 10px;font-size:.85rem;font-weight:600}
+.verdict.ok{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.verdict.no{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.verdict.mid{background:color-mix(in srgb,var(--sample) 18%,transparent);color:var(--sample)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.situ h3{font-size:1.1rem}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec ul{margin:0;padding-left:18px;font-size:.93rem;color:var(--muted);display:grid;gap:4px}
+.dec ul b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+</style>
+<style>
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.case{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:8px;align-content:start}
+.case h3{font-size:1rem}
+.case dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0;font-size:.9rem}
+.case dt{color:var(--muted)}.case dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.case .ans{font-size:.9rem;color:var(--muted);min-height:1.2em}
+.case .ans b.ok{color:var(--good)}.case .ans b.no{color:var(--warn)}
+.case .btns button{padding:6px 12px;font-size:.88rem}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:230px minmax(0,1fr) 92px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden;position:relative}
+.meter2 .bar i{display:block;height:100%;border-radius:7px;transition:width .35s}
+.meter2 .bar u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.meter2 .row{grid-template-columns:120px minmax(0,1fr) 70px;font-size:.84rem}}
+</style>
+<style>
+.narrow{max-width:780px;width:100%;justify-self:center}
+select{font:inherit;font-size:.95rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:6px 10px;max-width:100%}
+.selrow{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.selrow label{font-weight:700;font-size:.98rem}
+svg .halo{paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round}
+svg .drag{cursor:grab;touch-action:none}
+svg .pick{cursor:pointer}
+.big3 b.sm{font-size:1.35rem}
+@media (max-width:520px){.fig svg text{font-size:22px}.fig svg text.halo{font-size:26px;stroke-width:6px}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">The math under ML · topic 1 · explained with drawings · <a href="vectors-and-distances-technical-en.html" target="_self">see the technical version</a> · <a href="math-under-ml-en.html" target="_self">all topics</a> · <a href="vectores-y-distancias-es.html" target="_self">en español</a></p>
+  <h1>Vectors and distances</h1>
+  <p class="lede">To a computer, a truck is a list of numbers. If you draw that list as an arrow, you can measure how far one truck is from another. That measurement is the basis for finding "the most similar one", for grouping things, and for spotting what's unusual.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="situ col">
+    <p class="eyebrow">The setup</p>
+    <p>A fleet has 12 trucks. For each one we keep just <strong>two numbers</strong>, monthly averages: how many <strong>stops</strong> it makes per day (deliveries, pickups) and how many <strong>hours it works</strong> per day. With those two numbers, each truck is a point on a plane: so many stops to the right and so many hours up.</p>
+    <p>The question is simple: <strong>which truck is most similar to a given one?</strong> It's useful, for example, to pick which truck replaces another that goes into the maintenance shop. The answer will be the point that is <strong>closest</strong>.</p>
+  </div>
+  <figure class="fig narrow"><svg id="hero" role="img" aria-label="Twelve trucks as points by stops and hours per day, with the reference truck and the most similar one"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each <b style="color:var(--point)">orange</b> point is a truck, with its number. The <b style="color:var(--mean)">blue</b> point is the reference truck; the <b style="color:var(--mean)">blue arrow</b> starts at zero and reaches it, and the two <b style="color:var(--sample)">purple</b> lines are its two numbers: how far it goes to the right (stops) and how far it goes up (hours). The <b style="color:var(--good)">green</b> truck is the most similar one, and the green line is the path measured to it. You can tap any truck to make it the reference, or drag the blue point wherever you like.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>Which truck is the reference?</h3>
+      <div class="selrow"><label for="h-ref">Truck</label><select id="h-ref"></select></div>
+      <p>It's the truck we're looking for a match for. If you drag the blue point, it becomes an imaginary truck: a new one that isn't in the fleet yet.</p>
+    </div>
+    <div class="dec">
+      <h3>How do we measure distance?</h3>
+      <div class="seg" role="group" aria-label="Type of distance"><button type="button" id="h-l2" aria-pressed="true">Straight line</button><button type="button" id="h-l1" aria-pressed="false">By blocks</button></div>
+      <ul>
+        <li><b>Straight line</b>: as the crow flies, diagonally if needed.</li>
+        <li><b>By blocks</b>: like a truck in a city with a grid of streets: first horizontally and then vertically, adding up the two legs.</li>
+      </ul>
+      <p>For now, one stop counts the same as one hour. In idea 4 we'll see that this is a decision, and an important one.</p>
+    </div>
+  </div>
+  <div class="big3 col" id="h-big"></div>
+  <div class="col stack">
+    <p><strong>Try this, in order:</strong></p>
+    <ol class="try">
+      <li>Start with truck 2 (urban delivery). The most similar is truck 1, which makes half a stop more and works half an hour less.</li>
+      <li>Pick truck 5 and switch between "straight line" and "by blocks": the most similar one goes from truck 6 to truck 7. The way you measure changes the answer.</li>
+      <li>Drag the blue point to an empty area, for example to 14 stops and 11 hours. The most similar one is far away: a truck like that would be unusual in this fleet.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="h-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">What you just saw</p>
+    <h2>Similar means close</h2>
+    <p>You turned each truck into two numbers and drew those numbers as a point. From there, "which truck is most similar?" becomes "which point is closest?", and that can be calculated.</p>
+    <p>Many machine learning methods work like this under the hood: <a href="k-nearest-neighbors-en.html" target="_self">nearest neighbors</a> decides by looking at the most similar ones; <a href="k-means-en.html" target="_self">k-means</a> groups what is close together. For them to work well you need to understand four things: what exactly that arrow is, how its length is measured, how many ways there are to measure a distance, and what happens when the numbers are in different units or when there are many of them.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 5</p>
+    <h2>A data point is a list of numbers, and a list of numbers is an arrow</h2>
+    <p>A list of numbers in a fixed order (first the stops, then the hours) is called a <strong>vector</strong>. You can draw it as an arrow that starts at zero. With arrows you can do two operations that make sense in real life:</p>
+    <ul>
+      <li><strong>Add</strong>: Monday's work plus Tuesday's work is the work of both days. You add stops to stops and hours to hours. In the drawing, it means placing one arrow right after the other.</li>
+      <li><strong>Multiply by a number</strong>: twice the work is twice the stops and twice the hours. The arrow points the same way and is twice as long.</li>
+    </ul>
+  </div>
+  <figure class="fig"><svg id="vec" role="img" aria-label="Sum of two arrows and an arrow multiplied by a number"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Horizontally, stops; vertically, hours. The <b style="color:var(--point)">orange</b> arrow is Monday. When adding, the <b style="color:var(--sample)">purple</b> one is Tuesday, placed at the end of Monday's, and the <b style="color:var(--mean)">blue</b> one is the total. When multiplying, the blue one is Monday multiplied by the number you choose.</p>
+  <div class="seg" role="group" aria-label="Operation"><button type="button" id="v-sum" aria-pressed="true">Add two days</button><button type="button" id="v-mul" aria-pressed="false">Multiply by a number</button></div>
+  <div class="controls">
+    <div class="slider"><label for="v-a1">Monday: stops <output id="v-a1-o"></output></label><input type="range" id="v-a1" min="0" max="8" step="1" value="6"><div class="ends"><span>0</span><span>8</span></div></div>
+    <div class="slider"><label for="v-a2">Monday: hours <output id="v-a2-o"></output></label><input type="range" id="v-a2" min="0" max="8" step="0.5" value="4"><div class="ends"><span>0</span><span>8</span></div></div>
+    <div class="slider v-s"><label for="v-b1">Tuesday: stops <output id="v-b1-o"></output></label><input type="range" id="v-b1" min="0" max="8" step="1" value="3"><div class="ends"><span>0</span><span>8</span></div></div>
+    <div class="slider v-s"><label for="v-b2">Tuesday: hours <output id="v-b2-o"></output></label><input type="range" id="v-b2" min="0" max="8" step="0.5" value="5"><div class="ends"><span>0</span><span>8</span></div></div>
+    <div class="slider v-m" hidden><label for="v-k">Multiply Monday by <output id="v-k-o"></output></label><input type="range" id="v-k" min="0" max="3" step="0.5" value="2"><div class="ends"><span>0 (nothing)</span><span>3 (triple)</span></div></div>
+  </div>
+  <p class="qcard col" id="v-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 5</p>
+    <h2>What an arrow measures: the Pythagorean theorem</h2>
+    <p>Imagine a truck that leaves the warehouse and, on a grid street map, ends up 3 blocks east and 4 blocks north. Its vector is (3, 4). How far is it from the warehouse, in a straight line?</p>
+    <p>The two numbers and the arrow form a triangle with a right angle. Pythagoras says that the long side squared is the sum of the other two squared: 3² + 4² = 9 + 16 = 25, and the square root of 25 is <strong>5</strong>. That measurement is called the <strong>length</strong> (or norm) of the vector.</p>
+  </div>
+  <figure class="fig narrow"><svg id="len" role="img" aria-label="Right triangle formed by a vector and its two components"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The thin lines are the streets. The gray square is the warehouse. The <b style="color:var(--point)">orange</b> line is how far the truck goes east and the <b style="color:var(--sample)">purple</b> one, north. The <b style="color:var(--mean)">blue</b> arrow is the straight-line distance. <b>Drag the tip of the arrow</b> (the blue point) to another intersection.</p>
+  <p class="qcard col" id="l-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 5</p>
+    <h2>The distance between two trucks is the length of their difference</h2>
+    <p>To know how far B is from A, you subtract their numbers (how much you have to move in each direction to go from A to B) and measure the length of that arrow. There are several reasonable ways to measure it:</p>
+    <ul>
+      <li><strong>Straight line</strong> (<em>Euclidean</em> distance): Pythagoras, as in idea 2.</li>
+      <li><strong>By blocks</strong> (<em>Manhattan</em> distance): you add up the two legs, like a truck that can only drive along grid streets.</li>
+      <li><strong>By the longest side</strong> (<em>maximum</em> distance): only the largest of the differences counts. It's useful when what matters is the worst case: "no number may differ by more than so much".</li>
+    </ul>
+  </div>
+  <figure class="fig narrow"><svg id="dist" role="img" aria-label="Two trucks on a street map with three ways to measure the distance"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> <b>Drag</b> trucks <b style="color:var(--point)">A</b> and <b style="color:var(--sample)">B</b>. The <b style="color:var(--good)">green</b> line is the path being measured. The filled <b style="color:var(--mean)">blue</b> shape contains all the points that are the same distance from A as B is: with the straight line it's a circle; by blocks, a diamond; by the longest side, a square. The other two shapes appear dashed for comparison.</p>
+  <div class="seg" role="group" aria-label="Type of distance"><button type="button" id="d-0" aria-pressed="true">Straight line</button><button type="button" id="d-1" aria-pressed="false">By blocks</button><button type="button" id="d-2" aria-pressed="false">By the longest side</button></div>
+  <div class="kpis col" id="d-k"></div>
+  <p class="qcard col" id="d-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 5</p>
+    <h2>Units rule</h2>
+    <p>Let's change one number: instead of hours, we use <strong>kilometers per day</strong>. Kilometers range from 130 to 750; stops, from 1 to 13.5. If you compute the distance as is, a difference of 40 km weighs the same as a difference of 40 stops, and 40 stops don't exist in this fleet. Result: <strong>kilometers decide everything</strong> and stops barely count.</p>
+    <p>The fix is to <strong>scale</strong> (standardize): from each number you subtract its mean and divide by its <em>deviation</em>, which is how far that number usually strays from the mean in the fleet. In this fleet, the deviation of the km is about 200 km and that of the stops, about 4.25 stops. After scaling, "200 km more" and "4.25 stops more" weigh the same.</p>
+  </div>
+  <figure class="fig"><svg id="units" role="img" aria-label="Twelve trucks by kilometers and stops per day, with the area of those that would be closer"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Horizontally, kilometers per day; vertically, stops per day. The <b style="color:var(--mean)">blue</b> point is the reference and the <b style="color:var(--good)">green</b> one, its most similar truck. The <b style="color:var(--mean)">light blue</b> area is all the places that would be at the same distance as that truck or closer. Without scaling, the area is a narrow, very tall strip: only being close in kilometers matters, stops make no difference. When you scale, it becomes an oval that looks at both.</p>
+  <div class="decs">
+    <div class="dec"><h3>Do we scale?</h3><div class="seg" role="group" aria-label="Scaling"><button type="button" id="u-0" aria-pressed="true">Not scaled</button><button type="button" id="u-1" aria-pressed="false">Scaled</button></div><p>Not scaled: km and stops as they are. Scaled: each number measured in deviations.</p></div>
+    <div class="dec"><h3>Reference truck</h3><div class="selrow"><label for="u-ref">Truck</label><select id="u-ref"></select></div><p>Start with 2 and then try 5, 8 and 12.</p></div>
+  </div>
+  <div class="kpis col" id="u-k"></div>
+  <p class="qcard col" id="u-msg"></p>
+  <p class="col">That's why the data is almost always scaled before using distances: the topic <a href="preparing-features-en.html" target="_self">preparing the features</a> in "Preparing the data" explains it, and it's the first warning of the <a href="k-nearest-neighbors-en.html" target="_self">nearest neighbors</a> method.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 5</p>
+    <h2>With many numbers, everything is equally far away</h2>
+    <p>A real truck doesn't have two numbers, it has dozens or hundreds: speeds, hard brakes, fuel use, temperatures, hours per time slot… The formulas are the same: with 3 numbers, Pythagoras adds three squares; with 100, it adds a hundred. But something surprising happens: the more numbers, the more <strong>all</strong> distances look alike. The closest and the farthest end up at almost the same distance, and "the most similar one" stops meaning anything. It's called the <strong>curse of dimensionality</strong> (each number is a dimension).</p>
+  </div>
+  <figure class="fig"><svg id="dim" role="img" aria-label="Histogram of the distances between random points by number of dimensions"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> 120 made-up trucks are scattered at random and the 7,140 distances between every pair are measured. The bars count how many distances there are of each size, compared with the average distance (the 1 in the middle). The <b style="color:var(--good)">green</b> line marks how far a truck's nearest neighbor is and the <b style="color:var(--warn)">red</b> one, the farthest. The height of the bars adjusts automatically.</p>
+  <div class="slider col"><label for="m-d">Numbers per truck (dimensions) <output id="m-d-o"></output></label><input type="range" id="m-d" min="0" max="9" step="1" value="0"><div class="ends"><span>2</span><span>1,000</span></div></div>
+  <div class="big3 col" id="m-big"></div>
+  <p class="qcard col" id="m-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The recipe for measuring similarity</h2>
+    <ol class="steps">
+      <li><div><strong>Turn each thing into a list of numbers</strong>, always in the same order: that's its vector.</div></li>
+      <li><div><strong>Choose which numbers go in.</strong> Only the ones that matter for the similarity you're after: a number that has nothing to do with it only adds noise.</div></li>
+      <li><div><strong>Put them on the same scale</strong> (standardize) so none of them takes over because of its units.</div></li>
+      <li><div><strong>Choose how to measure</strong>: straight line by default; by blocks if there are extreme values or many numbers; by the longest side if the worst case matters.</div></li>
+      <li><div><strong>Find the closest ones</strong> or the ones that are far from everything, depending on the question.</div></li>
+      <li><div><strong>With many numbers, check</strong> that the closest one is clearly closer than the rest. If not, reduce the number of dimensions.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where distances are used in fleet telemetry</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 30C12 18 18 26 24 14S34 10 34 10"/><path d="M6 34C12 22 18 30 24 18S34 14 34 14" stroke-dasharray="3 3"/></svg><h3>Similar trips</h3><p>Each trip is a vector (km, duration, stops, fuel use, departure time). Finding the trips closest to a new one gives an estimate of its duration or its fuel use.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="12" cy="14" r="2.5"/><circle cx="17" cy="20" r="2.5"/><circle cx="11" cy="23" r="2.5"/><circle cx="31" cy="30" r="3.5"/><path d="M31 22v2M31 36v1"/></svg><h3>An odd truck</h3><p>A truck that is far from all the others (fuel use, temperatures, vibrations) deserves an inspection: it could be a breakdown, a badly calibrated sensor or misuse.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="12" cy="13" r="6"/><circle cx="28" cy="13" r="6"/><circle cx="20" cy="28" r="6"/></svg><h3>Grouping routes</h3><p>k-means puts nearby routes into groups (urban delivery, regional, long haul) to plan vehicles, shifts and maintenance by type of use.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="14" cy="13" r="5"/><path d="M5 32c1-7 5-10 9-10s8 3 9 10"/><path d="M26 18h9M31 14l4 4-4 4"/></svg><h3>A replacement driver</h3><p>If a driver is out, you look for another one with a close history: same areas, schedules, vehicle type and driving style.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Connections</p>
+    <h2>With the models of the ML series and with "Preparing the data"</h2>
+    <p><a href="k-nearest-neighbors-en.html" target="_self">Nearest neighbors</a> decides using the distances in this topic. <a href="k-means-en.html" target="_self">k-means</a> groups nearby points and computes the center of each group as an average of arrows. <a href="support-vector-machines-en.html" target="_self">Support vector machines</a> look for the boundary that is farthest from both groups, and their "kernel" version compares points with a distance. <a href="pca-en.html" target="_self">Principal component analysis</a> reduces many numbers to a few, which helps against the curse of dimensionality. To scale the data properly, see the topic <a href="preparing-features-en.html" target="_self">preparing the features</a>. The next topic in this collection, the <a href="dot-product-and-cosine-en.html" target="_self">dot product</a>, measures which way two arrows point instead of how far apart they are.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>What helps and where it misleads</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>What helps</h3><ul class="pc">
+      <li>A very intuitive idea: similar = close. It can be explained with a drawing.</li>
+      <li>It works with anything that can be described with numbers.</li>
+      <li>There's nothing to train: you just store the data and measure.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Where it misleads</h3><ul class="pc">
+      <li>The units silently decide who is "the most similar one".</li>
+      <li>A number that has nothing to do with what you're after spoils it all the same.</li>
+      <li>With many numbers, all distances look alike.</li>
+      <li>Measuring against millions of points is slow if the search isn't organized well.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Vector</dt><dd>A list of numbers in a fixed order. It's drawn as an arrow from zero.</dd>
+      <dt>Component</dt><dd>Each of the numbers in the vector (the stops, the hours).</dd>
+      <dt>Dimension</dt><dd>How many numbers the vector has. Two numbers, two dimensions: a plane.</dd>
+      <dt>Length (norm)</dt><dd>How long the arrow is. In a straight line, with Pythagoras.</dd>
+      <dt>Euclidean distance</dt><dd>The straight-line distance.</dd>
+      <dt>Manhattan distance</dt><dd>The distance by blocks: the sum of the differences.</dd>
+      <dt>Maximum distance</dt><dd>Only the largest of the differences counts.</dd>
+      <dt>Standardize</dt><dd>Subtract the mean and divide by the deviation, so that all numbers weigh about the same.</dd>
+      <dt>Nearest neighbor</dt><dd>The point at the smallest distance from a given one.</dd>
+      <dt>Curse of dimensionality</dt><dd>With many numbers, all distances become alike.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the math behind it</summary>
+    <p style="padding-top:10px">You don't need them to understand the idea:</p>
+    <div class="formula">truck A = (a1, a2)      truck B = (b1, b2)
+sum       A + B = (a1 + b1, a2 + b2)
+times k   k · A = (k·a1, k·a2)
+
+straight-line length:     √(a1² + a2²)        (3, 4) → √25 = 5
+straight-line distance:   √((a1−b1)² + (a2−b2)²)
+distance by blocks:       |a1−b1| + |a2−b2|
+maximum distance:         the larger of |a1−b1| and |a2−b2|
+
+standardize:  z = (number − mean) / deviation
+   km:      mean 368.3   deviation 200.1
+   stops:   mean 7.7     deviation 4.25
+
+with n numbers, the same with n terms:
+   √((a1−b1)² + (a2−b2)² + … + (an−bn)²)</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in one minute</h2>
+    <p>An animated recap: the truck as an arrow, adding arrows, Pythagoras, the three ways to measure, why you need to scale and what happens with many dimensions. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xACRAAEAAgMBAQEAAAAAAAAAAAAABgEFBwQIAgMBAQEBAQAAAAAAAAAAAAAAAAABAgMQAAICAQMCAwUDBwkGBQUBAAABAwIEEQUSBiETBzFRImEUQTIjcYJygVI2tBUINHUWkaFCM3Oys5J0NWIXoiRjU0STsSUYgxEBAQEBAQEBAQAAAAAAAAAAABEBEjFhAiH/wAARCAIcA8ADASIAAhEAAxEA/9oADAMBAAIRAxEAPwDSIAOjmAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACwVVAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwB//Z" aria-label="Animation: vectors and distances">
+      <source src="vectors-and-distances-with-audio-en.mp4" type="video/mp4">
+      Your browser can't play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+/* working hours per day, stops per day, km per day (monthly averages) */
+const TR=[[7.5,13.5,180],[8,13,250],[6,13.5,160],[7,10.5,300],[8,6,370],[10,7,470],[8,8.5,330],[5.5,5,210],[10,2.5,660],[12,1,750],[9,2.5,610],[4,9.5,130]];
+const TIPO=["urban delivery","urban delivery","urban delivery","mixed","regional","regional","regional","warehouse shuttle","long haul","long haul","long haul","part-time"];
+const f1=(v,d)=>{const s=Math.abs(v).toFixed(d??1).split(".");const a=s[0].replace(/\B(?=(\d{3})+(?!\d))/g,",");const neg=v<0&&Math.abs(v)>=0.5*10**(-(d??1));return (neg?"−":"")+a+(s[1]?"."+s[1]:"");};
+const fx=v=>f1(v,Math.abs(v-Math.round(v))<1e-9?0:1);           /* 6 / 6.5 */
+const fd=v=>f1(v,Math.abs(v*100-Math.round(v*100))<1e-6&&Math.abs(v-Math.round(v))<1e-9?0:2);
+const seg=(ids,cb)=>{const b=ids.map(i=>document.getElementById(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});};
+const dist=(a,b,t)=>{const dx=Math.abs(a[0]-b[0]),dy=Math.abs(a[1]-b[1]);return t===0?Math.hypot(dx,dy):t===1?dx+dy:Math.max(dx,dy);};
+function nearest(P,r,t,skip){let bi=-1,bd=Infinity;P.forEach((q,i)=>{if(i===skip)return;const d=dist(r,q,t);if(d<bd-1e-9){bd=d;bi=i;}});return [bi,bd];}
+function arrow(g,x1,y1,x2,y2,col,w,dash){const dx=x2-x1,dy=y2-y1,L=Math.hypot(dx,dy);if(L<2)return;const ux=dx/L,uy=dy/L,h=Math.min(18,L*0.5),hw=h*0.48,bx=x2-ux*h,by=y2-uy*h;
+  const a={x1,y1,x2:bx+ux*2,y2:by+uy*2,stroke:col,"stroke-width":w,"stroke-linecap":"round"};if(dash)a["stroke-dasharray"]=dash;el("line",a,g);
+  el("path",{d:`M${x2.toFixed(1)} ${y2.toFixed(1)}L${(bx-uy*hw).toFixed(1)} ${(by+ux*hw).toFixed(1)}L${(bx+uy*hw).toFixed(1)} ${(by-ux*hw).toFixed(1)}Z`,fill:col},g);}
+function vgrid(pl,xs){for(const x of xs)el("line",{x1:pl.sx(x),x2:pl.sx(x),y1:pl.sy(pl.o.y0),y2:pl.sy(pl.o.y1),class:"g-line"},pl.gGrid);}
+function dragger(pl,h,onMove){h.addEventListener("pointerdown",e=>{e.preventDefault();h.setPointerCapture(e.pointerId);
+  const mv=ev=>{const p=pl.toSvg(ev);if(p)onMove(pl.ix(p.x),pl.iy(p.y));},up=()=>{h.removeEventListener("pointermove",mv);h.removeEventListener("pointerup",up);h.removeEventListener("pointercancel",up);};
+  h.addEventListener("pointermove",mv);h.addEventListener("pointerup",up);h.addEventListener("pointercancel",up);});}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lab=(g,x,y,s,a)=>txt(g,x,y,s,Object.assign({class:"halo","font-size":13},a||{}));
+const pl_=n=>n===1?"":"s";
+
+/* ---------- hero: the most similar truck ---------- */
+(function(){const P=TR.map(r=>[r[1],r[0]]);/* x = stops, y = hours */
+  const svg=document.getElementById("hero"),pad={l:50,r:16,t:16,b:46},u=(900-pad.l-pad.r)/15,H=Math.round(13*u+pad.t+pad.b);
+  const pl=new Plot(svg,{W:900,H,pad,x0:0,x1:15,y0:0,y1:13,xt:[0,2,4,6,8,10,12,14],yt:[0,2,4,6,8,10,12],fx:v=>v,fy:v=>v,xl:"stops per day →",yl:"working hours per day ↑"});
+  vgrid(pl,[0,2,4,6,8,10,12,14]);
+  const gp=el("g",null,pl.top),hits=P.map((p,i)=>{const c=el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:20,class:"hit pick"},gp);c.addEventListener("click",()=>{ref=i;rp=P[i].slice();draw();});return c;});
+  const hd=el("circle",{r:22,class:"hit drag"},pl.top);
+  let ref=1,rp=P[1].slice(),t=0;
+  const sel=document.getElementById("h-ref");sel.innerHTML=P.map((_,i)=>`<option value="${i}">${i+1} · ${TIPO[i]}</option>`).join("")+`<option value="-1">imaginary (dragged)</option>`;
+  sel.onchange=()=>{const v=+sel.value;if(v>=0){ref=v;rp=P[v].slice();}draw();};
+  dragger(pl,hd,(x,y)=>{ref=-1;rp=[Math.round(clamp(x,0,15)*2)/2,Math.round(clamp(y,0,13)*2)/2];draw();});
+  function draw(){pl.g.textContent="";const g=pl.g,[nb,d]=nearest(P,rp,t,ref),[nb2,d2]=nearest(P,rp,1-t,ref);
+    sel.value=String(ref);
+    /* arrow and components */
+    el("line",{x1:pl.sx(0),y1:pl.sy(0),x2:pl.sx(rp[0]),y2:pl.sy(0),stroke:"var(--sample)","stroke-width":3,"stroke-dasharray":"7 5"},g);
+    el("line",{x1:pl.sx(rp[0]),y1:pl.sy(0),x2:pl.sx(rp[0]),y2:pl.sy(rp[1]),stroke:"var(--sample)","stroke-width":3,"stroke-dasharray":"7 5"},g);
+    arrow(g,pl.sx(0),pl.sy(0),pl.sx(rp[0]),pl.sy(rp[1]),"var(--mean)",3.5);
+    lab(g,pl.sx(rp[0]/2),pl.sy(0)-8,fx(rp[0])+" stop"+pl_(rp[0]),{"text-anchor":"middle",style:"fill:var(--sample)"});
+    lab(g,pl.sx(rp[0])+8,pl.sy(rp[1]/2),fx(rp[1])+" h",{style:"fill:var(--sample)"});
+    /* path to the most similar */
+    const q=P[nb];
+    if(t===0)el("line",{x1:pl.sx(rp[0]),y1:pl.sy(rp[1]),x2:pl.sx(q[0]),y2:pl.sy(q[1]),stroke:"var(--good)","stroke-width":4,"stroke-linecap":"round"},g);
+    else el("path",{d:`M${pl.sx(rp[0])} ${pl.sy(rp[1])}H${pl.sx(q[0])}V${pl.sy(q[1])}`,fill:"none",stroke:"var(--good)","stroke-width":4,"stroke-linejoin":"round","stroke-linecap":"round"},g);
+    /* trucks */
+    P.forEach((p,i)=>{if(i===ref)return;const isN=i===nb;el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:isN?11:8,fill:isN?"var(--good)":"var(--point)",stroke:"var(--point-ring)","stroke-width":2.5},g);
+      lab(g,pl.sx(p[0])+12,pl.sy(p[1])-9,String(i+1),{"font-size":14,class:"halo t-ink","font-weight":isN?700:400});});
+    el("circle",{cx:pl.sx(rp[0]),cy:pl.sy(rp[1]),r:12,fill:"var(--mean)",stroke:"var(--point-ring)","stroke-width":3},g);
+    lab(g,pl.sx(rp[0])-14,pl.sy(rp[1])-12,ref>=0?String(ref+1):"?",{"font-size":15,"text-anchor":"end",class:"halo t-ink","font-weight":700});
+    hd.setAttribute("cx",pl.sx(rp[0]));hd.setAttribute("cy",pl.sy(rp[1]));
+    hits.forEach((c,i)=>c.style.display=i===ref?"none":"");
+    const kind=t?"by blocks":"in a straight line",other=t?"in a straight line":"by blocks";
+    document.getElementById("h-big").innerHTML=`<div><b class="sm">${fx(rp[0])} stop${pl_(rp[0])} · ${fx(rp[1])} h</b><span>${ref>=0?`truck ${ref+1} (${TIPO[ref]}), the reference`:"imaginary reference truck"}</span></div><div><b>${fd(d)}</b><span>distance ${kind} to the most similar</span></div><div><b class="sm">truck ${nb+1}</b><span>the most similar (${TIPO[nb]})</span></div>`;
+    const dp=q[0]-rp[0],dh=q[1]-rp[1];
+    const dif=`${dp===0?"the same stops":(dp>0?fx(dp)+" more stop"+pl_(dp):fx(-dp)+" fewer stop"+pl_(-dp))} and ${dh===0?"the same hours":(dh>0?fx(dh)+" h more":fx(-dh)+" h less")}`;
+    let m=(ref>=0?`Truck ${ref+1} (${TIPO[ref]}) makes ${fx(rp[0])} stop${pl_(rp[0])} and works ${fx(rp[1])} hours a day: its arrow goes ${fx(rp[0])} to the right and ${fx(rp[1])} up.`:`Your imaginary truck makes ${fx(rp[0])} stop${pl_(rp[0])} and works ${fx(rp[1])} hours a day.`)+
+      ` The most similar is <b>truck ${nb+1}</b> (${TIPO[nb]}), with ${dif}: distance ${kind} <b>${fd(d)}</b>.`;
+    if(t===0)m+=` It comes from Pythagoras: √(${fx(Math.abs(dp))}² + ${fx(Math.abs(dh))}²) = ${fd(d)}.`;else m+=` It's the sum of the two legs: ${fx(Math.abs(dp))} + ${fx(Math.abs(dh))} = ${fd(d)}.`;
+    if(nb2!==nb)m+=` Careful: measuring ${other}, the most similar would be truck ${nb2+1} (at ${fd(d2)}). The way you measure changes the answer.`;
+    if(ref<0)m+=d>(t?3.8:3.0)?` It's <b>far from all of them</b>: in this fleet, a truck like that would be unusual and would deserve a look.`:` It has company nearby: it would be a normal truck in this fleet.`;
+    document.getElementById("h-msg").innerHTML=m;}
+  seg(["h-l2","h-l1"],i=>{t=i;draw();});draw();})();
+
+/* ---------- idea 1: adding and multiplying arrows ---------- */
+(function(){const svg=document.getElementById("vec"),ids=["v-a1","v-a2","v-b1","v-b2","v-k"],I=ids.map(i=>document.getElementById(i));let mode=0;
+  function draw(){svg.textContent="";const R=mode?24:16,tk=mode?[0,4,8,12,16,20,24]:[0,2,4,6,8,10,12,14,16];
+    const pl=new Plot(svg,{W:900,H:440,pad:{l:44,r:16,t:16,b:44},x0:0,x1:R,y0:0,y1:R,xt:tk,yt:tk,xl:"stops →",yl:"hours ↑"});vgrid(pl,tk);
+    const [a1,a2,b1,b2,k]=I.map(i=>+i.value),g=pl.g;
+    ids.forEach((id,j)=>document.getElementById(id+"-o").textContent=fx(+I[j].value));
+    document.querySelectorAll(".v-s").forEach(e=>e.hidden=mode!==0);document.querySelectorAll(".v-m").forEach(e=>e.hidden=mode!==1);
+    const S=(x,y)=>[pl.sx(x),pl.sy(y)];
+    if(mode===0){const s1=a1+b1,s2=a2+b2;
+      el("line",{x1:pl.sx(b1),y1:pl.sy(b2),x2:pl.sx(s1),y2:pl.sy(s2),stroke:"var(--point)","stroke-width":1.6,"stroke-dasharray":"5 5",opacity:.7},g);
+      el("line",{x1:pl.sx(0),y1:pl.sy(0),x2:pl.sx(b1),y2:pl.sy(b2),stroke:"var(--sample)","stroke-width":1.6,"stroke-dasharray":"5 5",opacity:.7},g);
+      arrow(g,...S(0,0),...S(s1,s2),"var(--mean)",5);
+      arrow(g,...S(0,0),...S(a1,a2),"var(--point)",3.5);
+      arrow(g,...S(a1,a2),...S(s1,s2),"var(--sample)",3.5);
+      lab(g,pl.sx(a1)+10,pl.sy(a2)+18,`Monday (${fx(a1)}, ${fx(a2)})`,{style:"fill:var(--point)"});
+      lab(g,pl.sx(s1)+10,pl.sy(s2)-6,`total (${fx(s1)}, ${fx(s2)})`,{style:"fill:var(--mean)","font-weight":700});
+      lab(g,pl.sx((a1+s1)/2)+10,pl.sy((a2+s2)/2)+4,`Tuesday (${fx(b1)}, ${fx(b2)})`,{style:"fill:var(--sample)"});
+      document.getElementById("v-msg").innerHTML=`Monday (${fx(a1)} stop${pl_(a1)}, ${fx(a2)} h) + Tuesday (${fx(b1)} stop${pl_(b1)}, ${fx(b2)} h) = <b>(${fx(s1)}, ${fx(s2)})</b>: ${fx(s1)} stop${pl_(s1)} and ${fx(s2)} hours over the two days. In the drawing, Tuesday's arrow starts where Monday's ends, and the blue one goes straight from zero to the end. If you add in the other order (Tuesday first, dashed lines) you get to the same place.`;}
+    else{const c1=k*a1,c2=k*a2;
+      arrow(g,...S(0,0),...S(c1,c2),"var(--mean)",7);
+      arrow(g,...S(0,0),...S(a1,a2),"var(--point)",3.5);
+      lab(g,pl.sx(a1)+10,pl.sy(a2)+18,`Monday (${fx(a1)}, ${fx(a2)})`,{style:"fill:var(--point)"});
+      if(k>0)lab(g,pl.sx(c1)+10,pl.sy(c2)-6,`${fx(k)} × Monday = (${fx(c1)}, ${fx(c2)})`,{style:"fill:var(--mean)","font-weight":700});
+      const L=Math.hypot(a1,a2);
+      document.getElementById("v-msg").innerHTML=k===0?`Multiplying by 0 leaves the arrow at zero: no work at all.`:`${fx(k)} × (${fx(a1)}, ${fx(a2)}) = <b>(${fx(c1)}, ${fx(c2)})</b>. Both numbers are multiplied by ${fx(k)}. The arrow points in the same direction${k===1?" and doesn't change":` and is ${fx(k)} times as long`}${k<1?": less work, a shorter arrow":k>1?": more work, a longer arrow":""}.${L>0?"":" (With Monday at (0, 0) there's no arrow to stretch.)"}`;}}
+  I.forEach(i=>i.addEventListener("input",draw));seg(["v-sum","v-mul"],i=>{mode=i;draw();});draw();})();
+
+/* ---------- idea 2: Pythagoras ---------- */
+(function(){const svg=document.getElementById("len"),pad={l:36,r:16,t:16,b:36},u=(900-pad.l-pad.r)/9,H=Math.round(6*u+pad.t+pad.b);
+  const pl=new Plot(svg,{W:900,H,pad,x0:-0.5,x1:8.5,y0:-0.5,y1:5.5,xt:[0,1,2,3,4,5,6,7,8],yt:[0,1,2,3,4,5],xl:"blocks east →",yl:"blocks north ↑"});
+  vgrid(pl,[0,1,2,3,4,5,6,7,8]);
+  const hd=el("circle",{r:24,class:"hit drag"},pl.top);let p=[3,4];
+  dragger(pl,hd,(x,y)=>{const q=[clamp(Math.round(x),0,8),clamp(Math.round(y),0,5)];if(q[0]!==p[0]||q[1]!==p[1]){p=q;draw();}});
+  function draw(){const g=pl.g;g.textContent="";const [a,b]=p,L=Math.hypot(a,b);
+    el("rect",{x:pl.sx(0)-13,y:pl.sy(0)-13,width:26,height:26,rx:4,fill:"var(--muted)"},g);
+    if(a>0&&b>0){const s=16;el("path",{d:`M${pl.sx(a)-s} ${pl.sy(0)}V${pl.sy(0)-s}H${pl.sx(a)}`,fill:"none",stroke:"var(--ink)","stroke-width":1.5},g);}
+    if(a>0)el("line",{x1:pl.sx(0),y1:pl.sy(0),x2:pl.sx(a),y2:pl.sy(0),stroke:"var(--point)","stroke-width":5,"stroke-linecap":"round"},g);
+    if(b>0)el("line",{x1:pl.sx(a),y1:pl.sy(0),x2:pl.sx(a),y2:pl.sy(b),stroke:"var(--sample)","stroke-width":5,"stroke-linecap":"round"},g);
+    arrow(g,pl.sx(0),pl.sy(0),pl.sx(a),pl.sy(b),"var(--mean)",4.5);
+    if(a>0)lab(g,pl.sx(a/2),pl.sy(0)+24,String(a),{"text-anchor":"middle","font-size":18,"font-weight":700,style:"fill:var(--point)"});
+    if(b>0)lab(g,pl.sx(a)+12,pl.sy(b/2)+6,String(b),{"font-size":18,"font-weight":700,style:"fill:var(--sample)"});
+    if(L>0)lab(g,pl.sx(a/2)-14,pl.sy(b/2)-10,fd(L),{"text-anchor":"end","font-size":20,"font-weight":800,style:"fill:var(--mean)"});
+    el("circle",{cx:pl.sx(a),cy:pl.sy(b),r:10,fill:"var(--mean)",stroke:"var(--point-ring)","stroke-width":3},g);
+    hd.setAttribute("cx",pl.sx(a));hd.setAttribute("cy",pl.sy(b));
+    const exact=Math.abs(L-Math.round(L))<1e-9;
+    document.getElementById("l-msg").innerHTML=L===0?"The truck is at the warehouse: its vector is (0, 0) and its length, 0.":
+      (a===0||b===0)?`The truck has only moved in one direction: the length is simply <b>${fd(L)}</b> block${L===1?"":"s"}, no need for Pythagoras.`:
+      `Vector (${a}, ${b}): √(${a}² + ${b}²) = √(${a*a} + ${b*b}) = √${a*a+b*b} = <b>${fd(L)}</b> blocks in a straight line${exact?" (it comes out exact, like the famous 3-4-5!)":""}. Notice that it's always less than ${a} + ${b} = ${a+b}, which is what the truck drives along the streets: the straight line is the shortest path.`;}
+  draw();})();
+
+/* ---------- idea 3: three distances ---------- */
+(function(){const svg=document.getElementById("dist"),pad={l:36,r:16,t:16,b:36},u=(900-pad.l-pad.r)/11,H=Math.round(7*u+pad.t+pad.b);
+  const pl=new Plot(svg,{W:900,H,pad,x0:-0.5,x1:10.5,y0:-0.5,y1:6.5,xt:[0,2,4,6,8,10],yt:[0,2,4,6],xl:"blocks east →",yl:"blocks north ↑"});
+  vgrid(pl,[0,1,2,3,4,5,6,7,8,9,10]);[1,3,5].forEach(y=>el("line",{x1:pl.sx(-0.5),x2:pl.sx(10.5),y1:pl.sy(y),y2:pl.sy(y),class:"g-line"},pl.gGrid));
+  let A=[4,3],B=[7,5],t=0;const hA=el("circle",{r:22,class:"hit drag"},pl.top),hB=el("circle",{r:22,class:"hit drag"},pl.top);
+  const mv=w=>(x,y)=>{const q=[clamp(Math.round(x),0,10),clamp(Math.round(y),0,6)];const o=w?B:A;if(q[0]!==o[0]||q[1]!==o[1]){if(w)B=q;else A=q;draw();}};
+  dragger(pl,hA,mv(0));dragger(pl,hB,mv(1));
+  const NAMES=["Straight line","By blocks","By the longest side"];
+  function shape(tp,r){const cx=pl.sx(A[0]),cy=pl.sy(A[1]),R=r*u;if(tp===0)return ["circle",{cx,cy,r:R}];if(tp===1)return ["path",{d:`M${cx-R} ${cy}L${cx} ${cy-R}L${cx+R} ${cy}L${cx} ${cy+R}Z`}];return ["rect",{x:cx-R,y:cy-R,width:2*R,height:2*R}];}
+  function draw(){const g=pl.g;g.textContent="";const D=[0,1,2].map(k=>dist(A,B,k)),r=D[t],dx=B[0]-A[0],dy=B[1]-A[1];
+    if(r>0){[0,1,2].forEach(k=>{if(k===t)return;const [tag,a]=shape(k,r);el(tag,Object.assign(a,{fill:"none",stroke:"var(--muted)","stroke-width":1.5,"stroke-dasharray":"6 5"}),g);});
+      const [tag,a]=shape(t,r);el(tag,Object.assign(a,{fill:"var(--band)",stroke:"var(--mean)","stroke-width":2.5}),g);}
+    const sA=[pl.sx(A[0]),pl.sy(A[1])],sB=[pl.sx(B[0]),pl.sy(B[1])],C=[pl.sx(B[0]),pl.sy(A[1])];
+    if(t===0)el("line",{x1:sA[0],y1:sA[1],x2:sB[0],y2:sB[1],stroke:"var(--good)","stroke-width":5,"stroke-linecap":"round"},g);
+    else if(t===1)el("path",{d:`M${sA[0]} ${sA[1]}H${C[0]}V${sB[1]}`,fill:"none",stroke:"var(--good)","stroke-width":5,"stroke-linejoin":"round","stroke-linecap":"round"},g);
+    else{el("path",{d:`M${sA[0]} ${sA[1]}H${C[0]}V${sB[1]}`,fill:"none",stroke:"var(--muted)","stroke-width":2,"stroke-dasharray":"4 4"},g);
+      if(Math.abs(dx)>=Math.abs(dy))el("line",{x1:sA[0],y1:sA[1],x2:C[0],y2:C[1],stroke:"var(--good)","stroke-width":6,"stroke-linecap":"round"},g);
+      else el("line",{x1:C[0],y1:C[1],x2:sB[0],y2:sB[1],stroke:"var(--good)","stroke-width":6,"stroke-linecap":"round"},g);}
+    [[A,"A","var(--point)"],[B,"B","var(--sample)"]].forEach(([p,n,c])=>{el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:12,fill:c,stroke:"var(--point-ring)","stroke-width":3},g);lab(g,pl.sx(p[0])-14,pl.sy(p[1])-12,n,{"text-anchor":"end","font-size":17,"font-weight":800,class:"halo t-ink"});});
+    hA.setAttribute("cx",sA[0]);hA.setAttribute("cy",sA[1]);hB.setAttribute("cx",sB[0]);hB.setAttribute("cy",sB[1]);
+    document.getElementById("d-k").innerHTML=NAMES.map((n,k)=>`<span>${n}: <b>${fd(D[k])}</b></span>`).join("");
+    const ax=Math.abs(dx),ay=Math.abs(dy);
+    const m=r===0?"A and B are at the same intersection: distance 0, however you measure it.":
+      t===0?`B is ${ax} block${pl_(ax)} ${dx>=0?"east":"west"} and ${ay} ${dy>=0?"north":"south"} of A. In a straight line: √(${ax}² + ${ay}²) = <b>${fd(D[0])}</b>. The blue circle goes through B: all its points are ${fd(D[0])} from A.`:
+      t===1?`By blocks: ${ax} + ${ay} = <b>${fd(D[1])}</b>. There are many paths along the streets with that same length (in a staircase, in another order…), and all the intersections ${fd(D[1])} blocks from A form a diamond. By blocks it never comes out less than in a straight line (${fd(D[0])}).`:
+      `By the longest side: the larger of ${ax} and ${ay} is <b>${fd(D[2])}</b>. The other leg doesn't count. The points at that distance form a square. It's the distance that matters if the question is "how much does it differ in what it differs most?".`;
+    document.getElementById("d-msg").innerHTML=m+(r>0&&ax>0&&ay>0?` It always holds: longest side (${fd(D[2])}) ≤ straight line (${fd(D[0])}) ≤ by blocks (${fd(D[1])}).`:"");}
+  seg(["d-0","d-1","d-2"],i=>{t=i;draw();});draw();})();
+
+/* ---------- idea 4: units rule ---------- */
+(function(){const K=TR.map(r=>[r[2],r[1]]),n=K.length,mu=[0,1].map(j=>K.reduce((s,p)=>s+p[j],0)/n),sd=[0,1].map(j=>Math.sqrt(K.reduce((s,p)=>s+(p[j]-mu[j])**2,0)/n));
+  const Z=K.map(p=>[(p[0]-mu[0])/sd[0],(p[1]-mu[1])/sd[1]]);
+  const svg=document.getElementById("units"),pl=new Plot(svg,{W:900,H:420,pad:{l:44,r:16,t:16,b:44},x0:0,x1:800,y0:0,y1:16,xt:[0,100,200,300,400,500,600,700,800],yt:[0,4,8,12,16],xl:"km per day →",yl:"stops per day ↑"});
+  vgrid(pl,[0,100,200,300,400,500,600,700,800]);
+  let ref=1,sc=0;const sel=document.getElementById("u-ref");sel.innerHTML=K.map((_,i)=>`<option value="${i}">${i+1} · ${TIPO[i]}</option>`).join("");sel.value="1";sel.onchange=()=>{ref=+sel.value;draw();};
+  const nnOf=(X,i)=>nearest(X,X[i],0,i);
+  const changed=K.map((_,i)=>nnOf(K,i)[0]!==nnOf(Z,i)[0]);
+  function draw(){const g=pl.g;g.textContent="";const X=sc?Z:K,[nb,d]=nnOf(X,ref),r=K[ref],q=K[nb];
+    const rx=(sc?d*sd[0]:d)*(pl.sx(1)-pl.sx(0)),ry=(sc?d*sd[1]:d)*(pl.sy(0)-pl.sy(1));
+    el("ellipse",{cx:pl.sx(r[0]),cy:pl.sy(r[1]),rx,ry,fill:"var(--band)",stroke:"var(--mean)","stroke-width":2,"stroke-dasharray":"6 4"},g);
+    el("line",{x1:pl.sx(r[0]),y1:pl.sy(r[1]),x2:pl.sx(q[0]),y2:pl.sy(q[1]),stroke:"var(--good)","stroke-width":4,"stroke-linecap":"round"},g);
+    K.forEach((p,i)=>{if(i===ref)return;const isN=i===nb;el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:isN?11:8,fill:isN?"var(--good)":"var(--point)",stroke:"var(--point-ring)","stroke-width":2.5},g);
+      lab(g,pl.sx(p[0])+11,pl.sy(p[1])-9,String(i+1),{"font-size":14,class:"halo t-ink","font-weight":isN?700:400});});
+    el("circle",{cx:pl.sx(r[0]),cy:pl.sy(r[1]),r:12,fill:"var(--mean)",stroke:"var(--point-ring)","stroke-width":3},g);
+    lab(g,pl.sx(r[0])-14,pl.sy(r[1])-12,String(ref+1),{"font-size":15,"text-anchor":"end",class:"halo t-ink","font-weight":700});
+    const dk=q[0]-r[0],dp=q[1]-r[1],ck=sc?(dk/sd[0])**2:dk*dk,cp=sc?(dp/sd[1])**2:dp*dp,share=ck/(ck+cp);
+    const nb0=nnOf(K,ref)[0],nb1=nnOf(Z,ref)[0];
+    document.getElementById("u-k").innerHTML=`<span>reference: <b>truck ${ref+1}</b>, ${fx(r[0])} km and ${fx(r[1])} stop${pl_(r[1])}</span><span>most similar: <b>truck ${nb+1}</b> (${TIPO[nb]})</span><span>distance: <b>${fd(d)}</b></span><span>share from the km: <b>${Math.round(share*100)}%</b></span>`;
+    const lista=changed.map((c,i)=>c?i+1:0).filter(Boolean);
+    let m;
+    if(!sc)m=`Not scaled, the distance from truck ${ref+1} to truck ${nb+1} is √(${fx(Math.abs(dk))}² + ${fx(Math.abs(dp))}²) = ${fd(d)}: the <b>km contribute ${Math.round(share*100)}%</b> of the sum (${fx(ck)} versus ${fx(cp)}). The most similar is <b>truck ${nb+1}</b> (${TIPO[nb]}), with ${fx(q[0])} km and ${fx(q[1])} stop${pl_(q[1])}.`+(nb0!==nb1?` Does it look like the most similar one to you? Press "Scaled".`:` Here it matches the scaled one, but that doesn't always happen.`);
+    else m=`Scaled, each difference is divided by its deviation: ${fx(Math.abs(dk))} km / 200.1 = ${f1(Math.abs(dk)/sd[0],2)} and ${fx(Math.abs(dp))} stop${pl_(Math.abs(dp))} / 4.25 = ${f1(Math.abs(dp)/sd[1],2)}; distance √(${f1(Math.abs(dk)/sd[0],2)}² + ${f1(Math.abs(dp)/sd[1],2)}²) = ${fd(d)}. The most similar is <b>truck ${nb+1}</b> (${TIPO[nb]})`+(nb0!==nb1?`, and not truck ${nb0+1} (${TIPO[nb0]}), which came out without scaling.`:`, the same as without scaling.`)+` Scaling changes the most similar truck for ${lista.length} of the 12 trucks: ${lista.slice(0,-1).join(", ")} and ${lista[lista.length-1]}.`;
+    document.getElementById("u-msg").innerHTML=m;}
+  seg(["u-0","u-1"],i=>{sc=i;draw();});draw();})();
+
+/* ---------- idea 5: the curse of dimensionality ---------- */
+(function(){const DS=[2,3,5,10,20,50,100,200,500,1000],cache={},n=120,svg=document.getElementById("dim"),it=document.getElementById("m-d");
+  function stats(d){if(cache[d])return cache[d];const r=mulberry32(1000+d),X=new Float64Array(n*d);for(let i=0;i<X.length;i++)X[i]=r();
+    const D=[],M=new Float64Array(n*n);for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){let s=0;for(let k=0;k<d;k++){const v=X[i*d+k]-X[j*d+k];s+=v*v;}const v=Math.sqrt(s);D.push(v);M[i*n+j]=M[j*n+i]=v;}
+    const mean=D.reduce((a,b)=>a+b,0)/D.length,sdv=Math.sqrt(D.reduce((a,b)=>a+(b-mean)**2,0)/D.length);
+    let ratio=0;const q=30;for(let i=0;i<q;i++){let mn=Infinity,mx=0;for(let j=0;j<n;j++){if(j===i)continue;const v=M[i*n+j];if(v<mn)mn=v;if(v>mx)mx=v;}ratio+=mn/mx;}
+    let mn0=Infinity,mx0=0;for(let j=1;j<n;j++){mn0=Math.min(mn0,M[j]);mx0=Math.max(mx0,M[j]);}
+    return cache[d]={D,mean,sdv,ratio:ratio/q,mn0,mx0};}
+  function draw(){svg.textContent="";const d=DS[+it.value],s=stats(d),nb=50,h=new Array(nb).fill(0);
+    s.D.forEach(v=>{const b=Math.floor(v/s.mean/2*nb);if(b>=0&&b<nb)h[b]++;});const mx=Math.max(...h)/s.D.length;
+    const pl=new Plot(svg,{W:900,H:320,pad:{l:52,r:16,t:16,b:44},x0:0,x1:2,y0:0,y1:mx*1.08,xt:[0,0.25,0.5,0.75,1,1.25,1.5,1.75,2],fx:v=>f1(v,2),yt:[],xl:"distance ÷ average distance"});
+    h.forEach((c,b)=>{const f=c/s.D.length;if(f>0)el("rect",{x:pl.sx(b*2/nb)+1,y:pl.sy(f),width:pl.sx(2/nb)-pl.sx(0)-2,height:pl.sy(0)-pl.sy(f),fill:"var(--mean)","fill-opacity":.75,rx:2},pl.g);});
+    el("line",{x1:pl.sx(0),x2:pl.sx(2),y1:pl.sy(0),y2:pl.sy(0),class:"g-axis"},pl.g);
+    [[s.mn0,"var(--good)","closest"],[s.mx0,"var(--warn)","farthest"]].forEach(([v,c,t],k)=>{const x=pl.sx(Math.min(v/s.mean,1.99));el("line",{x1:x,x2:x,y1:pl.sy(0),y2:pl.sy(mx*1.08),stroke:c,"stroke-width":3},pl.g);
+      const right=k?x<760:x<200;lab(pl.top,x+(right?8:-8),30,t,{"text-anchor":right?"start":"end",style:`fill:${c}`,"font-weight":700});});
+    document.getElementById("m-d-o").textContent=d.toLocaleString("en-US");
+    document.getElementById("m-big").innerHTML=`<div><b>${d.toLocaleString("en-US")}</b><span>numbers per truck</span></div><div><b>${Math.round(s.ratio*100)}%</b><span>distance to the closest / to the farthest (average over 30 trucks)</span></div><div><b>±${f1(s.sdv/s.mean*100,1)}%</b><span>how far distances usually stray from the average</span></div>`;
+    document.getElementById("m-msg").innerHTML=d<=3?`With ${d} numbers there's a bit of everything: pairs almost touching and pairs very far apart. For a truck, the closest one is, on average, at <b>${Math.round(s.ratio*100)}%</b> of the distance of the farthest: there's a clear difference. Increase the number of dimensions.`:
+      d<=50?`With ${d} numbers, the bars already bunch up around 1: the closest one is at ${Math.round(s.ratio*100)}% of the distance of the farthest. You can still tell them apart, but less and less.`:
+      `With ${d.toLocaleString("en-US")} numbers, almost all distances are within ±${f1(s.sdv/s.mean*100,1)}% of the average, and the closest one is at <b>${Math.round(s.ratio*100)}%</b> of the distance of the farthest. "The most similar one" can barely be told apart from the rest. In practice, real data are not random points (the numbers are related to each other) and the curse is weaker; even so, it's worth removing numbers that add nothing and always checking that the closest one is clearly closer.`;}
+  it.addEventListener("input",draw);draw();})();
+})();
+</script>
+</body>
+</html>

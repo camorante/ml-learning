@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Datos que faltan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.segs{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.segs .lab{font-size:.9rem;color:var(--muted)}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:210px minmax(0,1fr) 72px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden}
+.meter2 .bar i{display:block;height:100%;border-radius:7px;transition:width .35s}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.meter2 .row{grid-template-columns:118px minmax(0,1fr) 58px;font-size:.84rem}}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.verdict{display:inline-block;border-radius:999px;padding:2px 10px;font-size:.85rem;font-weight:600}
+.verdict.ok{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.verdict.no{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.verdict.mid{background:color-mix(in srgb,var(--sample) 18%,transparent);color:var(--sample)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.situ h3{font-size:1.1rem}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec ul{margin:0;padding-left:18px;font-size:.93rem;color:var(--muted);display:grid;gap:4px}
+.dec ul b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+</style>
+
+<style>
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.case{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:8px;align-content:start}
+.case h3{font-size:1rem}
+.case dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0;font-size:.9rem}
+.case dt{color:var(--muted)}.case dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.case .ans{font-size:.9rem;color:var(--muted);min-height:1.2em}
+.case .ans b.ok{color:var(--good)}.case .ans b.no{color:var(--warn)}
+.case .btns button{padding:6px 12px;font-size:.88rem}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:230px minmax(0,1fr) 92px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden;position:relative}
+.meter2 .bar i{display:block;height:100%;border-radius:7px;transition:width .35s}
+.meter2 .bar u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.meter2 .row{grid-template-columns:120px minmax(0,1fr) 70px;font-size:.84rem}}
+</style>
+
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Preparar los datos · tema 5 · explicado sin fórmulas · <a href="datos-que-faltan-tecnico-es.html" target="_self">ver la versión técnica</a> · <a href="preparar-los-datos-es.html" target="_self">todos los temas</a> · <a href="missing-data-en.html" target="_self">in English</a></p>
+  <h1>Datos que faltan</h1>
+  <p class="lede">Casi ninguna tabla real está completa: un conductor no rellena un campo, un sensor deja de enviar, se pierde la cobertura. Lo que hagas con esos huecos puede cambiar las conclusiones tanto como cualquier modelo. Y la pregunta que lo decide todo no es cuántos datos faltan, sino <strong>por qué</strong> faltan.</p>
+</header>
+
+<section class="first" aria-label="Juguete interactivo">
+  <div class="situ col">
+    <p class="eyebrow">La situación del juguete</p>
+    <p>Una empresa hace <strong>2 000 descargas</strong> en tres tipos de cliente: almacenes grandes, tiendas pequeñas y obras. Al terminar, el conductor apunta en una aplicación cuántos <strong>minutos esperó</strong> hasta que le descargaron. La empresa quiere dos cifras para negociar con sus clientes: la <strong>espera media</strong> y el <strong>porcentaje de descargas con más de una hora</strong> de espera.</p>
+    <p>Pero en unas 600 descargas (el 30 %) el conductor no apuntó nada. Como el ejemplo es simulado, nosotros sí sabemos cuánto esperó en todas, así que podemos comparar cada forma de tratar los huecos con la verdad: <strong>43,4 minutos</strong> de media y <strong>21 %</strong> de descargas de más de una hora.</p>
+  </div>
+  <figure class="fig"><svg id="hero" role="img" aria-label="Minutos de espera de las 2 000 descargas, declarados y no declarados"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Es un histograma: cada barra cuenta cuántas descargas tuvieron una espera en ese tramo de minutos. La parte <b style="color:var(--sample)">violeta</b> son las que el conductor declaró; la parte <b style="color:var(--muted)">gris</b>, las que no declaró (en la vida real no las veríamos). La línea <b style="color:var(--good)">verde</b> es la espera media verdadera y la <b style="color:var(--mean)">azul</b>, la que calculamos con el método elegido. La línea discontinua marca una hora.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>Decisión 1 (la elige la realidad): ¿por qué faltan?</h3>
+      <div class="seg" role="group" aria-label="Por qué faltan"><button type="button" id="h-mcar" aria-pressed="true">Por azar</button><button type="button" id="h-mar" aria-pressed="false">Por el tipo de cliente</button><button type="button" id="h-mnar" aria-pressed="false">Por la propia espera</button></div>
+      <ul>
+        <li><b>Por azar</b>: la aplicación falla a veces sin motivo (cobertura, batería). Le pasa igual a cualquier descarga.</li>
+        <li><b>Por el tipo de cliente</b>: en las tiendas pequeñas, que suelen ser rápidas, los conductores casi nunca lo apuntan. Faltan más donde las esperas son cortas, pero el tipo de cliente <em>sí</em> lo vemos en la tabla.</li>
+        <li><b>Por la propia espera</b>: cuando la espera ha sido corta, el conductor no se molesta en apuntarla, sea el cliente que sea. Lo que decide si falta es el dato que falta.</li>
+      </ul>
+    </div>
+    <div class="dec">
+      <h3>Decisión 2 (la eliges tú): ¿qué hacemos con los huecos?</h3>
+      <div class="seg" role="group" aria-label="Qué hacer"><button type="button" id="h-q" aria-pressed="true">Quitarlos</button><button type="button" id="h-m" aria-pressed="false">Rellenar con la media</button><button type="button" id="h-g" aria-pressed="false">Rellenar según el cliente</button></div>
+      <ul>
+        <li><b>Quitarlos</b>: calcular solo con las descargas declaradas.</li>
+        <li><b>Rellenar con la media</b>: poner en cada hueco la espera media de las declaradas.</li>
+        <li><b>Rellenar según el cliente</b>: en cada hueco, poner la espera de otra descarga declarada <em>del mismo tipo de cliente</em>, elegida al azar.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="big3 col" id="h-big"></div>
+  <div class="col stack">
+    <p><strong>Prueba en este orden:</strong></p>
+    <ol class="try">
+      <li>"Por azar" con cada uno de los tres métodos: la media sale bien con todos, pero "rellenar con la media" se equivoca en las esperas de más de una hora.</li>
+      <li>"Por el tipo de cliente": quitar y rellenar con la media se equivocan; rellenar según el cliente acierta.</li>
+      <li>"Por la propia espera": ningún método acierta del todo. Es el caso difícil.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="h-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Lo que acabas de ver</p>
+    <h2>Las tres razones por las que falta un dato</h2>
+    <p>En estadística se les llama con siglas en inglés, que conviene conocer porque aparecen en todas partes:</p>
+    <ul>
+      <li><strong>MCAR</strong> (<em>missing completely at random</em>, "falta completamente al azar"): el hueco no tiene que ver con nada. Quitar filas no sesga los resultados; solo se pierden datos.</li>
+      <li><strong>MAR</strong> (<em>missing at random</em>, "falta al azar <em>una vez que sabes</em> otra cosa"): el hueco depende de columnas que sí ves, como el tipo de cliente. Se arregla usando esas columnas para rellenar.</li>
+      <li><strong>MNAR</strong> (<em>missing not at random</em>, "no falta al azar"): el hueco depende del propio valor que falta. Con los datos de la tabla no se puede arreglar del todo: hace falta información de fuera (preguntar, medir de otra forma) o suponer algo y comprobar cuánto cambia el resultado.</li>
+    </ul>
+    <p>Mirando solo la tabla no se puede saber con certeza en cuál de los tres casos estás. Hay que preguntar <strong>cómo se generan los datos</strong>: quién los apunta, cuándo falla el sensor, qué pasa si no hay cobertura.</p>
+    <p>Y una regla del tema 1: cualquier relleno (la media, los valores de cada tipo de cliente) se calcula <strong>solo con los datos de entrenamiento</strong>, y se aplica igual al examen y a producción.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 5</p>
+    <h2>Quitar filas sale caro cuando hay muchas columnas</h2>
+    <p>Quitar cada fila que tenga algún hueco parece inofensivo si cada columna tiene pocos huecos. Pero las filas completas tienen que tener <em>todas</em> sus columnas, y los huecos de distintas columnas se van sumando.</p>
+  </div>
+  <figure class="fig"><svg id="cc" role="img" aria-label="Tabla con huecos y las filas que quedan completas"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada fila es un viaje y cada columna, un dato. Los cuadros <b style="color:var(--line)">vacíos</b> son huecos. Las filas en <b style="color:var(--mean)">azul</b> están completas y se conservarían; las <b style="color:var(--muted)">grises</b> se perderían enteras por tener al menos un hueco.</p>
+  <div class="decs">
+    <div class="dec"><h3>Columnas de la tabla</h3><div class="slider"><label for="c-k">Columnas <output id="c-k-o"></output></label><input type="range" id="c-k" min="1" max="20" step="1" value="8"><div class="ends"><span>1</span><span>20</span></div></div></div>
+    <div class="dec"><h3>Huecos en cada columna</h3><div class="slider"><label for="c-p">Porcentaje <output id="c-p-o"></output></label><input type="range" id="c-p" min="1" max="20" step="1" value="5"><div class="ends"><span>1 %</span><span>20 %</span></div></div></div>
+  </div>
+  <p class="qcard col" id="c-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 5</p>
+    <h2>Rellenar con la media aplasta los datos</h2>
+    <p>Rellenar es mejor que quitar, pero no todos los rellenos son iguales. Volvemos a las esperas, en el caso "por el tipo de cliente". Además de la espera, cada descarga tiene el número de <strong>palés</strong> (cuantos más palés, más tarda la descarga). Un buen relleno debe mantener tres cosas como en la realidad: la espera media, cuánto varían las esperas y la relación entre palés y espera.</p>
+  </div>
+  <figure class="fig"><svg id="imp" role="img" aria-label="Histograma de esperas tras rellenar los huecos con el método elegido"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Histograma de las 2 000 esperas después de rellenar: en <b style="color:var(--sample)">violeta</b>, las declaradas; en <b style="color:var(--point)">naranja</b>, los valores inventados para los huecos. La línea gris es la forma de las esperas verdaderas. Un buen relleno deja la suma (violeta + naranja) parecida a la línea gris.</p>
+  <div class="seg" role="group" aria-label="Cómo rellenar"><button type="button" id="i-0" aria-pressed="true">La media</button><button type="button" id="i-1" aria-pressed="false">Otra descarga del mismo cliente</button><button type="button" id="i-2" aria-pressed="false">Predicción con palés y cliente</button><button type="button" id="i-3" aria-pressed="false">Predicción con variación</button></div>
+  <div class="meter2 col" id="i-bars"></div>
+  <p class="qcard col" id="i-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 5</p>
+    <h2>Huecos en el tiempo: repetir, unir o dejar</h2>
+    <p>En las series de un sensor (aquí, el nivel del depósito de combustible cada 5 minutos) los huecos aparecen en tramos: el equipo pierde la conexión durante 40 minutos. Hay dos formas habituales de rellenar: <strong>repetir el último valor</strong> conocido o <strong>unir con una línea recta</strong> el último valor antes del hueco y el primero después. Cuál funciona depende de lo que pasó dentro del hueco.</p>
+  </div>
+  <figure class="fig"><svg id="ts" role="img" aria-label="Nivel de combustible con un hueco y el relleno elegido"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> La línea <b style="color:var(--mean)">azul</b> es el nivel medido. La franja gris es el hueco de 40 minutos. La línea <b style="color:var(--point)">naranja</b> es el relleno elegido y la <b style="color:var(--good)">verde discontinua</b>, lo que pasó de verdad dentro del hueco (que en la realidad no veríamos).</p>
+  <div class="decs">
+    <div class="dec"><h3>¿Qué pasó en el hueco?</h3><div class="seg" role="group" aria-label="Qué pasó"><button type="button" id="t-a" aria-pressed="true">El camión siguió circulando</button><button type="button" id="t-b" aria-pressed="false">Repostó durante el hueco</button></div></div>
+    <div class="dec"><h3>¿Cómo se rellena?</h3><div class="seg" role="group" aria-label="Relleno"><button type="button" id="t-0" aria-pressed="true">Repetir el último valor</button><button type="button" id="t-1" aria-pressed="false">Línea recta</button><button type="button" id="t-2" aria-pressed="false">Dejar el hueco</button></div></div>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 de 5</p>
+    <h2>Que falte también es información</h2>
+    <p>El sensor de temperatura del motor deja de enviar sobre todo cuando el sistema eléctrico del camión está fallando. Y un sistema eléctrico que falla anuncia averías. Así que el hueco en sí avisa: entre los 2 000 viajes, los que no tienen temperatura tienen una avería en el mes siguiente <strong>cuatro veces más</strong> a menudo que los que sí la tienen.</p>
+    <p>Si rellenas el hueco con la temperatura media y lo olvidas, borras esa pista. La solución es sencilla: además de rellenar, añadir una columna "faltaba la temperatura" (sí/no) para que el modelo pueda usarla.</p>
+  </div>
+  <figure class="fig"><svg id="inf" role="img" aria-label="Tasa de averías según falte o no la temperatura, y acierto de tres modelos"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> A la izquierda, el porcentaje de viajes con avería en los 30 días siguientes, según falte o no la temperatura. A la derecha, la nota de tres modelos que predicen la avería: el porcentaje de veces que, al comparar un viaje que acabó en avería con uno que no, el modelo da más riesgo al de la avería. 50 % es tirar una moneda y 100 %, acertar siempre (en la versión técnica se llama AUC). Se mide en viajes que el modelo no vio al aprender.</p>
+  <p class="qcard col" id="inf-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 de 5</p>
+    <h2>Qué hacer en cada caso</h2>
+    <p>Elige la situación que más se parece a la tuya y mira qué se recomienda.</p>
+  </div>
+  <div class="chips col" id="g-chips" role="group" aria-label="Situación"></div>
+  <p class="qcard col" id="g-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta completa</h2>
+    <ol class="steps">
+      <li><div><strong>Cuenta los huecos</strong> por columna y por combinación de columnas.</div></li>
+      <li><div><strong>Averigua por qué faltan</strong>: quién o qué genera el dato y cuándo deja de hacerlo.</div></li>
+      <li><div><strong>Compara las filas con hueco y sin hueco</strong>: si difieren en otras columnas (tipo de cliente, antigüedad), los huecos no son al azar.</div></li>
+      <li><div><strong>No rellenes con la media a ciegas</strong>: aplasta la variación y las relaciones.</div></li>
+      <li><div><strong>Rellena con las columnas relacionadas</strong> (por grupos, por predicción) y conserva la variación.</div></li>
+      <li><div><strong>Añade una columna "faltaba"</strong> cuando el hueco pueda ser una pista.</div></li>
+      <li><div><strong>En series temporales</strong>, elige el relleno según lo que pudo pasar dentro del hueco, y no rellenes huecos demasiado largos.</div></li>
+      <li><div><strong>Aprende todos los rellenos solo con el entrenamiento</strong>.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>Dónde aparece en la telemetría de flota</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="12" y="6" width="16" height="28" rx="3"/><path d="M16 26h8"/></svg><h3>Datos que apunta el conductor</h3><p>Esperas, incidencias, cargas: se apunta lo que llama la atención y se olvida lo rutinario. Casi siempre es el caso difícil.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 28c6-10 18-10 24 0"/><path d="M13 23c4-5 10-5 14 0"/><circle cx="20" cy="28" r="2"/></svg><h3>Zonas sin cobertura</h3><p>Túneles, valles, zonas rurales: los huecos se concentran en ciertas rutas, que no son iguales a las demás.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6L34 32H6Z"/><path d="M20 16v8M20 28v1"/></svg><h3>Sensores que fallan</h3><p>Un sensor que deja de enviar puede ser el primer síntoma de una avería: el hueco es una señal.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="7" y="9" width="26" height="22" rx="3"/><path d="M7 16h26"/></svg><h3>Equipos distintos</h3><p>Camiones con equipos antiguos no envían algunas columnas: el hueco depende del modelo de equipo, que sí se conoce.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Conexiones</p>
+    <h2>Con los modelos de la serie ML</h2>
+    <p><a href="xgboost-es.html" target="_self">XGBoost</a> y los árboles con boosting aceptan huecos directamente: en cada pregunta deciden hacia qué lado mandar los viajes sin dato, y así aprovechan el hueco como pista. La <a href="regresion-lineal-polinomial-es.html" target="_self">regresión</a> y <a href="k-vecinos-mas-cercanos-es.html" target="_self">k vecinos</a> no los aceptan: hay que rellenar antes. De hecho, k vecinos sirve también para rellenar: cada hueco toma el valor medio de los viajes más parecidos. Y el <a href="filtro-de-kalman-es.html" target="_self">filtro de Kalman</a> rellena huecos en el tiempo prediciendo con lo que sabe del movimiento.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo que cuesta y lo que se gana</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Lo que se gana</h3><ul class="pc">
+      <li>Se usan todos los datos disponibles, no solo las filas completas.</li>
+      <li>Se evitan conclusiones sesgadas por quién deja los huecos.</li>
+      <li>El propio hueco puede mejorar las predicciones.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Lo que cuesta</h3><ul class="pc">
+      <li>Cuando el hueco depende del propio valor, no hay arreglo perfecto.</li>
+      <li>Un valor rellenado no es un dato medido: hay que saber cuáles son.</li>
+      <li>Los rellenos complejos hay que mantenerlos igual en producción.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Imputar</dt><dd>Rellenar un hueco con un valor estimado.</dd>
+      <dt>MCAR</dt><dd>El dato falta por puro azar.</dd>
+      <dt>MAR</dt><dd>El dato falta por algo que sí vemos en otras columnas.</dd>
+      <dt>MNAR</dt><dd>El dato falta por su propio valor.</dd>
+      <dt>Análisis de casos completos</dt><dd>Usar solo las filas sin ningún hueco.</dd>
+      <dt>Columna indicadora</dt><dd>Columna de sí/no que dice si el dato faltaba.</dd>
+      <dt>Imputación múltiple</dt><dd>Rellenar varias veces de forma distinta y combinar los resultados, para saber cuánta incertidumbre añaden los huecos.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: las cuentas detrás de todo</summary>
+    <p style="padding-top:10px">No hacen falta para entender la idea:</p>
+    <div class="formula">filas completas con k columnas y un p de huecos en cada una (al azar):
+   (1 − p) elevado a k          ej.: 8 columnas al 5 %  →  0,95⁸ = 66 %
+
+rellenar con la media: la media no cambia, pero la variación
+se encoge en proporción a los huecos (con 30 % de huecos, ~16 % menos de desviación)
+
+imputación múltiple (m rellenos): estimación = media de las m estimaciones
+   incertidumbre = media de las incertidumbres + (1 + 1/m) · variación entre rellenos</div>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2>Todo en un minuto</h2>
+    <p>Un repaso animado: las tres razones por las que falta un dato, lo que cuesta quitar filas, por qué la media aplasta, los huecos en el tiempo y el hueco que avisa de una avería. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEiqgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSA//9k=" aria-label="Animación: datos que faltan">
+      <source src="datos-que-faltan-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"espera":[41.2,43.9,50.1,58.1,52.4,43.3,22.2,110.2,59.8,32.9,35.6,48.5,16.7,62.5,33.7,48.5,44.6,34.6,12.0,41.1,19.8,49.3,33.3,74.4,35.3,53.7,32.5,38.7,34.2,98.6,25.7,78.0,23.8,15.9,64.7,88.6,29.6,120.4,150.3,14.7,18.2,22.4,69.3,47.6,77.9,16.4,30.1,80.6,57.2,84.1,52.5,64.3,34.5,28.0,38.5,31.1,28.1,39.5,36.4,26.5,22.2,18.4,33.2,25.7,30.5,27.8,15.4,39.6,48.2,43.4,31.3,34.7,50.3,46.4,18.4,62.2,54.2,27.6,21.9,50.1,16.7,58.0,43.0,15.5,10.9,44.6,59.1,28.8,46.0,34.7,52.7,37.3,26.5,60.4,35.4,133.3,45.0,57.3,15.7,65.3,28.6,28.8,51.8,18.6,56.0,28.4,13.5,66.4,46.8,76.6,14.7,56.7,69.4,56.3,81.4,28.8,24.2,70.2,41.9,38.3,48.6,62.2,35.2,12.0,21.1,9.5,19.1,19.2,20.6,40.1,121.1,130.5,56.4,144.8,78.6,78.1,32.7,13.8,57.2,54.1,21.7,34.2,28.2,38.5,28.3,17.0,46.6,42.5,61.2,64.1,19.1,31.7,20.6,50.8,18.1,48.7,47.4,15.8,28.6,46.1,62.6,15.6,18.3,18.8,14.6,35.1,55.9,35.7,14.1,51.9,26.6,19.4,57.4,36.2,20.3,51.7,50.7,25.6,77.3,44.5,42.2,103.9,39.3,82.8,25.1,57.7,77.1,83.7,23.6,9.2,17.4,20.9,46.3,30.9,16.6,71.6,11.4,40.5,64.7,40.3,96.0,54.4,24.3,44.5,44.9,34.8,42.4,15.2,21.1,49.0,15.9,39.7,30.9,49.8,101.1,32.3,11.2,35.8,70.7,18.8,18.3,46.1,52.5,40.4,30.7,22.1,61.2,25.5,36.0,16.5,15.1,31.8,121.5,85.3,51.1,62.9,22.0,38.5,83.7,33.1,51.4,29.2,20.9,61.2,36.8,26.3,35.5,17.5,125.9,60.3,10.0,95.5,20.9,48.1,31.6,52.1,65.5,18.2,60.4,11.8,35.8,24.8,82.5,41.8,20.1,46.6,18.3,35.9,49.5,21.8,55.9,18.5,50.2,24.5,31.4,38.8,22.4,50.7,40.2,54.2,25.3,20.4,50.9,89.0,62.8,19.1,36.4,43.0,33.8,18.2,57.7,57.6,58.0,16.0,32.2,23.4,51.6,153.6,22.2,23.7,22.6,55.1,27.2,74.1,106.7,89.7,66.8,29.6,54.2,43.7,41.9,98.5,73.8,57.2,16.0,43.9,67.9,56.2,63.5,28.8,43.3,29.6,21.8,17.0,24.9,26.9,39.7,89.6,28.3,79.0,24.2,49.7,29.0,21.7,55.8,57.3,13.7,67.8,30.4,46.7,31.6,51.1,34.8,65.2,25.9,35.9,56.2,27.1,101.7,16.0,17.1,73.2,34.1,23.0,16.5,25.3,35.1,83.8,38.4,50.7,68.5,39.5,26.9,20.8,44.1,25.1,60.1,86.5,77.0,44.3,38.8,10.8,28.9,83.1,40.7,17.5,34.4,26.9,48.7,36.8,38.7,23.4,38.0,62.9,17.5,26.9,126.0,57.6,48.5,69.6,27.5,20.2,44.9,17.4,13.8,67.2,23.4,16.2,47.4,73.2,41.3,20.8,59.1,16.2,73.6,9.3,38.9,60.3,25.4,69.1,70.1,41.1,26.3,73.6,20.8,68.8,53.2,116.3,38.7,26.9,35.4,66.9,71.1,19.6,31.8,35.2,13.4,54.1,95.9,13.8,109.5,91.4,15.8,17.2,40.4,69.4,85.0,47.7,14.0,102.4,35.7,16.4,17.8,76.9,39.5,16.5,57.5,32.2,22.1,42.7,27.1,26.1,18.9,34.2,20.1,33.2,40.9,24.0,48.1,51.2,70.9,97.2,25.3,34.1,55.3,19.3,48.0,22.6,16.9,56.8,29.3,41.7,59.7,78.5,67.3,41.3,19.8,59.6,47.6,84.4,21.2,67.3,112.8,27.0,71.5,33.3,39.9,17.3,57.8,9.8,41.0,41.7,52.5,56.1,46.0,16.1,31.7,21.7,12.8,35.0,89.8,15.0,11.9,23.9,21.1,53.5,80.0,24.9,67.6,27.8,41.6,46.6,19.1,26.6,37.3,43.2,14.2,72.8,33.5,11.7,42.3,24.3,37.2,33.3,30.8,120.2,40.8,34.9,19.5,45.2,48.4,33.0,29.1,35.8,23.7,16.7,28.3,12.1,26.7,9.3,30.4,83.4,21.4,19.8,35.4,81.1,60.5,24.0,67.1,40.3,63.4,55.7,20.4,42.8,26.5,40.1,17.8,31.0,49.2,13.7,26.6,56.9,74.2,37.6,75.7,12.7,74.9,48.4,29.0,40.9,47.4,26.0,39.3,58.2,60.9,44.1,25.1,81.1,61.3,39.9,35.4,61.5,43.8,95.6,69.1,52.3,17.5,17.9,93.6,54.2,30.7,16.9,21.9,89.9,19.9,18.0,17.1,67.0,33.0,21.0,11.5,19.3,52.3,42.0,32.7,90.6,38.7,42.2,44.2,55.3,15.2,8.8,76.9,32.6,85.9,58.4,30.2,61.5,36.7,38.5,99.8,35.4,87.2,40.8,23.2,68.7,90.6,60.6,50.0,33.0,50.2,31.8,81.2,42.0,90.0,37.8,36.6,24.9,34.1,24.9,35.5,24.4,23.3,25.6,40.7,23.5,35.8,59.3,52.6,28.8,15.0,18.8,52.8,38.2,8.4,58.4,23.8,24.7,158.0,25.0,21.4,77.8,23.3,33.2,19.6,29.0,78.4,46.9,41.5,51.4,42.6,33.9,17.7,54.0,32.1,48.4,54.7,27.4,12.4,25.2,50.8,42.4,40.6,55.9,50.2,54.6,31.3,87.7,36.4,20.2,22.9,14.0,62.5,66.0,68.2,39.3,62.1,13.2,17.9,28.1,62.1,59.1,34.8,32.5,23.2,14.9,108.8,50.1,21.3,67.5,71.3,63.7,25.8,44.3,20.1,34.8,24.4,139.5,13.0,13.5,87.5,61.8,35.7,68.5,31.8,26.8,25.7,22.1,30.8,13.6,60.5,46.0,104.3,23.9,30.0,28.1,32.2,53.8,20.9,38.6,69.5,32.7,12.3,100.7,55.5,25.2,111.9,50.3,27.5,23.0,39.7,23.9,19.1,63.8,18.4,32.7,35.5,23.5,34.2,47.3,60.5,23.2,77.9,20.0,61.7,101.1,31.8,59.2,23.9,47.0,69.0,66.5,57.5,29.6,39.9,27.0,26.2,34.7,21.6,28.7,30.0,31.8,78.7,17.4,28.6,33.6,30.5,49.3,63.4,16.4,47.0,14.0,80.6,30.6,20.7,85.7,25.4,46.8,43.5,57.3,41.9,62.7,24.2,58.1,25.1,32.8,25.6,26.1,45.1,51.9,61.3,36.3,25.1,26.9,59.0,35.5,36.2,38.3,34.2,9.7,72.0,25.8,20.9,24.1,42.8,46.1,95.0,24.7,70.5,33.0,26.3,83.6,74.6,91.7,56.0,28.5,60.2,66.6,55.0,34.5,29.6,70.3,27.3,52.4,68.2,37.3,23.8,81.2,37.8,38.2,140.6,22.0,17.7,38.2,37.7,115.5,28.7,14.3,35.7,32.9,34.4,82.2,39.5,43.9,27.5,33.1,37.5,32.7,17.2,29.7,30.6,21.1,32.6,71.1,24.3,24.8,48.4,20.7,28.8,15.7,65.2,17.7,71.7,28.9,60.3,18.3,54.6,33.0,117.4,72.8,24.3,15.1,36.6,12.5,30.0,21.9,22.7,44.1,38.4,50.4,94.7,54.9,48.4,32.8,59.9,27.9,18.1,60.0,42.2,47.0,48.8,25.4,27.1,49.2,41.2,39.5,23.6,14.6,39.1,30.9,52.6,88.5,40.9,41.3,65.8,16.0,64.2,26.8,40.5,13.0,13.6,52.2,22.9,33.6,48.5,34.9,21.7,32.4,20.6,48.1,33.9,50.2,89.4,30.4,30.1,33.4,28.2,50.5,31.0,25.1,37.9,51.9,50.2,33.7,19.8,26.3,29.0,42.1,131.0,43.4,27.2,10.9,42.9,16.5,32.5,52.3,16.4,34.6,59.6,16.1,24.5,27.5,40.5,50.7,39.6,57.6,21.3,55.2,15.8,13.8,64.5,65.4,32.9,70.6,56.6,37.5,30.6,38.6,49.6,18.4,36.3,17.6,36.5,23.5,16.8,28.3,68.7,53.8,48.4,21.1,45.6,124.9,23.1,128.4,73.0,66.2,90.0,35.2,49.6,24.4,15.8,32.6,39.8,56.7,57.1,21.0,58.1,31.5,94.7,92.6,62.4,25.3,47.3,47.0,23.5,23.2,38.9,25.8,26.7,55.9,81.8,40.7,34.3,17.4,21.1,47.7,22.5,21.4,61.7,67.0,14.3,31.3,45.0,55.5,50.6,56.1,19.1,29.3,135.7,34.4,50.9,40.8,15.5,12.0,44.5,18.2,20.5,62.5,69.6,64.2,17.8,39.1,75.0,54.8,68.4,47.3,27.5,61.8,71.8,30.3,121.8,65.6,69.6,114.0,206.7,75.1,55.9,66.8,15.4,33.7,46.5,19.6,73.2,17.7,52.7,41.1,18.7,36.3,28.7,55.4,46.2,69.6,83.9,30.3,34.6,54.3,35.0,36.9,51.0,39.5,67.7,37.7,41.2,31.2,27.3,36.6,66.6,13.3,65.8,13.5,73.9,99.0,19.9,26.6,15.4,58.3,120.1,42.5,38.9,77.1,43.9,50.3,23.3,25.4,74.0,27.8,38.5,62.2,25.6,51.1,19.9,51.5,35.3,43.6,60.8,12.9,49.9,59.7,29.4,80.0,17.7,26.6,68.2,64.3,48.3,29.1,73.9,36.8,17.6,21.6,16.1,15.7,21.4,74.5,52.5,50.2,35.3,41.2,12.6,13.6,49.9,36.4,24.0,49.1,79.1,45.4,15.5,112.2,38.3,21.4,22.7,92.1,36.3,46.4,16.8,14.9,46.6,35.1,94.6,49.2,37.9,81.0,41.1,22.5,72.3,27.9,27.2,59.3,51.2,76.4,22.1,30.5,29.5,20.6,56.6,47.3,36.1,39.4,71.2,19.0,37.2,90.9,48.9,48.4,48.7,39.6,82.0,73.1,24.8,27.2,73.1,32.3,23.3,17.7,27.5,27.2,48.6,21.2,26.1,26.3,16.2,106.1,20.0,33.8,30.5,15.4,83.7,13.8,28.7,53.9,52.9,79.5,12.9,23.7,61.0,41.0,61.0,25.7,68.9,47.1,38.7,25.0,24.0,33.4,24.9,29.7,24.3,69.2,55.8,38.8,23.3,16.5,60.4,12.4,17.7,15.7,56.6,60.7,21.3,41.4,21.4,41.5,50.8,64.6,43.8,32.6,42.2,28.9,30.6,26.6,85.6,88.9,53.7,60.5,17.6,16.3,38.4,24.9,24.0,45.8,66.9,39.1,35.4,53.9,63.4,85.7,93.9,35.6,53.7,43.2,42.0,14.5,14.6,15.0,15.2,34.8,33.0,48.5,89.8,24.7,32.5,46.7,41.8,27.4,112.2,17.1,16.9,53.0,53.9,39.1,23.9,17.4,27.5,54.6,33.7,22.6,88.9,17.3,25.7,52.2,74.5,25.1,31.1,24.7,20.4,22.2,44.7,84.3,36.6,41.6,51.3,94.3,13.5,18.3,38.1,30.8,24.3,41.3,72.1,55.9,33.3,23.6,18.5,34.4,15.3,60.6,27.4,48.6,33.2,30.6,26.4,73.2,20.1,53.1,163.6,18.7,18.2,22.8,13.8,27.1,38.3,57.3,30.2,69.8,32.5,18.1,19.3,59.5,26.2,56.3,25.8,52.4,20.0,20.3,20.2,68.5,98.6,46.6,33.6,24.5,20.4,11.2,34.1,18.5,19.2,14.3,10.7,17.8,61.2,55.8,45.7,13.7,35.7,38.1,65.4,40.3,30.6,47.6,28.1,35.1,56.8,52.5,119.4,24.7,41.6,40.1,32.1,18.9,23.1,52.6,61.9,32.2,39.9,19.3,32.2,39.3,26.8,67.1,33.0,66.6,61.2,11.9,41.5,79.3,21.1,8.4,22.5,57.9,37.7,39.2,45.6,29.1,63.8,26.3,53.6,42.3,85.8,58.0,28.9,28.2,29.8,47.9,31.0,32.1,35.0,49.9,59.8,22.1,26.0,59.0,18.0,65.9,53.5,29.1,37.0,20.4,20.7,83.6,48.8,22.6,32.8,77.4,22.3,67.5,32.4,38.5,61.0,56.2,60.7,42.1,38.3,41.4,64.0,59.1,55.4,15.4,39.9,55.3,36.4,19.2,47.2,49.6,40.4,87.6,56.2,41.7,34.3,52.8,26.5,57.4,19.9,88.7,27.6,31.6,48.0,14.3,57.9,19.9,36.5,16.6,11.7,42.3,46.5,37.4,21.6,27.0,14.6,38.0,30.8,30.1,31.7,24.9,75.1,42.6,20.0,44.4,58.0,58.3,60.7,19.4,51.5,107.6,76.1,20.6,75.8,72.4,54.3,23.3,96.7,20.0,24.1,27.6,16.1,20.1,39.9,32.4,20.7,18.8,31.0,55.6,21.8,49.4,73.0,62.2,55.3,33.9,137.2,36.2,96.6,45.6,35.8,34.8,16.6,39.8,133.8,32.7,83.9,43.2,25.2,23.0,14.1,33.1,117.0,16.1,38.3,41.1,40.9,57.7,30.0,40.5,85.6,52.0,65.6,15.7,20.1,36.0,41.1,37.6,23.0,53.0,31.9,40.1,29.6,12.8,22.7,28.1,19.5,27.1,71.3,15.8,42.5,14.9,28.9,65.6,17.7,41.8,70.1,21.0,22.8,39.9,36.4,31.1,33.4,31.0,98.1,12.5,36.5,21.2,37.2,11.2,112.0,117.6,38.0,116.3,23.1,120.1,37.7,35.8,48.2,42.2,63.1,44.2,45.5,131.8,28.4,21.4,34.0,44.5,54.2,40.5,28.7,28.6,14.8,31.8,18.5,116.2,31.3,29.1,31.7,15.2,12.3,18.1,96.2,38.6,91.7,22.4,12.9,25.9,35.6,74.5,12.3,36.2,17.5,19.0,19.9,49.6,29.6,133.9,47.2,50.8,30.1,91.3,38.5,27.5,55.0,48.7,53.5,29.7,64.1,48.6,64.5,30.6,16.8,30.4,46.4,11.5,44.6,46.2,69.9,34.6,21.5,69.8,32.1,84.3,19.6,17.0,133.2,71.7,50.8,102.1,39.5,23.1,44.0,80.1,28.7,17.7,78.1,20.0,90.2,15.2,38.3,35.3,70.4,82.5,54.3,48.1,16.9,32.7,162.6,31.9,41.3,71.5,24.3,29.7,25.4,45.5,19.4,19.7,40.4,41.0,11.1,15.8,18.1,23.3,27.0,23.2,23.2,45.5,38.6,33.1,47.6,57.8,18.6,20.6,88.9,34.7,55.8,34.2,41.2,27.0,55.2,24.8,48.6,16.9,48.6,35.9,84.9,86.2,47.4,81.6,30.2,30.4,65.1,38.1,43.1,21.8,30.0,81.1,26.8,35.1,71.9,36.4,20.9,48.0,78.4,98.8,46.7,60.9,85.1,27.1,41.9,55.6,30.8,25.2,20.0,31.4,31.6,35.4,17.3,34.6,19.4,42.9,80.2,48.6,69.0,28.8,54.8,103.8,25.3,43.9,42.2,31.2,25.6,86.8,34.2,34.7,70.7,84.0,33.8,59.7,64.3,34.5,21.6,12.0,32.4,27.0,57.0,28.4,22.0,77.0,58.9,17.8,33.0,42.7,50.0,30.1,138.9,29.9,51.3,47.1,25.4,39.1,14.5,20.8,38.6,77.8,35.0,126.7,25.1,20.8,42.8,41.0,29.8,72.4,42.3,24.3,53.5,28.5,21.8,24.4,75.3,33.5,34.3,16.7,64.3,19.8,69.3,60.9,90.9,57.7,73.0,88.1,50.4,33.9,23.0,29.5,19.3,80.9,31.1,18.9,19.0,53.4,31.7,27.8,16.4,22.5,33.3,60.2,34.6,54.6,28.6,18.0,126.1,19.1,56.0,66.6,52.9,18.1,15.9,19.2,27.6,24.7,88.0,42.5,90.7,65.7,12.9,51.5,30.6,108.0,17.6,22.0,76.7,12.3,42.8,19.7,38.9,74.2,95.1,31.5,30.4,22.5,40.2,71.4,12.1,63.6,59.9,8.7,32.3,15.7,26.7,55.8,55.0,67.6,41.0,81.6,83.9,24.9,83.3,58.1,27.9,39.3,70.7,13.3,53.0,38.2,21.7,19.7,33.8,72.3,35.7,19.6,19.4,33.4,26.4,39.4,29.3,23.6,17.4,80.9,48.3,17.3,233.9,22.6,51.0,29.5,49.3,58.6,39.7,63.1,22.2,38.8,81.2,47.1,50.7,96.6,45.7,39.2,33.8,49.3,75.3,46.6,59.9,100.8,17.0,38.5,30.3,16.6,13.8,36.2,22.1,19.6,48.6,37.7,32.8,53.8,17.4,61.0,22.1,31.8,32.3,87.2,25.7,63.3,17.7,22.0,31.7,18.8,38.1,72.4,23.4,117.4,38.5,72.4,74.2,39.7,19.5,29.6,64.2,36.2],"cli":[2,2,1,0,0,1,1,0,0,2,1,0,1,2,2,2,1,1,1,0,1,0,2,0,1,2,0,2,2,0,1,0,1,1,0,0,2,0,0,1,1,2,0,0,2,1,1,0,0,2,0,2,1,2,1,2,1,0,1,1,1,1,0,1,0,1,1,1,2,0,1,2,1,1,1,2,2,1,2,0,1,2,1,1,1,2,0,1,0,1,1,2,2,0,2,0,2,0,1,0,2,2,0,1,0,1,1,0,2,0,1,0,0,0,0,2,2,1,1,1,2,0,2,1,1,1,1,1,1,0,0,0,0,0,0,0,1,2,0,1,1,1,2,2,1,1,0,2,0,2,1,1,1,0,1,0,0,1,1,2,0,1,1,1,1,1,1,1,1,0,1,1,0,2,1,2,0,1,0,0,0,0,2,0,1,0,0,0,1,1,1,1,0,1,2,0,1,0,0,0,0,2,1,0,0,0,0,1,1,2,2,0,1,2,0,2,1,2,0,1,1,0,2,2,1,1,2,1,2,1,1,1,0,0,0,0,1,1,0,0,2,0,1,2,0,1,2,0,0,2,1,0,1,0,2,2,0,1,0,1,1,1,0,0,1,1,1,2,0,1,0,1,2,1,1,1,1,2,0,0,2,1,2,0,2,1,1,2,0,1,0,0,2,1,2,0,2,2,1,0,1,0,1,0,0,0,0,2,0,2,0,0,0,2,2,0,2,0,0,1,0,2,1,1,1,0,1,2,1,0,2,1,1,1,0,0,1,0,1,0,0,2,1,0,1,2,2,2,0,1,1,0,1,1,1,1,0,0,2,0,0,0,0,1,0,0,0,0,2,2,2,1,0,0,1,1,1,1,2,1,0,2,2,0,0,1,2,2,0,0,1,1,2,1,1,0,1,1,2,0,0,1,0,1,0,1,2,0,2,0,0,1,1,0,1,2,0,0,1,0,2,2,2,1,2,1,1,0,0,1,0,2,1,1,2,0,0,0,1,0,0,1,1,0,0,1,2,0,2,2,1,1,1,0,1,2,1,1,1,2,0,0,2,1,2,1,0,1,1,0,1,2,0,0,0,1,2,0,2,0,1,2,0,1,2,1,2,1,2,1,2,0,0,0,1,1,0,1,1,1,0,1,1,1,1,0,2,1,0,2,0,0,1,1,1,1,1,0,2,1,1,1,0,2,1,0,1,1,1,0,2,0,1,1,1,1,0,1,1,1,0,0,1,1,0,0,1,1,2,2,0,0,1,2,1,2,1,0,2,1,1,0,2,2,0,1,0,2,1,0,2,1,2,2,0,0,2,0,0,2,2,0,0,0,0,0,1,1,0,2,1,1,1,0,2,1,1,0,0,1,1,1,1,2,1,0,1,2,0,1,1,1,0,1,0,0,0,0,1,2,0,2,0,2,1,2,2,2,0,2,0,1,0,0,0,1,0,1,0,1,2,1,1,1,2,0,0,0,0,1,1,2,0,0,1,2,1,1,0,1,1,0,1,2,1,1,0,0,0,0,0,2,1,1,2,0,1,1,2,1,0,0,0,2,2,0,2,0,2,1,1,1,0,2,0,0,2,1,1,1,0,0,2,1,1,1,0,0,1,0,0,0,1,2,1,0,2,0,1,1,0,0,0,2,1,1,1,1,2,1,0,1,0,1,1,1,1,2,2,2,2,2,1,0,0,1,0,0,1,1,2,1,1,0,1,2,0,1,1,0,2,2,2,1,2,2,2,0,1,0,2,0,0,1,0,1,1,1,1,2,1,1,0,1,2,0,2,2,0,1,0,1,2,1,1,2,1,0,2,0,2,2,1,0,1,1,2,2,0,0,2,0,2,2,2,1,0,1,1,1,0,1,2,1,2,2,0,1,0,0,1,0,0,1,0,1,0,0,1,1,2,2,2,0,0,2,1,0,1,0,0,1,1,0,1,0,2,1,1,0,1,0,2,0,1,1,2,1,1,0,0,1,2,0,1,1,0,1,1,1,2,1,0,2,2,1,0,1,0,0,1,1,2,1,1,1,1,0,2,2,2,2,2,0,2,2,1,0,2,0,0,1,2,0,0,2,1,1,1,2,2,0,1,2,2,1,0,2,0,1,1,2,1,1,0,0,1,1,2,0,2,1,0,0,0,2,2,2,2,1,0,1,0,0,1,1,2,2,0,0,1,1,2,1,1,0,1,2,0,1,2,2,0,0,0,2,2,0,1,1,0,0,2,0,0,2,1,2,2,1,0,1,1,1,1,2,0,0,2,1,2,0,1,0,0,0,0,0,0,1,1,1,2,0,0,0,2,1,2,0,0,1,2,0,2,1,1,1,2,0,0,1,0,1,1,2,1,1,2,0,1,1,2,0,0,0,1,1,0,2,2,0,1,1,0,1,1,2,0,0,1,2,0,0,0,2,2,0,2,1,0,0,0,0,0,0,0,0,1,2,2,1,0,2,0,0,1,1,2,0,2,2,0,2,2,2,1,2,2,2,0,0,1,1,2,1,0,1,2,1,0,0,1,2,1,0,0,0,1,0,0,2,1,1,0,1,2,0,1,0,1,0,2,2,0,1,2,0,2,0,1,2,2,2,0,1,0,2,1,1,1,1,1,0,2,0,2,1,1,1,0,0,1,0,0,0,1,0,2,1,1,0,1,0,2,1,0,1,0,0,2,0,2,1,2,1,2,2,0,0,2,1,2,1,0,2,0,1,2,1,1,0,0,2,0,0,0,0,1,1,2,2,1,1,1,1,2,1,1,2,1,0,0,1,2,1,0,1,0,2,2,0,1,1,0,2,0,2,2,0,2,1,1,1,1,1,2,0,0,2,1,1,0,1,1,1,2,0,1,0,1,1,2,0,2,2,2,1,1,1,0,0,2,0,1,1,1,1,1,0,0,1,1,1,2,0,0,2,2,2,2,1,1,1,1,1,2,2,0,2,1,1,2,1,0,1,1,0,0,2,1,1,1,1,1,2,0,1,1,0,2,1,1,1,1,1,1,2,1,2,0,0,1,1,0,1,1,2,0,0,0,1,1,1,1,0,1,2,1,1,1,0,1,0,0,1,1,2,1,1,0,0,0,2,1,1,1,0,1,0,1,0,2,1,1,0,0,0,2,1,1,1,1,1,1,1,1,1,0,2,0,1,2,2,1,1,1,0,1,1,0,2,2,0,2,1,2,1,1,0,0,0,1,1,1,2,2,0,0,0,0,1,2,2,1,1,2,0,1,0,1,0,0,2,2,2,0,0,1,1,1,2,2,2,2,1,0,2,1,2,1,0,0,1,1,1,1,0,2,1,2,2,1,0,0,1,2,0,0,0,0,1,0,2,1,1,2,0,2,1,1,2,1,2,0,1,1,0,1,2,1,0,1,2,2,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,0,1,0,2,1,0,0,0,2,1,0,0,0,1,0,0,0,2,0,1,2,2,1,1,1,2,1,1,1,0,2,2,2,0,0,1,0,0,0,0,0,1,2,0,0,2,0,0,1,1,1,2,0,1,2,2,0,1,0,1,0,0,2,1,1,1,2,2,1,2,0,2,0,1,2,1,1,2,0,1,0,1,2,2,1,0,0,1,1,2,1,1,0,1,0,1,2,1,1,1,0,0,2,0,1,0,2,1,0,1,0,0,0,0,2,1,1,1,0,2,1,1,1,2,1,0,0,2,1,1,1,1,0,1,2,0,1,1,0,0,1,1,1,1,1,1,1,0,0,2,1,0,2,1,0,0,0,1,0,2,0,1,1,2,2,1,0,0,0,0,1,0,0,2,0,1,0,1,2,0,2,1,2,0,1,1,0,2,2,1,0,1,0,0,0,1,2,1,0,1,2,0,1,1,1,2,1,1,0,0,1,1,1,1,1,1,1,0,2,1,0,0,1,1,0,2,0,2,2,2,0,1,0,1,2,1,0,0,2,0,1,2,0,0,1,1,2,0,1,1,0,0,1,0,0,0,0,0,0,1,0,0,1,1,1,2,0,2,1,2,1,1,0,0,0,0,0,0,0,0,0,2,1,0,0,0,0,0,1,0,0,2,2,1,2,1,0,2,1,0,0,1,2,2,2,1,2,1,2,2,1,0,1,1,0,2,2,0,1,1,0,0,1,0,2,1,0,1,1,2,0,2,1,1,0,1,2,0,2,2,0,0,1,0,2,1,1,0,1,1,1,2,1,1,1,1,1,2,2,0,0,1,0,1,0,0,0,1,1,1,1,1,0,0,0,0,1,0,1,0,1,1,0,2,2,1,2,2,0,1,1,1,2,0,1,2,0,1,1,1,2,0,0,2,2,2,0,1,0,2,2,1,0,1,2,2,1,1,1,0,1,1,1,1,1,1,1,1,1,0,1,1,0,1,0,1,0,0,1,0,1,0,0,0,0,0,1,2,1,1,0,2,0,0,1,0,1,1,1,2,1,1,2,2,2,0,1,0,1,1,2,0,1,0,1,1,2,1,1,0,1,0,1,0,0,1,1,1,2,0],"palets":[7,11,1,25,6,5,5,32,5,1,10,7,4,20,5,8,10,7,1,8,9,10,9,13,3,13,12,9,1,10,3,8,3,6,3,10,9,12,12,2,4,2,13,13,6,2,11,12,15,15,4,26,8,9,17,6,7,9,2,2,6,1,9,3,2,1,2,1,18,5,1,4,5,1,4,6,10,7,7,3,2,3,10,4,1,8,17,1,7,1,12,17,5,8,6,16,13,12,6,3,7,4,29,2,4,8,4,13,8,9,5,3,14,9,23,8,2,18,11,11,9,19,11,2,4,1,1,6,5,2,12,14,25,13,4,13,2,3,2,12,6,1,3,16,5,1,9,12,8,16,1,11,3,14,5,7,10,1,4,11,11,3,3,3,1,9,13,6,2,10,2,3,6,16,9,9,14,1,3,9,8,4,8,22,3,11,24,15,6,1,2,6,6,2,1,6,1,3,4,7,9,4,8,3,5,18,8,2,2,6,8,6,6,7,8,7,1,4,9,7,6,17,10,20,11,4,30,4,4,6,3,10,16,17,2,9,9,4,4,14,7,7,3,5,3,7,6,6,3,17,4,2,7,10,6,2,5,6,13,1,5,4,9,14,2,5,4,5,11,8,5,2,26,11,8,4,1,10,4,12,3,2,17,5,4,4,10,12,5,4,2,3,13,3,3,2,3,3,1,5,4,7,1,10,10,6,7,5,16,8,2,17,6,10,5,11,12,4,11,2,6,5,6,6,8,7,4,17,3,24,10,3,4,8,21,4,1,8,2,18,7,25,6,10,6,6,1,6,13,3,2,14,1,3,6,6,11,11,4,4,5,10,6,5,4,5,8,11,11,1,6,5,12,10,5,4,14,3,10,10,4,8,8,14,3,9,14,9,5,4,3,1,15,7,3,3,9,1,3,7,3,11,19,4,9,1,5,2,11,13,15,3,3,3,1,4,15,7,8,4,10,6,16,3,4,9,4,5,5,4,5,16,2,6,8,9,12,6,3,17,1,5,5,11,2,2,7,2,11,5,5,4,5,8,5,13,12,3,4,5,25,5,3,3,2,3,13,4,2,6,6,4,8,4,10,2,4,5,21,1,2,9,10,9,16,5,15,3,10,2,13,4,7,7,1,1,4,3,1,7,17,5,2,3,6,6,15,7,9,9,15,15,5,3,9,4,2,3,10,3,5,1,3,4,4,4,11,8,6,20,15,6,13,2,3,5,6,1,2,3,2,20,7,2,6,7,8,1,3,12,5,6,11,11,8,13,2,9,6,1,6,17,22,4,9,2,9,8,11,2,9,3,7,22,19,8,7,4,3,5,7,16,7,22,14,2,1,5,4,22,3,3,2,9,2,5,5,10,10,6,2,10,2,13,1,8,2,11,14,5,6,1,11,5,13,15,4,7,7,7,5,4,13,16,1,5,28,15,3,8,2,2,9,11,3,1,1,2,3,5,4,3,5,10,1,7,6,10,6,5,3,2,5,1,1,9,2,7,4,12,2,11,5,7,1,7,7,9,2,17,5,8,4,11,7,10,4,1,3,7,8,17,13,11,11,5,9,3,1,2,4,5,5,4,11,1,8,3,4,7,1,2,18,9,2,2,8,7,4,5,14,7,11,8,2,6,8,6,2,1,20,8,13,24,6,8,10,4,9,3,3,5,23,2,4,5,4,4,2,14,5,10,4,14,5,2,24,17,7,2,10,6,3,3,5,2,6,4,6,12,29,3,5,2,21,16,3,12,10,18,3,11,7,7,4,6,3,5,4,2,10,6,2,2,4,8,5,13,3,5,23,2,16,6,4,6,5,4,7,7,11,13,6,7,3,4,8,4,4,15,29,5,4,8,22,1,5,4,3,2,17,4,8,3,13,11,3,5,12,5,1,16,5,14,9,2,14,3,4,17,9,14,2,8,11,8,4,12,4,7,8,2,4,5,13,6,2,3,1,3,10,14,7,16,2,9,5,4,2,5,12,1,7,5,3,5,11,2,1,4,6,1,6,5,12,1,6,11,11,6,4,4,4,2,8,6,4,10,6,13,24,13,4,2,11,3,6,18,6,7,11,2,5,8,4,7,4,2,10,20,14,5,4,1,22,1,22,6,3,4,6,1,2,2,6,8,1,2,7,7,1,3,33,3,2,13,7,8,2,6,13,5,14,9,5,3,3,12,9,12,3,5,9,3,7,5,4,4,12,1,3,9,8,12,9,16,5,33,6,3,24,5,4,2,10,4,1,6,11,4,7,3,1,4,10,10,11,18,5,1,18,21,7,6,15,4,33,5,8,3,4,4,6,6,10,5,19,5,12,22,14,5,19,2,8,4,4,5,6,16,4,8,8,5,4,5,3,1,11,2,4,8,17,14,1,10,2,2,15,6,11,7,5,2,18,1,4,6,13,7,3,13,5,1,5,3,7,17,5,5,7,17,6,15,12,9,18,17,2,7,12,5,14,2,1,7,3,1,3,4,3,17,9,3,10,4,2,16,1,7,5,3,12,2,13,1,11,2,15,2,5,6,5,3,6,20,12,12,4,5,3,7,4,5,6,4,12,9,5,6,6,5,4,9,30,5,4,7,8,10,2,4,10,11,6,1,10,18,8,2,2,4,5,19,7,6,12,13,2,3,12,1,3,11,7,10,2,8,10,7,2,9,4,12,2,4,7,6,8,14,16,3,10,5,9,3,9,20,3,4,5,13,7,2,24,3,6,10,17,2,4,3,4,25,11,3,5,4,4,2,23,9,8,7,2,4,1,1,5,2,3,13,1,2,11,2,7,1,7,10,5,19,3,3,13,12,6,5,10,10,4,3,6,7,6,6,5,9,7,19,5,3,21,3,6,3,24,11,5,9,3,10,7,9,6,3,8,7,9,2,7,8,12,16,6,7,9,1,6,14,11,5,1,1,13,11,7,18,6,18,3,5,3,3,1,9,12,4,12,5,4,6,16,3,17,3,3,7,8,17,8,5,4,2,4,5,5,5,2,9,12,6,11,6,3,1,3,16,10,7,4,3,1,6,2,9,3,2,26,19,13,2,5,5,4,9,4,10,7,3,5,1,2,6,3,1,2,8,2,8,4,8,3,13,12,3,4,15,1,19,4,10,2,5,2,9,2,15,9,2,3,2,7,7,9,3,3,5,5,4,6,1,3,12,3,2,7,4,5,8,11,5,3,5,4,11,8,7,1,6,19,3,3,3,5,6,8,17,11,5,12,3,1,17,8,1,8,20,1,11,3,1,12,10,8,13,2,7,6,3,7,9,2,2,10,16,19,9,4,9,4,18,13,5,2,1,3,5,7,7,1,9,2,7,1,3,32,5,6,8,8,9,13,8,1,2,6,3,19,6,2,15,9,8,13,3,4,10,3,6,3,12,1,20,10,1,11,2,8,1,1,2,17,8,4,6,3,4,8,9,9,5,31,4,2,2,8,17,5,5,11,20,7,1,21,5,6,5,12,3,10,7,3,3,4,3,4,8,1,6,2,5,7,20,10,5,4,9,4,8,17,8,2,7,10,10,4,14,9,1,7,8,6,3,9,8,4,11,7,6,13,4,9,6,1,7,2,15,2,9,4,8,2,1,5,7,5,7,10,4,4,4,7,4,1,12,5,6,5,5,3,2,8,2,2,1,10,1,6,1,12,32,1,3,11,2,4,3,20,8,6,16,2,5,5,2,6,8,4,2,8,2,5,9,6,24,4,7,3,7,1,4,7,4,1,9,3,2,14,5,3,7,3,8,4,2,3,10,16,18,4,9,5,7,14,2,15,1,6,15,4,5,2,3,10,3,7,10,2,7,3,13,3,8,2,5,2,7,13,25,13,4,14,3,5,4,10,5,12,5,7,9,18,11,10,1,5,3,1,2,4,3,6,2,8,4,1,1,6,1,2,1,1,2,9,8,6,6,4,4,8,1,2,3,6,19,11,13,19,4,9,1,16,6,10,1,5,6,15,11,4,15,5,8,4,3,4,18,6,7,2,8,7,3,14,2,7,3,8,2,6,6,5,7,2,5,2,8,5,7,3,4,4,3,6,11,3,13,3,14,6,6,3,16,4,4,4,7,4,2,23,4,2,1,13,8,4,1,3,16,3,3,3,4,9,1,9,4,25,1,8,5,4,5,4,4,5,6,11,3,2,5,7,5,12,6,4,8,7,2,11,13,7,1,11,4,9,8,14,29,31,5,4,2,1,3,2,5,2,2,3,12,1,2,4,2,7,11,2,5,4,4,15,2,10,9,12,11,8,2,4,8,19,6,12,3,2,4,6,1,7,7,22,4,14,2,5,8,10,8,1,7,3,9,1,9,14,1,2,3,9,4,7,10,18,17,7,3,21,8,5,13,8,4,33,5,2,7,2,16,7,2,3,5,7,4,8,2,3,3,7,1,9,3,3,5,7,1,10,4,3,3,16,2,16,3,3,3,5,11,5,8,6,10,5,5,6,3,3,2,4,6,4,7,8,12,7,9,5,6,5,6,3,5,3,2,8,3,9,6,8,4,8,4,6,8,2,6,17,5],"mcar":[0,1,0,0,1,0,1,1,1,1,0,1,0,0,0,1,1,0,1,0,0,1,0,0,1,0,0,0,0,0,1,0,0,0,0,1,1,0,0,1,0,1,0,1,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,1,0,1,0,1,0,0,1,1,1,0,1,1,0,0,0,0,0,0,0,0,0,1,1,0,1,0,1,0,1,0,0,1,0,0,0,1,0,0,0,0,1,0,0,0,0,1,1,0,0,0,1,0,0,0,1,0,0,0,1,1,1,0,1,0,0,0,0,1,0,0,1,1,1,0,1,0,1,0,0,0,0,0,0,1,1,0,0,1,1,1,0,0,0,0,0,1,0,0,1,0,1,0,1,0,0,0,0,1,0,0,1,1,0,0,0,0,0,0,1,0,0,0,1,1,1,0,0,1,0,0,0,0,0,0,1,0,1,1,1,0,0,0,1,1,0,0,1,0,1,1,1,0,1,0,0,1,0,0,0,0,1,0,0,1,0,0,1,0,0,1,0,1,0,0,0,1,0,1,1,1,1,0,0,0,0,0,0,0,1,0,1,1,1,0,0,0,0,0,0,1,0,1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,1,1,0,0,1,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,1,0,0,0,0,0,1,0,0,1,0,1,1,1,0,0,1,0,0,0,0,0,0,1,0,1,0,0,1,0,1,1,0,1,0,1,0,1,1,0,0,0,1,1,0,1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,1,0,0,1,0,0,0,0,0,1,1,0,0,0,0,0,0,1,0,1,1,1,1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1,1,0,1,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,1,1,0,1,0,0,0,0,0,1,0,0,1,1,1,1,0,1,0,0,0,0,0,0,0,0,1,1,0,1,0,1,0,0,0,0,0,1,0,0,0,0,1,1,1,1,0,1,1,0,1,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1,1,1,0,0,0,1,0,0,0,0,1,0,0,1,0,1,0,0,0,1,0,0,1,0,0,0,0,1,0,0,0,0,1,1,1,0,1,1,1,0,1,0,1,1,1,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,0,1,0,1,1,0,0,0,1,0,1,0,0,0,1,1,1,0,0,0,1,0,1,1,0,0,0,0,0,1,1,0,0,0,1,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,1,1,0,0,0,1,0,1,0,0,0,1,0,0,1,1,0,0,1,0,0,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,1,0,0,0,0,0,1,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,1,1,1,0,0,1,1,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,1,0,1,0,1,1,0,1,0,1,0,0,0,0,0,1,0,1,0,1,0,1,0,1,1,0,0,1,0,1,0,0,0,1,0,0,0,1,1,0,0,1,0,0,1,0,1,0,0,1,1,0,1,1,1,0,0,0,0,1,0,0,0,1,0,1,0,0,0,0,0,0,1,0,1,1,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,1,0,1,1,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,1,0,0,1,0,1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,1,0,0,1,0,1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,1,0,1,1,0,0,0,0,1,0,0,0,0,0,1,1,0,0,0,0,0,0,0,1,0,0,1,0,1,0,0,0,1,0,0,0,1,1,0,0,1,1,0,1,1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0,1,0,0,1,0,0,0,0,1,0,1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,1,1,1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,1,1,0,0,0,0,0,0,1,0,0,1,0,0,0,1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,1,0,0,0,1,0,1,0,1,1,0,0,0,1,0,0,1,0,1,0,1,0,0,1,1,0,0,1,1,0,0,1,0,1,0,0,0,0,1,0,1,0,1,0,1,1,1,0,0,1,0,0,1,1,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,1,1,0,0,0,0,0,1,0,1,0,1,0,1,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1,0,0,1,0,1,0,0,0,0,0,1,1,1,1,1,0,1,1,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,1,0,0,1,0,1,0,0,1,0,1,0,0,0,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0,1,0,1,1,0,0,0,0,1,0,0,0,1,0,1,1,1,0,1,0,0,1,0,0,1,1,0,1,1,0,0,1,1,0,0,1,0,1,0,0,1,1,0,1,0,0,0,0,1,0,0,1,0,0,0,1,0,0,0,0,1,1,0,0,0,0,1,1,0,0,1,0,0,0,0,1,1,1,0,0,1,0,0,1,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,1,1,1,0,1,1,0,1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1,0,1,1,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,1,1,1,0,0,1,0,0,0,1,0,0,0,1,1,1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,1,1,0,0,1,1,0,1,0,0,0,0,0,1,0,1,0,0,1,1,0,0,1,0,1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,1,1,0,0,0,0,0,1,0,1,1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,0,0,0,1,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,1,0,1,0,0,1,0,0,0,0,1,0,0,1,0,1,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,1,0,1,0,0,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,1,0,1,1,1,0,0,1,0,0,0,0,1,0,0,0,0,0,1,0,1,1,0,1,0,0,1,0,0,0,1,1,0,0,0,0,0,0,1,0,0,1,1,0,0,0,1,0,0,1,0,1,0,0,1,1,1,1,0,1,0,0,0,0,0,1,0,1,0,0,1,1,0,1,0,0,0,0,0,0,0,0,0,1,1,0,1,0,0,0,0,0,1,0,1,1,1,1,0,1,0,0,0,0,1,1,1,1,0,0,0,1,0,0,0,1,0,0,1,0,0,1,1,0,1,1,0,0,1,0,1,1,0,0,1,0,1,0,0,1,0,0,0,0,1,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0],"mar":[0,1,1,0,0,1,1,0,1,0,0,1,1,0,0,0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,1,1,1,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,1,0,1,0,1,0,0,1,1,0,0,1,1,0,1,0,0,0,0,0,0,0,1,1,0,0,0,0,1,1,0,0,1,0,0,1,1,0,0,0,0,0,0,0,0,0,1,1,0,1,0,0,0,0,1,1,0,1,0,0,0,1,0,1,0,0,0,0,0,0,0,1,1,0,0,1,0,1,0,0,1,1,0,0,1,1,0,1,1,1,0,1,0,1,1,1,1,0,0,0,1,1,0,1,1,0,0,1,1,0,0,1,1,0,1,0,0,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,1,0,0,0,0,1,1,1,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,0,1,0,0,1,0,1,0,0,0,0,1,1,0,0,0,0,1,0,0,1,1,0,1,1,1,0,0,0,0,0,0,1,0,1,0,1,0,0,1,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,1,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,0,1,0,1,1,0,0,0,0,0,0,1,0,0,0,1,0,1,1,0,0,1,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,1,0,1,1,0,1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,1,0,0,1,0,0,0,0,0,1,1,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1,1,0,1,0,1,0,1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,1,0,1,0,1,0,0,0,0,0,0,1,1,0,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,1,0,1,0,0,1,1,0,0,0,1,0,1,1,1,0,0,0,1,0,1,1,0,0,0,1,0,1,1,0,1,0,0,1,0,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,1,1,0,0,1,1,1,0,0,0,1,0,0,1,0,1,0,0,1,0,1,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,0,0,1,1,1,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1,0,1,1,0,0,0,0,0,0,1,1,0,1,1,1,0,1,0,0,0,0,0,1,1,0,0,1,0,1,0,1,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,1,1,1,1,0,0,0,1,0,0,0,0,1,1,0,1,0,0,0,1,1,0,0,1,1,0,1,0,0,0,1,0,0,1,0,0,0,1,0,0,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,1,0,0,1,1,0,1,0,1,0,0,0,0,0,1,0,1,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,1,0,0,1,0,1,0,0,0,1,0,1,1,0,0,1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,1,0,1,0,0,0,0,0,0,0,1,0,1,0,1,0,1,1,0,1,1,0,1,1,0,0,1,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,1,0,1,0,0,0,0,1,0,0,1,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,1,0,1,0,0,0,0,0,0,0,1,1,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,1,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1,0,0,1,0,0,0,0,0,0,0,1,1,1,0,0,0,1,0,0,1,0,0,1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1,1,0,0,1,1,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,1,1,0,0,0,0,0,0,1,0,0,0,1,0,1,0,0,0,1,1,0,0,0,0,0,0,1,0,0,1,1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,1,0,0,1,0,0,1,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,0,0,1,1,1,0,1,0,0,0,1,0,0,0,1,0,0,1,0,1,1,1,0,0,1,0,0,0,1,1,0,0,0,0,0,0,0,1,0,0,1,1,1,0,0,0,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,1,0,1,0,1,0,1,0,1,0,0,0,0,0,0,1,0,0,1,0,0,1,1,0,0,0,0,1,0,1,0,1,1,0,0,1,0,1,1,1,1,1,1,0,1,0,0,0,1,0,1,1,1,0,1,0,0,0,0,1,0,0,1,0,0,0,1,1,1,1,1,0,1,0,1,1,0,0,1,0,0,0,1,0,1,0,0,0,0,0,0,1,0,0,0,0,1,0,1,0,0,0,0,0,1,1,0,1,1,0,0,0,0,1,0,0,0,1,0,1,1,0,1,0,0,1,0,0,0,1,0,1,1,1,0,0,0,0,1,0,0,1,1,0,0,0,0,1,1,1,0,0,1,0,1,0,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,0,0,0,1,0,0,1,0,0,1,0,1,0,0,0,0,1,1,0,0,0,0,1,1,0,0,1,0,0,1,1,0,0,0,0,1,0,1,0,0,0,0,0,0,0,1,0,1,0,1,0,1,0,1,0,0,1,0,1,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,1,0,1,0,1,1,0,1,0,0,1,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1,0,0,0,0,1,1,1,0,0,1,0,0,0,1,0,0,1,1,1,1,0,0,0,0,1,0,0,1,1,0,1,1,0,0,0,1,0,0,0,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0,1,1,0,1,0,1,1,1,0,0,1,0,0,0,1,1,1,0,0,1,0,0,0,1,0,0,1,0,0,0,1,0,1,1,0,0,1,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,1,1,0,0,1,0,0,0,0,1,0,1,0,0,0,0,0,0,0,1,0,0,1,0,0,1,0,1,0,0,1,1,0,1,1,0,0,0,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,0,0,1,0,0,0,0,1,1,0,0,0,1,0,0,1,1,1,0,1,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,1,0,0,1,1,0,0,1,0,0,1,0,1,1,1,1,0,0,1,0,0,0,0,0,1,0,0,1,0,0,1,0,1,1,1,0,1,1,1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,1,1,0,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,0,1,1,1,0,0,0,0,0,0,1,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,1,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,1,0,1,1,1,1,0,1,0,0,0,0,1,0,1,0,0,1,0,1,0,0,0,0,0,1,0,1,1,1,0,0,1,1,0,0,1,0,1,1,0,0,1,0,1,0,0,1,0,0,0,1,0,0,0,1,1,1,0,0,0,1,0,0,1,1,0,0,0],"mnar":[0,1,0,0,0,0,1,0,0,1,0,1,1,0,0,0,0,0,1,0,1,0,0,0,1,0,0,0,0,0,1,0,1,1,0,0,1,0,0,1,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,0,0,0,1,0,0,1,1,0,1,0,1,1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,1,0,0,1,0,0,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,1,0,1,0,1,0,0,0,0,0,0,0,1,0,0,0,1,1,0,0,1,0,1,0,0,1,0,0,0,1,1,0,1,1,1,0,1,0,1,1,0,0,0,1,0,1,1,0,1,1,0,0,1,0,0,0,0,1,0,1,0,0,0,1,1,0,0,0,1,1,0,0,0,0,0,0,0,1,0,0,1,0,1,1,1,0,0,0,1,0,0,0,1,0,1,1,0,0,0,0,0,1,0,0,1,1,1,0,0,0,0,1,1,0,0,0,0,1,0,0,1,1,0,0,0,1,0,0,0,1,0,0,1,0,1,0,1,0,0,1,0,0,0,0,0,0,1,0,0,1,0,1,0,0,0,0,0,1,0,0,1,0,0,1,1,0,0,0,1,1,0,0,0,0,1,1,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,1,0,1,1,0,0,0,0,0,0,1,0,0,0,1,1,0,1,0,0,1,0,0,0,1,0,0,0,0,0,0,0,1,1,0,1,0,0,0,0,0,1,1,0,0,0,1,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,1,1,0,0,0,0,0,1,0,1,0,0,0,0,0,1,1,0,1,0,0,0,0,0,0,0,0,1,1,1,0,0,0,1,0,0,1,0,1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,1,0,0,0,0,0,1,0,0,0,1,0,0,1,0,0,0,1,0,1,0,0,0,0,0,1,0,1,1,0,0,0,1,0,0,0,0,0,0,1,0,0,1,0,1,0,1,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,1,0,1,1,0,0,0,1,1,0,1,0,1,0,0,1,0,0,0,0,1,0,1,0,1,0,0,0,1,0,0,0,0,1,0,0,1,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,1,1,0,1,1,1,0,0,0,1,1,0,0,0,0,1,0,0,1,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,1,0,1,1,0,1,0,0,0,1,0,0,0,0,1,0,0,1,0,0,1,0,1,0,1,1,0,0,0,0,0,0,1,0,1,1,0,1,1,1,0,0,0,0,0,0,1,0,0,1,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,1,1,1,1,1,0,1,1,0,0,0,0,1,1,0,1,1,0,0,1,0,0,0,1,1,0,1,0,0,0,1,0,0,1,0,0,0,1,0,1,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,1,0,1,0,0,0,1,0,1,0,0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,1,0,0,0,1,0,0,0,0,1,1,1,0,0,0,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,1,0,0,1,1,1,0,1,0,0,0,0,0,0,0,1,0,1,1,1,0,1,1,0,1,1,1,0,1,0,0,0,0,0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,1,0,1,1,0,0,0,0,0,0,0,1,0,0,0,1,1,0,0,0,0,1,1,0,0,0,1,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,1,0,0,1,1,0,0,1,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,1,1,0,1,0,0,1,0,0,1,0,0,0,0,0,1,1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,1,1,1,0,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,1,1,0,0,0,0,0,0,1,0,1,1,1,0,0,0,1,0,1,1,0,0,0,0,0,0,1,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,1,0,1,0,1,1,1,1,0,0,1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1,1,0,0,1,0,1,0,1,0,0,0,0,0,1,0,1,1,0,0,0,1,1,1,0,0,1,0,0,0,1,1,0,0,0,0,0,0,0,1,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,1,0,1,0,0,1,0,0,0,1,0,0,1,0,0,0,1,0,1,1,0,0,1,0,1,1,0,0,1,0,1,1,0,0,0,0,1,1,1,0,0,1,0,0,0,1,1,0,0,1,0,0,0,1,1,1,1,1,0,1,0,0,1,0,0,1,0,0,0,1,1,1,0,0,0,1,0,0,1,0,0,0,0,1,0,1,0,0,0,0,0,1,1,1,1,1,0,0,0,0,1,0,0,0,1,0,1,0,0,1,0,0,1,0,0,0,1,0,1,1,1,0,0,0,0,1,1,0,1,1,0,1,0,0,1,0,0,1,0,1,0,1,0,0,1,0,1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,1,1,1,1,0,0,0,0,0,0,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1,1,1,1,1,1,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,1,1,1,0,1,1,0,1,0,0,0,0,1,0,0,1,1,0,0,0,0,0,0,1,1,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,0,1,0,1,0,0,1,0,0,0,0,1,1,0,0,0,0,1,1,1,1,0,1,0,0,0,1,0,1,0,0,0,1,0,0,1,0,0,0,0,0,0,0,1,1,0,0,1,0,0,0,0,1,0,0,0,1,1,0,0,0,0,1,1,0,0,1,0,0,0,0,1,0,1,0,0,0,0,1,0,0,1,0,0,1,0,0,1,0,1,0,0,1,1,0,1,1,0,0,0,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,1,1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,1,0,0,1,0,0,0,1,0,0,1,0,1,1,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0,0,1,0,1,1,1,0,1,1,1,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,1,1,0,1,0,1,1,0,0,0,0,1,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,1,0,1,1,0,1,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,1,1,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0,1,1,0,1,1,1,0,0,0,0,1,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,1,1,1,0,1,0,0,0,0,1,0,0,0,1,0,1,1,1,1,1,0,0,0,0,0,0,0,1,0,0,0],"res":{"tabla":{"mcar":{"quitar":[43.2,0.214,25.4,0.399],"media":[43.2,0.149,21.2,0.328],"grupo":[43.7,0.221,25.2,0.355],"regresion":[43.5,0.233,23.2,0.434],"regresion_ruido":[43.5,0.224,25.3,0.403],"falta":0.303},"mar":{"quitar":[48.0,0.267,26.2,0.346],"media":[48.0,0.184,21.8,0.302],"grupo":[43.2,0.211,25.6,0.361],"regresion":[43.0,0.209,24.2,0.413],"regresion_ruido":[42.8,0.214,26.4,0.387],"falta":0.308},"mnar":{"quitar":[51.2,0.297,26.0,0.32],"media":[51.2,0.208,21.7,0.284],"grupo":[46.7,0.238,24.9,0.352],"regresion":[46.6,0.239,23.8,0.393],"regresion_ruido":[46.5,0.252,26.8,0.338],"falta":0.3}},"verdad":[43.422,0.21,25.35],"averia":{"media":[0.766],"media_indicador":[0.835],"arbol_nativo":[0.821]},"tasas":[0.3,0.069]}};
+const N=D.espera.length,f1=(v,d)=>v.toFixed(d??1).replace(".",",").replace("-","−");
+const seg=(ids,cb)=>{const b=ids.map(i=>document.getElementById(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});};
+const mean=a=>a.reduce((s,v)=>s+v,0)/a.length,sd=a=>{const m=mean(a);return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/(a.length-1));};
+const pearson=(x,y)=>{const mx=mean(x),my=mean(y);let a=0,b=0,c=0;for(let i=0;i<x.length;i++){a+=(x[i]-mx)*(y[i]-my);b+=(x[i]-mx)**2;c+=(y[i]-my)**2;}return a/Math.sqrt(b*c);};
+const Y=D.espera,TRUE_M=mean(Y),TRUE_60=Y.filter(v=>v>60).length/N,TRUE_SD=sd(Y),TRUE_R=pearson(D.palets,Y);
+const CLI=["almacén grande","tienda pequeña","obra"];
+/* rellenos */
+function fillMean(miss){const obs=Y.filter((v,i)=>!miss[i]),m=mean(obs);return Y.map((v,i)=>miss[i]?m:v);}
+function fillGroup(miss,seed){const r=mulberry32(seed||3),pools=[[],[],[]];Y.forEach((v,i)=>{if(!miss[i])pools[D.cli[i]].push(v);});return Y.map((v,i)=>miss[i]?pools[D.cli[i]][Math.floor(r()*pools[D.cli[i]].length)]:v);}
+function fillReg(miss,noise,seed){/* espera ~ 1 + palets + tienda + obra, por mínimos cuadrados */
+  const rows=[],ys=[];Y.forEach((v,i)=>{if(!miss[i]){rows.push([1,D.palets[i],D.cli[i]===1?1:0,D.cli[i]===2?1:0]);ys.push(v);}});
+  const p=4,A=[...Array(p)].map(()=>Array(p).fill(0)),b=Array(p).fill(0);rows.forEach((r,k)=>{for(let a=0;a<p;a++){b[a]+=r[a]*ys[k];for(let c=0;c<p;c++)A[a][c]+=r[a]*r[c];}});
+  /* resolver por Gauss */
+  const M=A.map((r,i)=>r.concat([b[i]]));for(let i=0;i<p;i++){let mx=i;for(let k=i+1;k<p;k++)if(Math.abs(M[k][i])>Math.abs(M[mx][i]))mx=k;[M[i],M[mx]]=[M[mx],M[i]];for(let k=i+1;k<p;k++){const f=M[k][i]/M[i][i];for(let c=i;c<=p;c++)M[k][c]-=f*M[i][c];}}
+  const beta=Array(p).fill(0);for(let i=p-1;i>=0;i--){let s=M[i][p];for(let c=i+1;c<p;c++)s-=M[i][c]*beta[c];beta[i]=s/M[i][i];}
+  const pred=i=>beta[0]+beta[1]*D.palets[i]+beta[2]*(D.cli[i]===1?1:0)+beta[3]*(D.cli[i]===2?1:0);
+  const res=rows.map((r,k)=>ys[k]-(beta[0]+beta[1]*r[1]+beta[2]*r[2]+beta[3]*r[3])),rr=mulberry32(seed||5);
+  return Y.map((v,i)=>miss[i]?pred(i)+(noise?res[Math.floor(rr()*res.length)]:0):v);}
+function hist(svg,parts,o){const W=900,H=o.H||300,L=46,R=16,T=16,B=44,bw=5,x1=o.x1||150,nb=Math.ceil(x1/bw);svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+  const C=parts.map(p=>{const c=Array(nb).fill(0);p.v.forEach(v=>{const k=Math.min(nb-1,Math.max(0,Math.floor(v/bw)));c[k]++;});return c;});
+  const tot=[...Array(nb).keys()].map(k=>C.reduce((s,c)=>s+c[k],0)),ref=o.ref?(()=>{const c=Array(nb).fill(0);o.ref.forEach(v=>{c[Math.min(nb-1,Math.floor(v/bw))]++;});return c;})():null;
+  const mx=Math.max(...tot,...(ref||[0])),sx=v=>L+v/x1*(W-L-R),sy=c=>H-B-c/mx*(H-T-B);
+  for(let t=0;t<=x1;t+=30){el("line",{x1:sx(t),x2:sx(t),y1:T,y2:H-B,class:"g-line"},svg);txt(svg,sx(t),H-B+17,t,{"text-anchor":"middle","font-size":12});}
+  txt(svg,W-R,H-8,"minutos de espera",{"text-anchor":"end","font-size":12});
+  for(let k=0;k<nb;k++){let base=0;parts.forEach((p,j)=>{const c=C[j][k];if(!c)return;el("rect",{x:sx(k*bw)+0.6,y:sy(base+c),width:sx(bw)-sx(0)-1.2,height:sy(base)-sy(base+c),fill:p.col,"fill-opacity":p.op||.85},svg);base+=c;});}
+  if(ref)el("path",{d:"M"+ref.map((c,k)=>`${sx(k*bw)} ${sy(c)}H${sx((k+1)*bw)}`).join("L"),fill:"none",stroke:"var(--ink)","stroke-width":1.6,"stroke-opacity":.6},svg);
+  el("line",{x1:sx(60),x2:sx(60),y1:T,y2:H-B,stroke:"var(--ink)","stroke-width":1.5,"stroke-dasharray":"5 4"},svg);txt(svg,sx(60)+5,T+10,"1 hora",{"font-size":12});
+  (o.lines||[]).forEach(([v,c,t],i)=>{el("line",{x1:sx(v),x2:sx(v),y1:T,y2:H-B,stroke:c,"stroke-width":3},svg);txt(svg,sx(v)+6,T+30+i*18,t,{"font-size":13,"font-weight":700,style:`fill:${c}`});});}
+
+/* ---------- héroe ---------- */
+(function(){let mec="mcar",met=0;const svg=document.getElementById("hero");
+  function draw(){const miss=D[mec].map(Boolean);let est,used;
+    if(met===0){const obs=Y.filter((v,i)=>!miss[i]);est=obs;used=obs.length;}else if(met===1){est=fillMean(miss);used=N;}else{est=fillGroup(miss,7);used=N;}
+    const m=mean(est),p60=est.filter(v=>v>60).length/est.length;
+    hist(svg,[{v:Y.filter((v,i)=>!miss[i]),col:"var(--sample)"},{v:Y.filter((v,i)=>miss[i]),col:"var(--muted)",op:.35}],{lines:[[TRUE_M,"var(--good)","verdad "+f1(TRUE_M)],[m,"var(--mean)","calculada "+f1(m)]]});
+    const okM=Math.abs(m-TRUE_M)<1.2,ok6=Math.abs(p60-TRUE_60)<0.012;
+    document.getElementById("h-big").innerHTML=`<div><b style="color:${okM?"var(--good)":"var(--warn)"}">${f1(m)} min</b><span>espera media · verdad: ${f1(TRUE_M)}</span></div><div><b style="color:${ok6?"var(--good)":"var(--warn)"}">${f1(p60*100)} %</b><span>más de una hora · verdad: ${f1(TRUE_60*100)} %</span></div><div><b>${used.toLocaleString("es-ES")}</b><span>descargas usadas</span></div>`;
+    const nm=miss.filter(Boolean).length,ts=[0,1,2].map(c=>{const idx=[...Array(N).keys()].filter(i=>D.cli[i]===c);return idx.filter(i=>miss[i]).length/idx.length;});
+    const M={mcar:[`Faltan ${nm} esperas, repartidas al azar. Las declaradas son una muestra normal de todas, así que quitar los huecos da una media correcta (${f1(m)} frente a ${f1(TRUE_M)}): solo se pierden datos.`,
+        `La media sale bien (rellenar con la media no la cambia), pero las descargas de más de una hora bajan a <b>${f1(p60*100)} %</b> en lugar de ${f1(TRUE_60*100)} %. Las ${nm} descargas rellenadas tienen todas exactamente ${f1(m)} minutos: ninguna pasa de la hora. Rellenar con la media aplasta la variación (idea 2).`,
+        `Rellenando con esperas reales de descargas del mismo tipo de cliente, las dos cifras se acercan a la verdad y se usan las 2 000 descargas.`],
+      mar:[`Ahora faltan el ${f1(ts[1]*100,0)} % de las tiendas pequeñas, pero solo el ${f1(ts[0]*100,0)} % de los almacenes. Las tiendas son rápidas, así que entre las declaradas sobran esperas largas: la media sale <b>${f1(m)}</b> en lugar de ${f1(TRUE_M)} y las de más de una hora, ${f1(p60*100)} %. Prueba "Rellenar según el cliente".`,
+        `Rellenar con la media no arregla nada: la media es la de las declaradas, que ya estaba sesgada (${f1(m)}), y las de más de una hora bajan por el aplastamiento. Dos errores a la vez.`,
+        `Como sabemos de qué tipo es cada cliente, cada hueco de una tienda se rellena con la espera de otra tienda. Se corrige el sesgo: <b>${f1(m)}</b> minutos (verdad ${f1(TRUE_M)}) y ${f1(p60*100)} % de más de una hora. Este es el caso que se puede arreglar con lo que hay en la tabla.`],
+      mnar:[`Ahora faltan sobre todo las esperas cortas, de cualquier cliente. Entre las declaradas sobran las largas: media <b>${f1(m)}</b> (verdad ${f1(TRUE_M)}).`,
+        `La media rellena hereda el sesgo de las declaradas (${f1(m)}) y además aplasta la variación.`,
+        `Rellenar según el cliente ayuda solo un poco (${f1(m)} frente a ${f1(TRUE_M)}): dentro de cada tipo de cliente siguen faltando las esperas cortas, y el relleno copia esperas declaradas, que son las largas. Ninguna columna de la tabla sabe qué esperas fueron cortas. Para arreglarlo hace falta información de fuera: por ejemplo, la hora de llegada y salida del GPS en el cliente, o preguntar a una muestra de conductores.`]};
+    document.getElementById("h-msg").innerHTML=M[mec][met];}
+  seg(["h-mcar","h-mar","h-mnar"],i=>{mec=["mcar","mar","mnar"][i];draw();});seg(["h-q","h-m","h-g"],i=>{met=i;draw();});draw();})();
+
+/* ---------- idea 1: filas completas ---------- */
+(function(){const svg=document.getElementById("cc"),W=900,H=300,R=24,ik=document.getElementById("c-k"),ip=document.getElementById("c-p");svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const rnd=[...Array(24*20)].map((_,i)=>mulberry32(i*31+7)());
+  function draw(){const k=+ik.value,p=+ip.value/100;svg.textContent="";const cw=Math.min(36,(W-40)/k),ch=(H-30)/R,x0=(W-cw*k)/2;let full=0;
+    for(let r=0;r<R;r++){const miss=[...Array(k)].map((_,c)=>rnd[r*20+c]<p),ok=!miss.some(Boolean);if(ok)full++;
+      for(let c=0;c<k;c++)el("rect",{x:x0+c*cw+1.5,y:10+r*ch+1.5,width:cw-3,height:ch-3,rx:2,fill:miss[c]?"none":ok?"var(--mean)":"var(--muted)","fill-opacity":miss[c]?1:ok?.8:.3,stroke:miss[c]?"var(--line)":"none","stroke-width":1.5,"stroke-dasharray":miss[c]?"3 2":""},svg);}
+    const th=(1-p)**k;document.getElementById("c-k-o").textContent=k;document.getElementById("c-p-o").textContent=Math.round(p*100)+" %";
+    document.getElementById("c-msg").innerHTML=`Con ${k} columna${k>1?"s":""} y un ${Math.round(p*100)} % de huecos en cada una, solo quedan completas el <b>${f1(th*100,0)} %</b> de las filas (en el dibujo, ${full} de ${R}). ${th<0.5?"Más de la mitad de la tabla desaparece, aunque cada columna tenga muy pocos huecos.":th<0.8?"Se pierde una parte importante de la tabla.":"Aún se conserva la mayoría."} Y si los huecos no son al azar, lo que queda además está sesgado.`;}
+  [ik,ip].forEach(i=>i.addEventListener("input",draw));draw();})();
+
+/* ---------- idea 2: rellenos ---------- */
+(function(){const miss=D.mar.map(Boolean);let met=0;
+  function draw(){const v=met===0?fillMean(miss):met===1?fillGroup(miss,11):fillReg(miss,met===3,13);
+    hist(document.getElementById("imp"),[{v:v.filter((x,i)=>!miss[i]),col:"var(--sample)"},{v:v.filter((x,i)=>miss[i]),col:"var(--point)"}],{ref:Y,H:280});
+    const s=sd(v),r=pearson(D.palets,v),p=v.filter(x=>x>60).length/N,m=mean(v);
+    const row=(lab,a,t,mx,txtv)=>`<div class="row"><span>${lab}</span><span class="bar"><i style="width:${Math.min(100,a/mx*100).toFixed(1)}%;background:${Math.abs(a/t-1)<0.06?"var(--good)":"var(--warn)"}"></i><u style="left:${(t/mx*100).toFixed(1)}%"></u></span><span class="num">${txtv}</span></div>`;
+    document.getElementById("i-bars").innerHTML=row("espera media",m,TRUE_M,60,f1(m)+" min")+row("variación (desviación)",s,TRUE_SD,35,f1(s)+" min")+row("relación palés–espera",r,TRUE_R,0.6,f1(r,2))+row("más de una hora",p*100,TRUE_60*100,30,f1(p*100)+" %");
+    const M=["Todos los huecos reciben el mismo valor: una barra naranja altísima en un solo sitio. La variación baja, la relación con los palés se debilita (los huecos tienen la misma espera con 2 palés que con 30) y las esperas largas desaparecen. Además, la media hereda el sesgo de las declaradas.",
+      "Cada hueco recibe la espera real de otra descarga del mismo tipo de cliente. La forma del histograma y la media vuelven a parecerse a la verdad. Pero el relleno no sabe nada de los palés, así que la relación palés–espera se debilita un poco.",
+      "La predicción usa palés y tipo de cliente: la media y la relación con los palés salen bien. Pero todas las predicciones caen cerca del centro de su grupo, sin la variación natural: la desviación y las esperas largas siguen por debajo de la realidad.",
+      "Se predice con palés y cliente y se suma una variación sorteada de entre los errores reales de la predicción. Las cuatro cifras quedan cerca de la verdad. Es la idea de la imputación múltiple de la versión técnica: rellenar varias veces así y comparar."];
+    document.getElementById("i-msg").innerHTML=M[met]+" (La raya negra de cada barra es el valor verdadero.)";}
+  seg(["i-0","i-1","i-2","i-3"],i=>{met=i;draw();});draw();})();
+
+/* ---------- idea 3: series ---------- */
+(function(){const svg=document.getElementById("ts"),W=900,H=300,L=46,R=16,T=16,B=40;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);let sc=0,met=0;
+  const t=[...Array(49).keys()].map(k=>k*5),g0=80,g1=120;
+  function lvl(m,ref){let v=62-0.11*m;if(ref&&m>=100)v+=Math.min(1,(m-100)/10)*30;return v;}
+  const sx=m=>L+m/240*(W-L-R),sy=v=>H-B-(v-30)/70*(H-T-B);
+  function draw(){svg.textContent="";const ref=sc===1;
+    el("rect",{x:sx(g0),y:T,width:sx(g1)-sx(g0),height:H-T-B,fill:"var(--muted)","fill-opacity":.12},svg);txt(svg,sx(100),T+12,"hueco de 40 min",{"text-anchor":"middle","font-size":12});
+    [40,50,60,70,80,90].forEach(v=>{el("line",{x1:L,x2:W-R,y1:sy(v),y2:sy(v),class:"g-line"},svg);txt(svg,L-6,sy(v)+4,v+" %",{"text-anchor":"end","font-size":12});});
+    [0,60,120,180,240].forEach(m=>txt(svg,sx(m),H-B+17,"+"+m+" min",{"text-anchor":"middle","font-size":12}));
+    const meas=t.map(m=>[m,lvl(m,ref)]);
+    el("path",{d:"M"+meas.filter(([m])=>m<=g0).map(([m,v])=>`${sx(m)} ${sy(v)}`).join("L"),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    el("path",{d:"M"+meas.filter(([m])=>m>=g1).map(([m,v])=>`${sx(m)} ${sy(v)}`).join("L"),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    el("path",{d:"M"+meas.filter(([m])=>m>=g0&&m<=g1).map(([m,v])=>`${sx(m)} ${sy(v)}`).join("L"),fill:"none",stroke:"var(--good)","stroke-width":2.5,"stroke-dasharray":"6 4"},svg);
+    const a=lvl(g0,ref),b=lvl(g1,ref);let fill=null;
+    if(met===0)fill=`M${sx(g0)} ${sy(a)}H${sx(g1)}L${sx(g1)} ${sy(b)}`;else if(met===1)fill=`M${sx(g0)} ${sy(a)}L${sx(g1)} ${sy(b)}`;
+    if(fill)el("path",{d:fill,fill:"none",stroke:"var(--point)","stroke-width":3.5},svg);
+    const M=[[`Repetir el último valor deja el depósito plano 40 minutos y luego lo hace bajar de golpe. Un análisis de consumo diría que el camión no gastó nada en el hueco y mucho al volver la señal.`,`Unir con una línea recta acierta casi exactamente: el camión siguió gastando a ritmo constante. Para magnitudes que cambian suave (combustible, odómetro, temperatura), es lo razonable en huecos cortos.`,`Dejar el hueco es honesto pero hace que cualquier cálculo de esos 40 minutos falte. Si el hueco es corto y lo que pasa dentro es predecible, rellenar es mejor.`],
+      [`Repetir el último valor deja el depósito plano y luego lo hace subir de golpe. Por casualidad, el salto queda en el sitio aproximado del repostaje, pero el momento exacto se ha perdido.`,`La línea recta reparte el repostaje a lo largo de 40 minutos, como si el depósito se llenara poco a poco circulando. Inventa un comportamiento que no existe: un modelo de consumo aprendería que el camión "ganó" combustible conduciendo.`,`Aquí lo correcto es dejar el hueco y marcarlo: dentro pasó algo (un repostaje) que ningún relleno puede reconstruir. Mejor saber que no se sabe que inventar.`]];
+    document.getElementById("t-msg").innerHTML=M[sc][met];}
+  seg(["t-a","t-b"],i=>{sc=i;draw();});seg(["t-0","t-1","t-2"],i=>{met=i;draw();});draw();})();
+
+/* ---------- idea 4: el hueco informa ---------- */
+(function(){const svg=document.getElementById("inf"),W=900,H=300,R=D.res;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const [tf,tn]=R.tasas,A=R.averia,bw=80,base=H-50,sc=180/0.4;
+  [[tn,"hay temperatura","var(--sample)"],[tf,"falta la temperatura","var(--warn)"]].forEach(([v,l,c],i)=>{const x=40+i*170;el("rect",{x,y:base-v*sc,width:bw,height:v*sc,rx:6,fill:c},svg);txt(svg,x+bw/2,base-v*sc-8,f1(v*100)+" %",{"text-anchor":"middle","font-size":15,"font-weight":700,class:"t-ink"});txt(svg,x+bw/2,base+18,l,{"text-anchor":"middle","font-size":12});});
+  txt(svg,60,24,"viajes con avería en 30 días",{"font-size":13,"font-weight":600,class:"t-ink"});
+  const x0=420,bx=x0+190,bW=W-bx-70;txt(svg,x0,24,"nota de cada modelo (50 % = moneda)",{"font-size":13,"font-weight":600,class:"t-ink"});
+  [["rellenar con la media",A.media[0],"var(--muted)"],["media + columna «faltaba»",A.media_indicador[0],"var(--good)"],["árbol que acepta huecos",A.arbol_nativo[0],"var(--mean)"]].forEach(([l,v,c],i)=>{const y=60+i*62,w=(v-0.5)/0.5*bW;
+    txt(svg,bx-10,y+20,l,{"text-anchor":"end","font-size":13,class:"t-ink"});el("rect",{x:bx,y,width:bW,height:30,rx:6,fill:"var(--line)","fill-opacity":.6},svg);el("rect",{x:bx,y,width:w,height:30,rx:6,fill:c},svg);txt(svg,bx+w+8,y+20,f1(v*100)+" %",{"font-size":14,"font-weight":700,class:"t-ink"});});
+  txt(svg,bx,H-14,"barras desde 50 % (moneda) hasta 100 %",{"font-size":12});
+  document.getElementById("inf-msg").innerHTML=`Cuando falta la temperatura, el ${f1(tf*100)} % de los viajes acaba en avería; cuando está, el ${f1(tn*100)} %. El modelo que rellena con la media y olvida el hueco acierta un <b>${f1(A.media[0]*100,1)} %</b>. Añadiendo la columna "faltaba la temperatura" sube al <b>${f1(A.media_indicador[0]*100,1)} %</b>. Un árbol con boosting que acepta huecos directamente llega al <b>${f1(A.arbol_nativo[0]*100,1)} %</b> sin hacer nada, porque aprende hacia qué lado mandar los viajes sin dato.`;})();
+
+/* ---------- idea 5: guía ---------- */
+(function(){const G=[["Faltan pocos datos y por azar","Quitar las filas con hueco es aceptable si quedan suficientes. Si son muchas columnas, mejor rellenar (idea 1)."],
+  ["Faltan más en ciertos grupos que sí conoces","Rellena usando esas columnas (por grupo o con una predicción) y conserva la variación sumando un error sorteado. Quitar filas sesgaría el resultado."],
+  ["Faltan por su propio valor (lo rutinario no se apunta)","Ningún relleno con la tabla lo arregla. Busca otra fuente (GPS, otro sensor, una muestra revisada a mano) y calcula los resultados con varias suposiciones razonables para ver cuánto cambian."],
+  ["El hueco puede anunciar algo (un sensor que falla)","Rellena y añade la columna «faltaba», o usa un modelo de árboles que acepte huecos."],
+  ["Huecos en una serie en el tiempo","Huecos cortos en algo que cambia suave: línea recta. Si dentro pudo pasar algo brusco (repostaje, parada), o el hueco es largo: déjalo marcado."],
+  ["Vas a entrenar un modelo","Aprende el relleno solo con el entrenamiento, guárdalo y aplícalo igual en el examen y en producción. Mira si el modelo funciona igual de bien en filas con y sin huecos."]];
+  const box=document.getElementById("g-chips"),bs=[];
+  G.forEach(([l,t],i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===0));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));document.getElementById("g-msg").innerHTML=`<b>${l}.</b> ${t}`;};box.appendChild(b);bs.push(b);});
+  document.getElementById("g-msg").innerHTML=`<b>${G[0][0]}.</b> ${G[0][1]}`;})();
+})();
+</script>
+
+</body>
+</html>

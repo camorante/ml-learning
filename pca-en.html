@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PCA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: same identity as the Visual ML series. One reading column + live figures. Blue = the model, orange = the data, purple = the errors */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.duo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.duo{grid-template-columns:1fr}}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:150px minmax(0,1fr) 64px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden}
+.meter2 .bar i{display:block;height:100%;border-radius:7px}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.meter2 .row{grid-template-columns:96px minmax(0,1fr) 54px;font-size:.84rem}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Visual ML series · explained without formulas · <a href="pca-technical-en.html" target="_self">see the technical version</a> · <a href="visual-ml-series-en.html" target="_self">all topics</a> · <a href="pca-es.html" target="_self">en español</a></p>
+  <h1>PCA</h1>
+  <p class="lede">Principal component analysis: rotate the data to look at it from the angle where the differences between cases show the most, and keep only the few directions that matter.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <figure class="fig"><svg id="hero" role="img" aria-label="Cloud of points, a rotating line and each point's shadow on it"></svg></figure>
+  <div class="meter2 col" id="h-bars"></div>
+  <div class="controls">
+    <div class="slider"><label for="h-a">Angle of the line <output id="h-a-o"></output></label><input type="range" id="h-a" min="0" max="179" step="1" value="100"><div class="ends"><span>0°</span><span>180°</span></div></div>
+    <div class="btns"><button type="button" class="primary" id="h-best">Find the best direction</button><button type="button" id="h-new">New data</button></div>
+  </div>
+  <p class="qcard col" id="h-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Before we start</p>
+    <h2>The best shadow</h2>
+    <p>Imagine you have to describe a pen using only one photo of its shadow. If you light it from above with the pen standing up, the shadow is a tiny dot: it tells you nothing. If you lay it down, the shadow shows its full length. Same object, but one shadow keeps far more information than the other.</p>
+    <p>PCA does that with data: if each truck is described by 10 numbers, we can't draw it in 10 dimensions. PCA looks for the angle from which to "cast the shadow" so the trucks end up as <strong>spread out</strong> as possible, because those differences are the information. The first direction it finds is <strong>principal component 1</strong>; the next one, perpendicular to it, is component 2; and so on.</p>
+  </div>
+  <figure class="fig"><svg id="pen" role="img" aria-label="A pen and two shadows, one short and one long"></svg></figure>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 5</p>
+    <h2>What you gain lengthwise, you lose crosswise</h2>
+    <p>In the toy above, each point has a shadow on the line (blue) and a distance to the line (purple). Rotate the line and watch the bars: the spread of the shadows and the spread of the distances always add up to the same total, like the two legs of Pythagoras' triangle. So looking for the line where the shadows are most spread out is the same as looking for the line that passes <strong>closest</strong> to all the points. Two ways of saying the same thing.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 5</p>
+    <h2>Many features say almost the same thing</h2>
+    <p>Six daily measurements from 300 trucks. Many go together: the truck that drives more kilometers also burns more liters, emits more CO₂ and has its engine running for more hours. That's six numbers, but deep down they tell one or two stories. The color map shows how similar they are; the bars, how much information each component captures.</p>
+  </div>
+  <div class="duo">
+    <figure class="fig"><svg id="corr" role="img" aria-label="Correlation map between the six features"></svg><figcaption>Blue: they go up together. Orange: when one goes up, the other goes down.</figcaption></figure>
+    <figure class="fig"><svg id="scree" role="img" aria-label="Information captured by each component"></svg><figcaption id="scree-c"></figcaption></figure>
+  </div>
+  <div class="slider col"><label for="sc-k">Components I keep <output id="sc-k-o"></output></label><input type="range" id="sc-k" min="1" max="6" step="1" value="2"><div class="ends"><span>1</span><span>6</span></div></div>
+  <figure class="fig"><svg id="load" role="img" aria-label="How much each feature weighs in the first two components"></svg><figcaption>How much each feature weighs in the first two components. Reading this, we can give them names: component 1 goes up with everything that grows when the truck works more (km, hours, liters, CO₂); component 2 goes up with stops and down with speed, so it separates city trucks from highway trucks.</figcaption></figure>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 5</p>
+    <h2>Compressing: store 3 numbers instead of 24</h2>
+    <p>A truck's speed profile over the day is 24 numbers (one per hour). But the profiles look alike: some work days in the city, others nights on the highway, others two shifts. PCA finds the "typical shapes" and describes each truck as a mix of a few of them. Move the number of components and watch the reconstruction (blue) get closer to the real profile (orange).</p>
+  </div>
+  <figure class="fig"><svg id="prof" role="img" aria-label="Speed profile by hour and its reconstruction with a few components"></svg></figure>
+  <div class="controls">
+    <div class="slider"><label for="pf-k">Components used <output id="pf-k-o"></output></label><input type="range" id="pf-k" min="0" max="10" step="1" value="2"><div class="ends"><span>0 (just the average)</span><span>10</span></div></div>
+    <div class="btns"><button type="button" id="pf-next">Another truck</button></div>
+  </div>
+  <p class="col qcard" id="pf-q"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 5</p>
+    <h2>Units, once again</h2>
+    <p>PCA looks for the direction of greatest spread, and spread is measured in each feature's units. If one goes from 0 to 600 (kilometers) and another from 20 to 45 (liters per 100 km), the first component almost always points at the kilometers just because their numbers are bigger. That's why we almost always <strong>standardize</strong> first: each feature is measured as "how many times its typical spread" it is away from the average.</p>
+  </div>
+  <figure class="fig"><svg id="unit" role="img" aria-label="Principal direction with and without standardizing"></svg></figure>
+  <div class="seg" role="group" aria-label="Scale"><button type="button" id="un-raw" aria-pressed="true">Original units</button><button type="button" id="un-std" aria-pressed="false">Standardized</button></div>
+  <p class="col qcard" id="un-q"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 5</p>
+    <h2>It only knows about straight lines</h2>
+    <p>PCA always projects onto lines and planes. If the data forms a curve (for example, GPS positions along a winding road), the best line lumps together points that are far apart along the curve. To "unroll" curved shapes there are other methods (t-SNE, UMAP), used mostly for drawing.</p>
+  </div>
+  <figure class="fig"><svg id="curve" role="img" aria-label="Arc-shaped data and its projection onto the principal line"></svg></figure>
+  <p class="col note">Look at the two circled points: following the arc they are very far from each other, but their shadows on the line land almost in the same spot. PCA mixes them up.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The full recipe</h2>
+    <ol class="steps">
+      <li><div><strong>Center</strong> each feature (subtract its average) and, almost always, <strong>standardize it</strong>.</div></li>
+      <li><div><strong>Find the direction</strong> in which the data is most spread out: component 1.</div></li>
+      <li><div><strong>Find the next one</strong>, perpendicular to the previous ones, with the largest spread that's left. And so on.</div></li>
+      <li><div><strong>Check how much information</strong> each component captures and keep the first ones until you reach, say, 90%.</div></li>
+      <li><div><strong>Describe each case</strong> by its "shadows" on those few components.</div></li>
+      <li><div><strong>Give them names</strong> by looking at which features weigh in each one.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>What is it used for?</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 34V6M6 34h28"/><circle cx="14" cy="24" r="2"/><circle cx="20" cy="18" r="2"/><circle cx="27" cy="12" r="2"/></svg><h3>Drawing what can't be drawn</h3><p>Reduce 20 features to 2 to see on a chart which trucks, customers or trips are alike.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="8" y="6" width="24" height="28" rx="3"/><path d="M14 14h12M14 20h12M14 26h6"/></svg><h3>Compress and speed up</h3><p>Fewer columns to store, transmit or feed into another model (KNN, K-means) while losing almost nothing.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M4 22c4-8 8 8 12 0s8 8 12 0 6 4 8 2"/></svg><h3>Remove noise</h3><p>The last components are usually noise: rebuilding with only the first ones cleans up the signal.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13"/><path d="M20 12v10M20 27v1"/></svg><h3>Spot the odd ones</h3><p>If a case is poorly rebuilt from the usual components, it doesn't look like the normal ones: a possible sensor fault or anomaly.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>The good and the not so good</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>The good</h3><ul class="pc">
+      <li>Fast, with a single answer (no random starts).</li>
+      <li>Tells you how much information each component keeps.</li>
+      <li>The components don't repeat each other: each one tells something new.</li>
+      <li>Useful as a first step for almost any other model.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>The not so good</h3><ul class="pc">
+      <li>Only finds straight-line relationships.</li>
+      <li>Sensitive to units and to extreme values.</li>
+      <li>The components mix features, and sometimes they're hard to name.</li>
+      <li>"Lots of spread" isn't always "what matters" for predicting something.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Dimension</dt><dd>Each feature that describes a case. 6 features = 6 dimensions.</dd>
+      <dt>Project</dt><dd>Keep the "shadow" of a point on a line or a plane.</dd>
+      <dt>Principal component</dt><dd>A new direction, a mix of the original features, ordered from most to least spread.</dd>
+      <dt>Explained variance</dt><dd>What share of all the spread in the data each component captures.</dd>
+      <dt>Loadings</dt><dd>How much each original feature weighs in a component.</dd>
+      <dt>Standardize</dt><dd>Subtract the average and divide by the standard deviation, so all features weigh the same.</dd>
+      <dt>Reconstruction</dt><dd>Going back to the original features from just a few components.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the formulas behind it all</summary>
+    <p style="padding-top:10px">You don't need them to understand the idea:</p>
+    <div class="formula">component 1 = the direction (vector of length 1) that maximizes
+              the spread of the points' shadows
+
+shadow of a point = sum of (value of each feature × its weight in the component)
+
+spread lengthwise + spread crosswise = total spread (Pythagoras)</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in one minute</h2>
+    <p>An animated recap: the rotating line looking for the best shadow, the components, compressing and rebuilding, and what PCA can't see. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFiqoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWA//9k=" aria-label="Animation: PCA">
+      <source src="pca-with-audio-en.mp4" type="video/mp4">
+      Your browser can't play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- shared library: 2D CART trees + drawing ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,class],...]; returns the root node with children and box */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* tree diagram */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"yes",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} leaves`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"too big to draw well",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"orange":"purple"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} of ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+/* ---- PCA: means, covariance and eigenvectors (Jacobi) ---- */
+function colMeans(X){const d=X[0].length,m=Array(d).fill(0);X.forEach(r=>r.forEach((v,j)=>m[j]+=v));return m.map(v=>v/X.length);}
+function colSds(X,m){const d=X[0].length,s=Array(d).fill(0);X.forEach(r=>r.forEach((v,j)=>s[j]+=(v-m[j])**2));return s.map(v=>Math.sqrt(v/(X.length-1)));}
+function covMat(Z){const n=Z.length,d=Z[0].length,C=[...Array(d)].map(()=>Array(d).fill(0));Z.forEach(r=>{for(let i=0;i<d;i++)for(let j=i;j<d;j++)C[i][j]+=r[i]*r[j];});for(let i=0;i<d;i++)for(let j=i;j<d;j++){C[i][j]/=n-1;C[j][i]=C[i][j];}return C;}
+function eigSym(A){const n=A.length,a=A.map(r=>r.slice()),V=[...Array(n)].map((_,i)=>[...Array(n)].map((_,j)=>i===j?1:0));
+  for(let sweep=0;sweep<100;sweep++){let off=0;for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)off+=a[i][j]**2;if(off<1e-20)break;
+    for(let p=0;p<n;p++)for(let q=p+1;q<n;q++){if(Math.abs(a[p][q])<1e-15)continue;const th=(a[q][q]-a[p][p])/(2*a[p][q]),t=Math.sign(th||1)/(Math.abs(th)+Math.sqrt(th*th+1)),c=1/Math.sqrt(t*t+1),s=t*c;
+      for(let k=0;k<n;k++){const akp=a[k][p],akq=a[k][q];a[k][p]=c*akp-s*akq;a[k][q]=s*akp+c*akq;}
+      for(let k=0;k<n;k++){const apk=a[p][k],aqk=a[q][k];a[p][k]=c*apk-s*aqk;a[q][k]=s*apk+c*aqk;}
+      for(let k=0;k<n;k++){const vkp=V[k][p],vkq=V[k][q];V[k][p]=c*vkp-s*vkq;V[k][q]=s*vkp+c*vkq;}}}
+  const idx=[...Array(n).keys()].sort((i,j)=>a[j][j]-a[i][i]);
+  return {vals:idx.map(i=>a[i][i]),vecs:idx.map(i=>{const v=V.map(r=>r[i]);const big=v.reduce((b,x,k)=>Math.abs(x)>Math.abs(v[b])?k:b,0);return v[big]<0?v.map(x=>-x):v;})};}
+function pca(X,standardize){const m=colMeans(X),s=standardize?colSds(X,m):X[0].map(()=>1);const Z=X.map(r=>r.map((v,j)=>(v-m[j])/s[j]));const E=eigSym(covMat(Z));
+  return {m,s,Z,vals:E.vals,vecs:E.vecs,score:(z,k)=>E.vecs[k].reduce((a,v,j)=>a+v*z[j],0),
+    recon:(z,K)=>{const out=z.map(()=>0);for(let k=0;k<K;k++){const t=E.vecs[k].reduce((a,v,j)=>a+v*z[j],0);E.vecs[k].forEach((v,j)=>out[j]+=t*v);}return out;}};}
+
+
+const bars=(id,rows)=>{document.getElementById(id).innerHTML=rows.map(([lab,v,col,txt])=>`<div class="row"><span>${lab}</span><span class="bar"><i style="width:${Math.max(0.5,v*100).toFixed(1)}%;background:${col}"></i></span><span class="num">${txt}</span></div>`).join("");};
+
+/* ---------- hero ---------- */
+(function(){const svg=document.getElementById("hero"),pl=new Plot(svg,{W:900,H:420,pad:{l:10,r:10,t:10,b:10},x0:-10.7,x1:10.7,y0:-5,y1:5});
+  const gR=el("g",null,pl.g),ln=el("line",{stroke:"var(--mean)","stroke-width":3},pl.g),gS=el("g",null,pl.top),gP=el("g",null,pl.top);let P,best,anim=null;const ia=document.getElementById("h-a");let seed=6;
+  function data(){const r=mulberry32(seed),th=(15+r()*60)*Math.PI/180,a=2.6+r()*1.2,b=0.6+r()*0.6;P=[...Array(70)].map(()=>{const u=a*gauss(r),v=b*gauss(r);return [u*Math.cos(th)-v*Math.sin(th),u*Math.sin(th)+v*Math.cos(th)];});
+    const m=colMeans(P);P=P.map(p=>[p[0]-m[0],p[1]-m[1]]);const E=eigSym(covMat(P));best=(Math.atan2(E.vecs[0][1],E.vecs[0][0])*180/Math.PI+180)%180;gP.textContent="";
+    P.forEach(p=>el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:5.5,fill:"var(--point)",stroke:"var(--point-ring)","stroke-width":2},gP));}
+  function draw(){const a=+ia.value*Math.PI/180,u=[Math.cos(a),Math.sin(a)];ln.setAttribute("x1",pl.sx(-12*u[0]));ln.setAttribute("y1",pl.sy(-12*u[1]));ln.setAttribute("x2",pl.sx(12*u[0]));ln.setAttribute("y2",pl.sy(12*u[1]));
+    gR.textContent="";gS.textContent="";let along=0,perp=0;
+    P.forEach(p=>{const t=p[0]*u[0]+p[1]*u[1],q=[t*u[0],t*u[1]];along+=t*t;perp+=(p[0]-q[0])**2+(p[1]-q[1])**2;
+      el("line",{x1:pl.sx(p[0]),y1:pl.sy(p[1]),x2:pl.sx(q[0]),y2:pl.sy(q[1]),stroke:"var(--sample)","stroke-width":1.6,"stroke-opacity":.75},gR);
+      el("circle",{cx:pl.sx(q[0]),cy:pl.sy(q[1]),r:3.6,fill:"var(--mean)"},gS);});
+    const tot=along+perp;document.getElementById("h-a-o").textContent=ia.value+"°";
+    bars("h-bars",[["Lengthwise (shadows)",along/tot,"var(--mean)",Math.round(along/tot*100)+"%"],["Crosswise (lost)",perp/tot,"var(--sample)",Math.round(perp/tot*100)+"%"]]);
+    const off=Math.min(Math.abs(+ia.value-best),180-Math.abs(+ia.value-best));
+    document.getElementById("h-msg").innerHTML=off<2?`<b>This is the principal direction!</b> The shadows (blue) keep ${Math.round(along/tot*100)}% of the spread: describing each point with a single number (its shadow) loses very little.`:off>80?"The line is almost perpendicular to the cloud: the shadows pile up and almost all the information stays in the purple distances.":"Rotate the line so the blue shadows are as spread out as possible (and the purple lines as short as possible).";}
+  ia.addEventListener("input",()=>{cancelAnimationFrame(anim);draw();});
+  document.getElementById("h-best").onclick=()=>{cancelAnimationFrame(anim);const a0=+ia.value;let d=best-a0;if(d>90)d-=180;if(d<-90)d+=180;const t0=performance.now();
+    const go=t=>{const k=Math.min(1,(t-t0)/900),e=k<.5?2*k*k:1-(-2*k+2)**2/2;ia.value=String(Math.round((a0+d*e+180)%180));draw();if(k<1)anim=requestAnimationFrame(go);};anim=requestAnimationFrame(go);};
+  document.getElementById("h-new").onclick=()=>{seed+=3;data();draw();};data();draw();})();
+
+/* ---------- pen ---------- */
+(function(){const s=document.getElementById("pen"),W=900,H=220;s.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const pen=(x,y,ang)=>{const g=el("g",{transform:`translate(${x} ${y}) rotate(${ang})`},s);el("rect",{x:-70,y:-7,width:140,height:14,rx:7,fill:"var(--mean)"},g);el("path",{d:"M70 -7L92 0L70 7Z",fill:"var(--ink)"},g);};
+  pen(220,70,-90);el("ellipse",{cx:220,cy:180,rx:12,ry:6,fill:"var(--muted)","fill-opacity":.6},s);txt(s,220,212,"short shadow: tells you nothing",{"text-anchor":"middle","font-size":14,class:"t-ink"});
+  pen(650,90,0);el("rect",{x:580,y:172,width:162,height:12,rx:6,fill:"var(--muted)","fill-opacity":.6},s);txt(s,660,212,"long shadow: you see the whole pen",{"text-anchor":"middle","font-size":14,class:"t-ink"});
+  [[220,20],[650,20]].forEach(([x,y])=>{el("circle",{cx:x,cy:y-6,r:9,fill:"var(--point)"},s);});})();
+
+/* ---------- fleet features ---------- */
+(function(){const r=mulberry32(14),N=["km","engine hours","liters","CO₂","stops","avg speed"];
+  const X=[...Array(300)].map(()=>{const w=gauss(r),u=gauss(r);const km=280+90*w+20*gauss(r),hm=9+2.2*w+0.9*u+0.6*gauss(r),lt=0.34*km+8*u+6*gauss(r),co=2.64*lt+5*gauss(r),pa=14+7*u-1.5*w+2.5*gauss(r),vm=km/hm+3*gauss(r);return [km,hm,lt,co,pa,vm];});
+  const P=pca(X,true),C=covMat(P.Z),tot=P.vals.reduce((a,b)=>a+b,0);
+  const s=document.getElementById("corr"),W=440,H=400,cell=50,ox=118,oy=24;s.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  N.forEach((n,i)=>{txt(s,ox-8,oy+i*cell+cell/2+4,n,{"text-anchor":"end","font-size":12,class:"t-ink"});txt(s,ox+i*cell+cell/2,oy+6*cell+16,n.split(" ").pop(),{"text-anchor":"middle","font-size":11});
+    N.forEach((_,j)=>{const v=C[i][j];el("rect",{x:ox+j*cell+1,y:oy+i*cell+1,width:cell-2,height:cell-2,rx:5,fill:v>=0?"var(--mean)":"var(--point)","fill-opacity":(0.08+0.85*Math.abs(v)).toFixed(2)},s);txt(s,ox+j*cell+cell/2,oy+i*cell+cell/2+4,v.toFixed(2),{"text-anchor":"middle","font-size":11,class:"t-ink"});});});
+  const pl=new Plot(document.getElementById("scree"),{W:440,H:400,pad:{l:46,r:14,t:20,b:40},x0:0.4,x1:6.6,y0:0,y1:1,xt:[1,2,3,4,5,6],yt:[0,0.25,0.5,0.75,1],fy:v=>Math.round(v*100)+"%",xl:"component"});
+  const gB=el("g",null,pl.g),cum=el("path",{fill:"none",stroke:"var(--point)","stroke-width":2.5},pl.g),gC=el("g",null,pl.top);const ik=document.getElementById("sc-k");
+  const cumv=P.vals.map((_,i)=>P.vals.slice(0,i+1).reduce((a,b)=>a+b,0)/tot);
+  function draw(){const k=+ik.value;gB.textContent="";gC.textContent="";P.vals.forEach((v,i)=>el("rect",{x:pl.sx(i+1)-20,y:pl.sy(v/tot),width:40,height:pl.sy(0)-pl.sy(v/tot),rx:4,fill:i<k?"var(--mean)":"var(--line)"},gB));
+    cum.setAttribute("d",pl.ppath(cumv.map((v,i)=>[i+1,v])));cumv.forEach((v,i)=>el("circle",{cx:pl.sx(i+1),cy:pl.sy(v),r:i===k-1?7:4,fill:"var(--point)"},gC));
+    document.getElementById("sc-k-o").textContent=k;document.getElementById("scree-c").textContent=`Bars: what each component captures. Orange line: the running total. With ${k} component${k>1?"s":""} we keep ${Math.round(cumv[k-1]*100)}% of the information in the 6 features.`;}
+  ik.addEventListener("input",draw);draw();
+  const sl=document.getElementById("load"),W2=900,H2=280;sl.setAttribute("viewBox",`0 0 ${W2} ${H2}`);
+  [0,1].forEach(k=>{const x0=k?470:20,v=P.vecs[k];txt(sl,x0,22,`Component ${k+1} (${Math.round(P.vals[k]/tot*100)}%): `+(k?"“city”":"“how much it worked”"),{"font-size":14,class:"t-ink"});
+    v.forEach((w,j)=>{const y=46+j*36,cx=x0+250;txt(sl,x0+100,y+14,N[j],{"text-anchor":"end","font-size":13,class:"t-ink"});el("line",{x1:cx,x2:cx,y1:y-4,y2:y+24,stroke:"var(--muted)"},sl);
+      el("rect",{x:w>=0?cx:cx+w*150,y:y+2,width:Math.abs(w)*150,height:16,rx:4,fill:w>=0?"var(--mean)":"var(--point)"},sl);});});})();
+
+/* ---------- profiles ---------- */
+(function(){const r=mulberry32(8),H=[...Array(24).keys()];
+  const shapes=[h=>(h>=7&&h<=18)?38+8*Math.sin((h-7)/11*Math.PI):0,h=>(h>=21||h<=5)?78:(h>=6&&h<=8)?40:0,h=>((h>=5&&h<=10)||(h>=15&&h<=20))?52:0];
+  const T=[...Array(150)].map(()=>{const w=[0,1,2].map(()=>Math.max(0,r()-0.25));const s=w.reduce((a,b)=>a+b,0)||1;const sh=Math.round(gauss(r)*1.2);return H.map(h=>{const hh=(h+sh+24)%24;return Math.max(0,shapes.reduce((a,f,k)=>a+w[k]/s*f(hh),0)+4*gauss(r));});});
+  const P=pca(T,false),tot=P.vals.reduce((a,b)=>a+b,0);
+  const pl=new Plot(document.getElementById("prof"),{W:900,H:320,pad:{l:70,r:14,t:16,b:40},x0:0,x1:23,y0:-5,y1:95,xt:[0,6,12,18,23],fx:v=>v+" h",yt:[0,25,50,75],fy:v=>v+" km/h",xl:"hour of the day"});
+  const pR=el("path",{fill:"none",stroke:"var(--point)","stroke-width":3},pl.g),pM=el("path",{fill:"none",stroke:"var(--mean)","stroke-width":3.5},pl.g);const gD=el("g",null,pl.top);
+  let idx=3;const ik=document.getElementById("pf-k");
+  function draw(){const k=+ik.value,z=P.Z[idx],rc=P.recon(z,k).map((v,j)=>v+P.m[j]);pR.setAttribute("d",pl.ppath(H.map(h=>[h,T[idx][h]])));pM.setAttribute("d",pl.ppath(H.map(h=>[h,rc[h]])));
+    gD.textContent="";H.forEach(h=>el("circle",{cx:pl.sx(h),cy:pl.sy(T[idx][h]),r:4,fill:"var(--point)"},gD));
+    const err=Math.sqrt(H.reduce((a,h)=>a+(rc[h]-T[idx][h])**2,0)/24),kept=P.vals.slice(0,k).reduce((a,b)=>a+b,0)/tot;document.getElementById("pf-k-o").textContent=k;
+    document.getElementById("pf-q").innerHTML=`With <b>${k}</b> number${k===1?"":"s"} instead of 24: typical error of <b>${err.toFixed(1)} km/h</b> per hour; the ${k} components capture ${Math.round(kept*100)}% of the variation across all trucks. `+(k===0?"With no components, all that's left is the fleet's average profile.":k<=3?"With very few numbers you can already recognize the shape of the day.":"From here on, you're adding almost nothing but noise.");}
+  ik.addEventListener("input",draw);document.getElementById("pf-next").onclick=()=>{idx=(idx+17)%T.length;draw();};draw();})();
+
+/* ---------- units ---------- */
+(function(){const r=mulberry32(19);const X=[...Array(120)].map(()=>{const km=300+130*gauss(r);const c=32-0.008*(km-300)+3.2*gauss(r);return [km,c];});
+  const pl=new Plot(document.getElementById("unit"),{W:900,H:360,pad:{l:56,r:16,t:16,b:42},x0:-50,x1:700,y0:18,y1:46,xt:[0,200,400,600],yt:[20,30,40],fx:v=>v+" km",fy:v=>v+" L",xl:"km per day",yl:"L/100 km"});
+  X.forEach(p=>el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:4.5,fill:"var(--point)","fill-opacity":.8},pl.g));const ln=el("line",{stroke:"var(--mean)","stroke-width":3.5},pl.top);
+  const raw=pca(X,false),std=pca(X,true);
+  function draw(s){const P=s?std:raw,v=P.vecs[0],m=P.m,sd=P.s,dx=v[0]*sd[0],dy=v[1]*sd[1],L=1e4,n=Math.hypot(dx/750,dy/28);
+    ln.setAttribute("x1",pl.sx(m[0]-dx/n*0.5));ln.setAttribute("y1",pl.sy(m[1]-dy/n*0.5));ln.setAttribute("x2",pl.sx(m[0]+dx/n*0.5));ln.setAttribute("y2",pl.sy(m[1]+dy/n*0.5));
+    const tot=P.vals[0]+P.vals[1];
+    document.getElementById("un-q").innerHTML=s?`<strong>Standardized:</strong> the principal direction mixes both features and reveals how they relate: trucks that drive more km burn less per 100 km (more highway). Component 1: ${Math.round(P.vals[0]/tot*100)}% of the information.`:`<strong>Original units:</strong> the line is almost horizontal, because of the kilometers: their spread (hundreds) crushes that of fuel use (single units). Component 1 "captures" ${Math.round(P.vals[0]/tot*100)}%, but only because km have bigger numbers.`;
+    document.getElementById("un-raw").setAttribute("aria-pressed",String(!s));document.getElementById("un-std").setAttribute("aria-pressed",String(s));}
+  document.getElementById("un-raw").onclick=()=>draw(false);document.getElementById("un-std").onclick=()=>draw(true);draw(false);})();
+
+/* ---------- curve ---------- */
+(function(){const r=mulberry32(23);const T=[...Array(80)].map((_,i)=>-0.15*Math.PI+i/79*1.3*Math.PI);const X=T.map(t=>[4.2*Math.cos(t)+0.2*gauss(r),4.2*Math.sin(t)+0.2*gauss(r)]);
+  const pl=new Plot(document.getElementById("curve"),{W:900,H:380,pad:{l:10,r:10,t:10,b:10},x0:-9.5,x1:9.5,y0:-3,y1:5.2});const P=pca(X,false),v=P.vecs[0],m=P.m;
+  el("line",{x1:pl.sx(m[0]-9*v[0]),y1:pl.sy(m[1]-9*v[1]),x2:pl.sx(m[0]+9*v[0]),y2:pl.sy(m[1]+9*v[1]),stroke:"var(--mean)","stroke-width":3},pl.g);
+  const q=X.map(p=>{const t=(p[0]-m[0])*v[0]+(p[1]-m[1])*v[1];return [m[0]+t*v[0],m[1]+t*v[1]];});
+  X.forEach((p,i)=>{el("line",{x1:pl.sx(p[0]),y1:pl.sy(p[1]),x2:pl.sx(q[i][0]),y2:pl.sy(q[i][1]),stroke:"var(--sample)","stroke-opacity":.5},pl.g);el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:5,fill:"var(--point)"},pl.top);el("circle",{cx:pl.sx(q[i][0]),cy:pl.sy(q[i][1]),r:3,fill:"var(--mean)"},pl.top);});
+  let a=0,b=1,bg=-1;for(let i=0;i<X.length;i++)for(let j=i+1;j<X.length;j++){const d=Math.hypot(q[i][0]-q[j][0],q[i][1]-q[j][1]);if(d<0.12&&j-i>bg){bg=j-i;a=i;b=j;}}
+  [a,b].forEach(i=>el("circle",{cx:pl.sx(X[i][0]),cy:pl.sy(X[i][1]),r:12,fill:"none",stroke:"var(--ink)","stroke-width":2.5},pl.top));})();
+})();
+</script>
+
+</body>
+</html>

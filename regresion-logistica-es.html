@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Regresión logística</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.p-sig{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round}
+.p-bnd{fill:none;stroke:var(--ink);stroke-width:2.6;stroke-dasharray:8 5}
+.p-yes{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-no{fill:var(--sample);stroke:var(--point-ring);stroke-width:2.5}
+.p-thr{stroke:var(--ink);stroke-width:2.5}
+.seg{display:inline-flex;width:fit-content;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.dot-i{display:inline-block;width:11px;height:11px;border-radius:50%;vertical-align:-1px;margin-right:6px}
+.counts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.count{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:2px}
+.count b{font-family:var(--f-display);font-size:1.7rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.count span{font-size:.85rem;color:var(--muted)}
+.count.good b{color:var(--good)} .count.bad b{color:var(--warn)}
+@media (max-width:560px){.counts{grid-template-columns:1fr}}
+.surp{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (max-width:620px){.surp{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Serie ML visual · explicado sin fórmulas · <a href="regresion-logistica-tecnico-es.html" target="_self">ver la versión técnica</a> · <a href="serie-ml-visual-es.html" target="_self">todos los temas</a> · <a href="logistic-regression-en.html" target="_self">in English</a></p>
+  <h1>Regresión logística</h1>
+  <p class="lede">Cómo pasar de predecir números a responder preguntas de sí o no, diciendo además qué tan probable es cada respuesta.</p>
+</header>
+
+<section class="first" aria-label="Juguete interactivo">
+  <div class="fig"><svg id="hero" role="img" aria-label="Gráfico interactivo: puntos de dos clases, el mapa de probabilidad y la frontera de decisión"></svg></div>
+  <div class="legend">
+    <span><svg viewBox="0 0 28 14"><circle cx="14" cy="7" r="5" fill="var(--point)"/></svg>Casos "sí" (por ejemplo, se averió)</span>
+    <span><svg viewBox="0 0 28 14"><circle cx="14" cy="7" r="5" fill="var(--sample)"/></svg>Casos "no"</span>
+    <span><svg viewBox="0 0 28 14"><path d="M2 7H26" stroke="var(--ink)" stroke-width="2.5" stroke-dasharray="6 4"/></svg>Frontera: 50 % de probabilidad</span>
+    <span><svg viewBox="0 0 28 14"><rect x="1" y="1" width="12" height="12" fill="var(--point)" fill-opacity=".35"/><rect x="15" y="1" width="12" height="12" fill="var(--sample)" fill-opacity=".35"/></svg>Color más intenso = más seguro</span>
+  </div>
+  <p class="status" id="h-status"></p>
+  <div class="controls">
+    <div class="stack" style="gap:8px">
+      <span style="font-weight:700;font-size:.98rem">Al tocar el gráfico, añadir un caso:</span>
+      <div class="seg" role="group" aria-label="Clase a añadir"><button type="button" id="h-yes" aria-pressed="true"><span class="dot-i" style="background:var(--point)"></span>"sí"</button><button type="button" id="h-no" aria-pressed="false"><span class="dot-i" style="background:var(--sample)"></span>"no"</button></div>
+    </div>
+    <div class="btns">
+      <button type="button" id="h-quad" aria-pressed="false">Permitir frontera curva</button>
+      <button type="button" id="h-undo">Quitar el último</button>
+      <button type="button" id="h-clear">Borrar todo</button>
+      <button type="button" id="h-ex">Volver al ejemplo</button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Antes de empezar</p>
+    <h2>Algo que tú ya sabes hacer</h2>
+    <p>La aplicación del tiempo no te dice "mañana llueve" o "mañana no llueve". Te dice <strong>"70 % de probabilidad de lluvia"</strong>. Y con eso decides tú: si vas a una boda, llevas paraguas aunque sea 30 %; si solo sales a comprar pan, quizá no.</p>
+    <p>Muchas preguntas importantes son así, de sí o no: ¿aprobará el examen?, ¿es spam este correo?, ¿se averiará este camión este mes? La regresión logística responde con una probabilidad, y tú decides a partir de qué probabilidad actúas.</p>
+  </div>
+  <figure class="fig">
+    <svg id="exam" role="img" aria-label="Horas de estudio de cada alumno y si aprobó o no"></svg>
+    <figcaption>Cada punto es un alumno: cuántas horas estudió y si aprobó (arriba) o no (abajo). Con pocas horas casi nadie aprueba, con muchas casi todos. En medio, hay de todo.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 5</p>
+    <h2>Por qué una recta no sirve</h2>
+    <p>Podríamos usar la regresión lineal del tema anterior: aprobado = 1, suspendido = 0, y trazar la mejor recta. Pero la recta no sabe que vive entre 0 y 1. Con pocas horas predice <strong>probabilidades negativas</strong>, y con muchas, <strong>más del 100 %</strong>. No tiene sentido.</p>
+  </div>
+  <div class="grid2">
+    <figure class="fig"><svg id="cmpA" role="img" aria-label="Recta ajustada a datos de aprobado y suspendido que se sale del rango 0 a 1"></svg><figcaption><strong>Recta.</strong> Se sale por abajo y por arriba.</figcaption></figure>
+    <figure class="fig"><svg id="cmpB" role="img" aria-label="Curva en forma de S ajustada a los mismos datos, siempre entre 0 y 1"></svg><figcaption><strong>Curva en S.</strong> Siempre entre 0 % y 100 %.</figcaption></figure>
+  </div>
+  <p class="col">La solución es doblar la recta en forma de <strong>S</strong> (se llama <em>sigmoide</em>). Lejos a la izquierda se aplana en 0 %, lejos a la derecha en 100 %, y en medio sube suavemente. Toda la regresión logística es encontrar la mejor S.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 5</p>
+    <h2>La curva S también tiene dos perillas</h2>
+    <ul class="pc">
+      <li><strong>Punto medio:</strong> cuántas horas hay que estudiar para tener un 50 % de probabilidad de aprobar.</li>
+      <li><strong>Rapidez:</strong> qué tan brusco es el cambio. Rápida: "o estudias 5 horas o suspendes". Lenta: cada hora extra ayuda un poquito.</li>
+    </ul>
+    <p>Ajústalas a mano. La barra mide la <strong>sorpresa</strong> total del modelo con estos alumnos (la idea 3 explica qué es).</p>
+  </div>
+  <div class="lab">
+    <figure class="fig"><svg id="manual" role="img" aria-label="Curva en S ajustable a mano sobre los datos de horas de estudio"></svg></figure>
+    <div class="stack">
+      <div class="slider"><label for="m-mid">Punto medio <output id="m-mid-o"></output></label><input type="range" id="m-mid" min="0" max="10" step="0.05" value="7.5"><div class="ends"><span>0 h</span><span>10 h</span></div></div>
+      <div class="slider"><label for="m-k">Rapidez <output id="m-k-o"></output></label><input type="range" id="m-k" min="0.2" max="6" step="0.05" value="4"><div class="ends"><span>suave</span><span>brusca</span></div></div>
+      <div class="meter"><span>Tu sorpresa total: <b class="num" id="m-err"></b></span><div class="bar"><i id="m-bar"></i></div></div>
+      <div class="meter"><span>La mínima posible: <b class="num" id="m-best"></b></span><div class="bar best"><i id="m-bbar"></i></div></div>
+      <button type="button" class="primary" id="m-auto">Que lo haga la máquina</button>
+      <p class="status" id="m-msg"></p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 5</p>
+    <h2>"La mejor" significa: la que menos se sorprende</h2>
+    <p>En la regresión lineal medíamos errores al cuadrado. Aquí se mide la <strong>sorpresa</strong>: para cada caso, miramos qué probabilidad le dio el modelo a lo que <em>de verdad</em> pasó.</p>
+  </div>
+  <div class="surp" id="surp"></div>
+  <div class="col stack">
+    <p>Si el modelo dijo 90 % y pasó, apenas se sorprende. Si dijo 1 % y pasó, se sorprende muchísimo. La sorpresa crece sin límite cuando el modelo estaba <strong>muy seguro y se equivocó</strong>. Eso es justo lo que queremos castigar: un modelo que dice "seguro que no" a algo que pasa es peligroso.</p>
+    <p class="note">La máquina busca la curva S con la menor sorpresa total. A diferencia de la recta, no hay una cuenta directa: la encuentra dando pasos, cada uno mejor que el anterior, hasta que ya no puede bajar más. Con pocos datos tarda unos pocos pasos.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 de 5</p>
+    <h2>De probabilidad a decisión: el umbral</h2>
+    <p>El modelo dice probabilidades. Pero al final hay que decidir: ¿mando este camión al taller o no? Para eso se elige un <strong>umbral</strong>: si la probabilidad de avería supera ese valor, se actúa.</p>
+    <p>Abajo hay 40 camiones. Cada punto está colocado según la probabilidad de avería que les dio el modelo. Arriba, los que <strong>de verdad</strong> se averiaron; abajo, los que no. Mueve el umbral.</p>
+  </div>
+  <figure class="fig"><svg id="thr" role="img" aria-label="Camiones ordenados por probabilidad de avería con un umbral móvil"></svg></figure>
+  <div class="slider col"><label for="t-t">Umbral para mandar al taller <output id="t-t-o"></output></label><input type="range" id="t-t" min="0.02" max="0.98" step="0.01" value="0.5"><div class="ends"><span>mandar casi todos</span><span>mandar casi ninguno</span></div></div>
+  <div class="counts">
+    <div class="count good"><b id="c-ok"></b><span>averías evitadas (al taller y se iban a averiar)</span></div>
+    <div class="count bad"><b id="c-fa"></b><span>falsas alarmas (al taller sin necesidad)</span></div>
+    <div class="count bad"><b id="c-miss"></b><span>averías no detectadas (se averiaron en ruta)</span></div>
+  </div>
+  <p class="col note" id="t-note"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 de 5</p>
+    <h2>Con dos o más datos, la frontera es una línea</h2>
+    <p>En la vida real se usan varias pistas a la vez: kilómetros desde el último servicio <em>y</em> temperatura del motor, por ejemplo. Con dos pistas, la frontera del 50 % es una <strong>línea recta</strong> que parte el plano en dos (lo que ves en el gráfico de arriba del todo).</p>
+    <p>¿Y si los casos "sí" forman un círculo? Una recta no puede rodearlo. El truco es el mismo que en la regresión polinomial: darle al modelo pistas extra (los cuadrados de las pistas) y la frontera se puede curvar.</p>
+  </div>
+  <div class="grid2">
+    <figure class="fig"><svg id="ringA" role="img" aria-label="Frontera recta que no logra separar un círculo"></svg><figcaption id="ringA-c"></figcaption></figure>
+    <figure class="fig"><svg id="ringB" role="img" aria-label="Frontera curva que rodea el círculo"></svg><figcaption id="ringB-c"></figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta completa</h2>
+    <ol class="steps">
+      <li><div><strong>Plantea una pregunta de sí o no</strong> y reúne casos pasados con su respuesta real.</div></li>
+      <li><div><strong>Elige las pistas</strong> (kilómetros, temperatura, edad del vehículo…) y guarda una parte de los datos para probar.</div></li>
+      <li><div><strong>Deja que la máquina busque la curva S</strong> con la menor sorpresa.</div></li>
+      <li><div><strong>Revisa si sus probabilidades son honestas:</strong> de los casos a los que dio 70 %, ¿pasó en más o menos el 70 %?</div></li>
+      <li><div><strong>Elige el umbral según lo que cuesta cada error</strong>, no por costumbre en 50 %.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>¿Para qué se usa?</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="9" width="30" height="22" rx="3"/><path d="M5 11l15 11 15-11"/></svg><h3>Filtros de spam</h3><p>Según las palabras y el remitente, ¿qué probabilidad hay de que sea spam? Fue uno de los primeros usos masivos.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="4" y="12" width="32" height="18" rx="3"/><path d="M4 18h32M10 25h8"/></svg><h3>Fraude y riesgo de crédito</h3><p>Bancos y tarjetas la usan porque es rápida y explicable: pueden decir qué pistas subieron el riesgo de una operación.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="13" cy="28" r="4"/><circle cx="29" cy="28" r="4"/><path d="M4 28V14h20v14M24 18h7l5 6v4"/></svg><h3>Mantenimiento predictivo</h3><p>¿Se averiará este vehículo en los próximos 30 días? Con los kilómetros y las alertas del motor se decide a quién revisar primero. La versión técnica resuelve este caso a mano.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 34s-12-7-12-17a7 7 0 0 1 12-4 7 7 0 0 1 12 4c0 10-12 17-12 17z"/></svg><h3>Medicina</h3><p>Probabilidad de una complicación según la edad, la presión y otros análisis. Ahí importa mucho que las probabilidades sean honestas.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo bueno y lo no tan bueno</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Lo bueno</h3><ul class="pc">
+      <li>Da <strong>probabilidades</strong>, no solo un sí o un no.</li>
+      <li>Muy <strong>explicable</strong>: "cada 1 000 km extra multiplican el riesgo por 1.2".</li>
+      <li>Rápida de entrenar y de usar, incluso con millones de casos.</li>
+      <li>Es el punto de partida de las redes neuronales: una neurona es casi una regresión logística.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Lo no tan bueno</h3><ul class="pc">
+      <li>Sin ayuda, solo traza fronteras rectas. Las formas complicadas necesitan pistas extra o modelos más potentes.</li>
+      <li>Si los casos "sí" son muy raros (1 de cada 1 000), hay que tratar el desequilibrio con cuidado.</li>
+      <li>Pistas que dicen casi lo mismo confunden la interpretación.</li>
+      <li>Como toda regresión, encuentra relaciones, no causas.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Clasificación</dt><dd>Predecir a qué grupo pertenece algo (sí/no, spam/no spam) en lugar de un número.</dd>
+      <dt>Sigmoide</dt><dd>La curva en forma de S que convierte cualquier número en una probabilidad entre 0 y 1.</dd>
+      <dt>Momios (odds)</dt><dd>Otra forma de decir probabilidad: 75 % equivale a "3 contra 1".</dd>
+      <dt>Frontera de decisión</dt><dd>La línea donde el modelo duda al 50 %.</dd>
+      <dt>Umbral</dt><dd>La probabilidad a partir de la cual decides actuar.</dd>
+      <dt>Log loss</dt><dd>El nombre técnico de la "sorpresa" que la máquina intenta minimizar.</dd>
+      <dt>Falsa alarma</dt><dd>El modelo dijo "sí" y era "no".</dd>
+      <dt>Caso perdido</dt><dd>El modelo dijo "no" y era "sí".</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: las fórmulas detrás de todo</summary>
+    <p style="padding-top:10px">No hacen falta para entender la idea:</p>
+    <div class="formula">puntuación:  z = a·x + b              (una recta, como antes)
+probabilidad: p = 1 / (1 + e^(−z))     (la curva S)
+
+sorpresa de un caso: −log(probabilidad que le dio a lo que pasó)
+la máquina elige a y b que minimizan la sorpresa total</div>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2>Todo en 40 segundos</h2>
+    <p>Un repaso animado: por qué la recta falla, la curva S, la sorpresa, el umbral y la frontera con dos variables. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJFVAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkB//9k=" aria-label="Animación: regresión logística">
+      <source src="regresion-logistica-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+const sig=z=>1/(1+Math.exp(-z));
+function solve(A,b,p){const L=new Float64Array(p*p);for(let i=0;i<p;i++)for(let j=0;j<=i;j++){let t=A[i*p+j];for(let k=0;k<j;k++)t-=L[i*p+k]*L[j*p+k];if(i===j)L[i*p+i]=Math.sqrt(Math.max(t,1e-12));else L[i*p+j]=t/L[j*p+j];}
+  const z=new Float64Array(p);for(let i=0;i<p;i++){let t=b[i];for(let k=0;k<i;k++)t-=L[i*p+k]*z[k];z[i]=t/L[i*p+i];}const c=new Float64Array(p);for(let i=p-1;i>=0;i--){let t=z[i];for(let k=i+1;k<p;k++)t-=L[k*p+i]*c[k];c[i]=t/L[i*p+i];}return c;}
+/* regresión logística por Newton (IRLS) con un poco de L2 para el caso separable */
+function logfit(F,y,lam){const n=F.length,p=F[0]?F[0].length:1;let w=new Float64Array(p);if(!n)return w;
+  for(let it=0;it<40;it++){const g=new Float64Array(p),H=new Float64Array(p*p);
+    for(let i=0;i<n;i++){let z=0;for(let j=0;j<p;j++)z+=F[i][j]*w[j];const q=sig(z),s=q*(1-q);for(let j=0;j<p;j++){g[j]+=(q-y[i])*F[i][j];for(let k=0;k<p;k++)H[j*p+k]+=s*F[i][j]*F[i][k];}}
+    for(let j=0;j<p;j++){if(j>0){g[j]+=lam*w[j];H[j*p+j]+=lam;}H[j*p+j]+=1e-9;}
+    const st=solve(H,g,p);let mx=0;for(let j=0;j<p;j++){w[j]-=st[j];mx=Math.max(mx,Math.abs(st[j]));}if(mx<1e-8)break;}
+  return w;}
+const dotw=(w,f)=>f.reduce((a,v,j)=>a+v*w[j],0);
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:44,r:16,t:16,b:34},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="lc"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.gGrid=el("g",null,svg);for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":`url(#${id})`},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,n){n=n||240;const {x0,x1,y0,y1}=this.o,sp=y1-y0;let d="";for(let i=0;i<=n;i++){const x=x0+(x1-x0)*i/n;const y=Math.max(y0-3*sp,Math.min(y1+3*sp,f(x)));d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(y).toFixed(1);}return d;}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+/* mapa 2D: imagen suave de probabilidad (lienzo pequeño ampliado) + contorno 0.5 (marching squares) */
+const REDRAW=[];
+function hex(name){const v=getComputedStyle(document.documentElement).getPropertyValue(name).trim();const m=v.match(/^#?([0-9a-f]{6})$/i);const n=m?parseInt(m[1],16):0x888888;return [n>>16&255,n>>8&255,n&255];}
+function field(pl,g,prob,N){const {x0,x1,y0,y1}=pl.o,nx=N,ny=Math.round(N*(pl.sy(y0)-pl.sy(y1))/(pl.sx(x1)-pl.sx(x0))),dx=(x1-x0)/nx,dy=(y1-y0)/ny;g.textContent="";
+  const cv=document.createElement("canvas");cv.width=nx;cv.height=ny;const cx=cv.getContext("2d"),im=cx.createImageData(nx,ny),A=hex("--point"),B=hex("--sample");
+  for(let i=0;i<nx;i++)for(let j=0;j<ny;j++){const p=prob(x0+(i+.5)*dx,y1-(j+.5)*dy),a=Math.abs(p-.5)*2,c=p>.5?A:B,k=(j*nx+i)*4;im.data[k]=c[0];im.data[k+1]=c[1];im.data[k+2]=c[2];im.data[k+3]=Math.round(255*(0.05+0.38*a*a));}
+  cx.putImageData(im,0,0);
+  el("image",{href:cv.toDataURL(),x:pl.sx(x0),y:pl.sy(y1),width:pl.sx(x1)-pl.sx(x0),height:pl.sy(y0)-pl.sy(y1),preserveAspectRatio:"none"},g);
+  const V=[];for(let i=0;i<=nx;i++){V.push([]);for(let j=0;j<=ny;j++)V[i].push(prob(x0+i*dx,y0+j*dy)-.5);}
+  let d="";const P=(i,j)=>[x0+i*dx,y0+j*dy];
+  for(let i=0;i<nx;i++)for(let j=0;j<ny;j++){const c=[[i,j],[i+1,j],[i+1,j+1],[i,j+1]],pts=[];
+    for(let e=0;e<4;e++){const a=c[e],b=c[(e+1)%4],va=V[a[0]][a[1]],vb=V[b[0]][b[1]];if((va>0)!==(vb>0)){const t=va/(va-vb),A=P(...a),B=P(...b);pts.push([A[0]+(B[0]-A[0])*t,A[1]+(B[1]-A[1])*t]);}}
+    for(let k=0;k+1<pts.length;k+=2)d+=`M${pl.sx(pts[k][0]).toFixed(1)} ${pl.sy(pts[k][1]).toFixed(1)}L${pl.sx(pts[k+1][0]).toFixed(1)} ${pl.sy(pts[k+1][1]).toFixed(1)}`;}
+  el("path",{d,class:"p-bnd"},g);}
+const onTheme=()=>REDRAW.forEach(f=>f());try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",onTheme);}catch(e){}
+new MutationObserver(onTheme).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+const feats=(x,y,q)=>{const a=x/5-1,b=y/5-1;return q?[1,a,b,a*a,b*b,a*b]:[1,a,b];};
+
+/* ---------- héroe ---------- */
+(function(){
+  const r=mulberry32(14),EX=[];
+  for(let i=0;i<14;i++){const x=1+r()*8,y=1+r()*8;const s=0.9*(x-5)+0.7*(y-5)+gauss(r)*1.6;EX.push([x,y,s>0?1:0]);}
+  let P=EX.map(p=>p.slice()),cls=1,quad=false;
+  const svg=document.getElementById("hero"),pl=new Plot(svg,{W:900,H:440,pad:{l:14,r:14,t:14,b:14}});
+  const gF=el("g",null,pl.g),gP=el("g",null,svg);svg.style.cursor="crosshair";
+  function draw(){
+    gP.textContent="";
+    const both=P.some(p=>p[2])&&P.some(p=>!p[2]);
+    let w=null;if(both){w=logfit(P.map(p=>feats(p[0],p[1],quad)),P.map(p=>p[2]),quad?0.05:0.01);field(pl,gF,(x,y)=>sig(dotw(w,feats(x,y,quad))),56);}else gF.textContent="";
+    for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:8,class:c?"p-yes":"p-no"},gP);
+    const st=document.getElementById("h-status");
+    if(!both){st.innerHTML="<b>Faltan casos.</b> Añade al menos un caso \"sí\" y uno \"no\" tocando el gráfico.";return;}
+    const ok=P.filter(p=>(sig(dotw(w,feats(p[0],p[1],quad)))>.5)===!!p[2]).length;
+    st.innerHTML=`<b>${P.length} casos.</b> El modelo acierta <b>${ok} de ${P.length}</b> usando la frontera del 50 %. Toca para añadir un caso o toca uno para quitarlo. Prueba a poner casos de un color dentro de una zona del otro.`;
+  }
+  svg.addEventListener("click",e=>{const p=pl.toSvg(e);if(!p)return;for(let i=0;i<P.length;i++)if(Math.hypot(pl.sx(P[i][0])-p.x,pl.sy(P[i][1])-p.y)<16){P.splice(i,1);draw();return;}
+    const x=pl.ix(p.x),y=pl.iy(p.y);if(x<0||x>10||y<0||y>10)return;P.push([x,y,cls]);draw();});
+  const by=document.getElementById("h-yes"),bn=document.getElementById("h-no");
+  by.onclick=()=>{cls=1;by.setAttribute("aria-pressed","true");bn.setAttribute("aria-pressed","false");};
+  bn.onclick=()=>{cls=0;bn.setAttribute("aria-pressed","true");by.setAttribute("aria-pressed","false");};
+  const bq=document.getElementById("h-quad");bq.onclick=()=>{quad=!quad;bq.setAttribute("aria-pressed",String(quad));draw();};
+  document.getElementById("h-undo").onclick=()=>{P.pop();draw();};
+  document.getElementById("h-clear").onclick=()=>{P=[];draw();};
+  document.getElementById("h-ex").onclick=()=>{P=EX.map(p=>p.slice());quad=false;bq.setAttribute("aria-pressed","false");draw();};
+  REDRAW.push(draw);draw();
+})();
+
+/* ---------- datos del examen ---------- */
+const EXAM=[[0.5,0],[1.1,0],[1.6,0],[2.0,0],[2.6,0],[3.0,0],[3.5,0],[4.2,0],[4.8,0],[5.6,0],[6.4,0],[3.2,1],[4.5,1],[5.1,1],[5.9,1],[6.1,1],[6.8,1],[7.3,1],[7.9,1],[8.4,1],[9.0,1],[9.6,1]];
+const EH=EXAM.map(e=>e[0]),EY=EXAM.map(e=>e[1]);
+const EW=logfit(EH.map(h=>[1,h]),EY,0);
+const jit=mulberry32(8),JY=EXAM.map(()=>(jit()-.5)*0.06);
+function examPlot(id,o){return new Plot(document.getElementById(id),Object.assign({W:900,H:300,x0:0,x1:10.3,y0:-0.25,y1:1.25,xt:[0,2,4,6,8,10],yt:[0,0.5,1],fx:v=>v+" h",fy:v=>(v*100)+"%"},o||{}));}
+function examDots(pl){EXAM.forEach(([h,y],i)=>el("circle",{cx:pl.sx(h),cy:pl.sy(y+JY[i]),r:6.5,class:y?"p-yes":"p-no"},pl.top));}
+(function(){const pl=examPlot("exam");txt(pl.gGrid,pl.sx(10.2),pl.sy(1)-8,"aprobó",{"text-anchor":"end","font-size":12,class:"t-ink"});txt(pl.gGrid,pl.sx(10.2),pl.sy(0)-8,"suspendió",{"text-anchor":"end","font-size":12,class:"t-ink"});examDots(pl);})();
+(function(){
+  const n=EH.length,mx=EH.reduce((a,b)=>a+b)/n,my=EY.reduce((a,b)=>a+b)/n;let sxy=0,sxx=0;EH.forEach((h,i)=>{sxy+=(h-mx)*(EY[i]-my);sxx+=(h-mx)**2;});const a=sxy/sxx,b=my-a*mx;
+  const A=examPlot("cmpA",{W:460,H:300,x0:-1,x1:11.5,y0:-0.45,y1:1.45,xt:[0,5,10]});
+  el("rect",{x:A.o.pad.l,y:A.sy(1.45),width:A.o.W-A.o.pad.l-A.o.pad.r,height:A.sy(1)-A.sy(1.45),fill:"var(--warn)","fill-opacity":.08},A.gGrid);
+  el("rect",{x:A.o.pad.l,y:A.sy(0),width:A.o.W-A.o.pad.l-A.o.pad.r,height:A.sy(-0.45)-A.sy(0),fill:"var(--warn)","fill-opacity":.08},A.gGrid);
+  txt(A.gGrid,A.sx(-0.8),A.sy(1.32),"más del 100 %",{"font-size":11,style:"fill:var(--warn)"});txt(A.gGrid,A.sx(6.5),A.sy(-0.3),"menos del 0 %",{"font-size":11,style:"fill:var(--warn)"});
+  el("path",{d:A.fpath(x=>a*x+b),class:"p-sig"},A.g);examDots(A);
+  const B=examPlot("cmpB",{W:460,H:300,x0:-1,x1:11.5,y0:-0.45,y1:1.45,xt:[0,5,10]});
+  el("path",{d:B.fpath(x=>sig(EW[0]+EW[1]*x)),class:"p-sig"},B.g);examDots(B);
+})();
+
+/* ---------- ajuste manual ---------- */
+(function(){
+  const pl=examPlot("manual",{W:620,H:380});const curve=el("path",{class:"p-sig"},pl.g);const gS=el("g",null,pl.g);examDots(pl);
+  const nll=(k,m)=>EXAM.reduce((s,[h,y])=>{const q=Math.min(1-1e-12,Math.max(1e-12,sig(k*(h-m))));return s-(y?Math.log(q):Math.log(1-q));},0);
+  const BK=EW[1],BM=-EW[0]/EW[1],best=nll(BK,BM);
+  const im=document.getElementById("m-mid"),ik=document.getElementById("m-k");let anim=null;
+  function draw(){const m=+im.value,k=+ik.value,f=h=>sig(k*(h-m));curve.setAttribute("d",pl.fpath(f));gS.textContent="";
+    EXAM.forEach(([h,y],i)=>{const q=f(h);el("line",{x1:pl.sx(h),x2:pl.sx(h),y1:pl.sy(y+JY[i]),y2:pl.sy(q),class:"p-res","stroke-opacity":Math.min(1,0.25+Math.abs(y-q))},gS);});
+    const e=nll(k,m),top=Math.max(e,best*4);
+    document.getElementById("m-mid-o").textContent=m.toFixed(2)+" h";document.getElementById("m-k-o").textContent=k.toFixed(2);
+    document.getElementById("m-err").textContent=e.toFixed(1);document.getElementById("m-best").textContent=best.toFixed(1);
+    document.getElementById("m-bar").style.width=Math.min(100,e/top*100)+"%";document.getElementById("m-bbar").style.width=(best/top*100)+"%";
+    const r=e/best;document.getElementById("m-msg").textContent=r<1.02?`¡Esa es! Con ${m.toFixed(1)} horas de estudio, la probabilidad de aprobar es del 50 %.`:r<1.25?"Muy cerca. Afina un poco más.":k>3?"Demasiado brusca: los alumnos que no siguen la regla sorprenden muchísimo al modelo.":"Sigue probando: mira las líneas violetas más largas.";}
+  im.addEventListener("input",draw);ik.addEventListener("input",draw);
+  document.getElementById("m-auto").onclick=()=>{if(anim)cancelAnimationFrame(anim);const m0=+im.value,k0=+ik.value,t0=performance.now(),D=matchMedia("(prefers-reduced-motion: reduce)").matches?1:900;
+    const step=t=>{const q=Math.min(1,(t-t0)/D),e=1-Math.pow(1-q,3);im.value=m0+(BM-m0)*e;ik.value=k0+(BK-k0)*e;draw();if(q<1)anim=requestAnimationFrame(step);else{im.value=BM;ik.value=BK;draw();}};anim=requestAnimationFrame(step);};
+  draw();
+})();
+
+/* ---------- sorpresa ---------- */
+(function(){const box=document.getElementById("surp");
+  for(const [p,lab] of [[0.9,"Dijo 90 % y pasó"],[0.5,"Dijo 50 % y pasó"],[0.1,"Dijo 10 % y pasó"],[0.01,"Dijo 1 % y pasó"]]){
+    const s=-Math.log(p),d=document.createElement("div");d.className="count "+(p<0.2?"bad":p>0.6?"good":"");
+    d.innerHTML=`<span>${lab}</span><b>${s.toFixed(2)}</b><span>de sorpresa</span><div class="meter"><div class="bar"><i style="width:${Math.min(100,s/4.6*100)}%"></i></div></div>`;box.appendChild(d);}
+})();
+
+/* ---------- umbral ---------- */
+(function(){
+  const r=mulberry32(40),T=[];for(let i=0;i<40;i++){const z=gauss(r)*1.9-0.6,p=sig(z),y=r()<p?1:0;T.push([p,y]);}
+  const pl=new Plot(document.getElementById("thr"),{W:900,H:300,pad:{l:110,r:20,t:20,b:40},x0:0,x1:1,y0:0,y1:2,xt:[0,0.25,0.5,0.75,1],fx:v=>Math.round(v*100)+"%",xl:"probabilidad de avería que dio el modelo"});
+  txt(pl.gGrid,pl.o.pad.l-12,pl.sy(1.5)+4,"se averió",{"text-anchor":"end","font-size":13,class:"t-ink"});txt(pl.gGrid,pl.o.pad.l-12,pl.sy(0.5)+4,"no se averió",{"text-anchor":"end","font-size":13,class:"t-ink"});
+  el("line",{x1:pl.o.pad.l,x2:pl.o.W-pl.o.pad.r,y1:pl.sy(1),y2:pl.sy(1),class:"g-line"},pl.gGrid);
+  const shade=el("rect",{y:pl.o.pad.t,height:pl.o.H-pl.o.pad.t-pl.o.pad.b,fill:"var(--mean)","fill-opacity":.08},pl.g);
+  const lab=txt(pl.top,0,pl.o.pad.t+14,"→ al taller",{"font-size":12,class:"t-ink"});
+  const jr=mulberry32(2);T.forEach(([p,y])=>el("circle",{cx:pl.sx(p),cy:pl.sy(y?1.5+(jr()-.5)*0.6:0.5+(jr()-.5)*0.6),r:7,class:y?"p-yes":"p-no"},pl.top));
+  const ln=el("line",{class:"p-thr",y1:pl.o.pad.t,y2:pl.o.H-pl.o.pad.b},pl.top);
+  const it=document.getElementById("t-t");
+  function draw(){const t=+it.value,X=pl.sx(t);ln.setAttribute("x1",X);ln.setAttribute("x2",X);shade.setAttribute("x",X);shade.setAttribute("width",pl.o.W-pl.o.pad.r-X);lab.setAttribute("x",X+8);
+    let ok=0,fa=0,miss=0;for(const [p,y] of T){if(p>=t&&y)ok++;else if(p>=t&&!y)fa++;else if(p<t&&y)miss++;}
+    document.getElementById("t-t-o").textContent=Math.round(t*100)+" %";document.getElementById("c-ok").textContent=ok;document.getElementById("c-fa").textContent=fa;document.getElementById("c-miss").textContent=miss;
+    const cost=fa*600+ok*600+miss*4000;
+    document.getElementById("t-note").innerHTML=`Si una revisión cuesta 600 dólares y una avería en ruta 4 000 (grúa, reparación, carga retrasada), este umbral costaría unos <b>${cost.toLocaleString("es")} dólares</b>. `+(t>0.4?"Con un umbral alto, se escapan muchas averías caras.":t<0.1?"Con un umbral tan bajo, revisas casi toda la flota.":"Como una avería sale mucho más cara que una revisión, conviene un umbral bastante por debajo del 50 %.");}
+  it.addEventListener("input",draw);draw();
+})();
+
+/* ---------- anillo ---------- */
+(function(){const r=mulberry32(19),R=[];for(let i=0;i<70;i++){const x=0.5+r()*9,y=0.5+r()*9,d=Math.hypot(x-5,y-5)+gauss(r)*0.45;R.push([x,y,d<2.6?1:0]);}
+  for(const [id,q] of [["ringA",false],["ringB",true]]){const pl=new Plot(document.getElementById(id),{W:440,H:440,pad:{l:10,r:10,t:10,b:10}});const g=el("g",null,pl.g);
+    const w=logfit(R.map(p=>feats(p[0],p[1],q)),R.map(p=>p[2]),0.05);const fd=()=>field(pl,g,(x,y)=>sig(dotw(w,feats(x,y,q))),44);fd();REDRAW.push(fd);
+    for(const [x,y,c] of R)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:6,class:c?"p-yes":"p-no"},pl.top);
+    const ok=R.filter(p=>(sig(dotw(w,feats(p[0],p[1],q)))>.5)===!!p[2]).length;
+    document.getElementById(id+"-c").innerHTML=q?`<strong>Con pistas al cuadrado.</strong> La frontera rodea el círculo: acierta ${ok} de ${R.length}.`:`<strong>Solo las pistas originales.</strong> Frontera recta: acierta ${ok} de ${R.length}, casi como decir "no" a todo.`;}
+})();
+})();
+</script>
+</body>
+</html>

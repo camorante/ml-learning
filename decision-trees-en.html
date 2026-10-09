@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Decision trees</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: same identity as the visual ML series. One reading column + live figures. Blue = the model, orange = the data, purple = the errors */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.dot-i{display:inline-block;width:11px;height:11px;border-radius:50%;vertical-align:-1px;margin-right:6px}
+.duo{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.duo{grid-template-columns:1fr}}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Visual ML series · explained without formulas · <a href="decision-trees-technical-en.html" target="_self">see the technical version</a> · <a href="visual-ml-series-en.html" target="_self">all topics</a> · <a href="arboles-de-decision-es.html" target="_self">en español</a></p>
+  <h1>Decision trees</h1>
+  <p class="lede">A model that decides the way a person would: by asking yes-or-no questions, one after another, until it reaches an answer.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="duo">
+    <div class="fig"><svg id="hero" role="img" aria-label="Data map split into rectangles by the tree"></svg></div>
+    <div class="fig"><svg id="heroT" role="img" aria-label="Diagram of the tree of questions"></svg></div>
+  </div>
+  <div class="kpis" id="h-kpi"></div>
+  <p class="status" id="h-status"></p>
+  <div class="controls">
+    <div class="stack" style="gap:8px">
+      <span style="font-weight:700;font-size:.98rem">When you tap the map, add a point:</span>
+      <div class="seg" role="group" aria-label="Color to add"><button type="button" id="h-a" aria-pressed="true"><span class="dot-i" style="background:var(--point)"></span>orange</button><button type="button" id="h-b" aria-pressed="false"><span class="dot-i" style="background:var(--sample)"></span>purple</button></div>
+    </div>
+    <div class="slider"><label for="h-d">Maximum number of questions in a row (depth) <output id="h-d-o"></output></label><input type="range" id="h-d" min="1" max="8" step="1" value="3"><div class="ends"><span>1</span><span>8</span></div></div>
+    <div class="btns"><button type="button" id="h-undo">Remove the last one</button><button type="button" id="h-clear">Clear all</button><button type="button" id="h-ex">Back to the example</button></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Before we start</p>
+    <h2>Something you already know how to do</h2>
+    <p>Have you ever played "Guess Who?" You don't ask "Is it Anna?", "Is it Luis?", "Is it Martha?"… You ask "Do they wear glasses?" With a single question you rule out half of them. Then "Do they have blond hair?", and so on until only one is left.</p>
+    <p>A mechanic does the same thing: "Does the engine start?" → no → "Do the lights come on?" → no → "It's the battery." A decision tree is exactly that: a chain of yes-or-no questions that ends in an answer.</p>
+  </div>
+  <figure class="fig"><svg id="mech" role="img" aria-label="A mechanic's diagnostic tree"></svg>
+    <figcaption>Each question splits the cases in two. The final answers are called <strong>leaves</strong>.</figcaption></figure>
+  <p class="col note">The difference is that the mechanic learned those questions over years of experience. A decision tree <strong>learns them on its own</strong> by looking at past cases: it searches for the questions that best separate the answers.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 5</p>
+    <h2>Each question cuts the map in two</h2>
+    <p>Ten deliveries from a delivery company. For each one we know the <strong>distance</strong> and whether it left at <strong>rush hour</strong>, and whether it arrived <span style="color:var(--point);font-weight:700">late</span> or <span style="color:var(--sample);font-weight:700">on time</span>. Press "Next question" and watch the tree cut up the map.</p>
+  </div>
+  <div class="duo">
+    <figure class="fig"><svg id="del" role="img" aria-label="Deliveries by distance and rush hour, split by the tree"></svg></figure>
+    <figure class="fig"><svg id="delT" role="img" aria-label="Tree of questions about the deliveries"></svg></figure>
+  </div>
+  <p class="col qcard" id="del-q"></p>
+  <div class="btns"><button type="button" class="primary" id="del-next">Next question</button><button type="button" id="del-reset">Start over</button></div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 5</p>
+    <h2>Which question goes first? The one that leaves the "purest" groups</h2>
+    <p>A group is <strong>pure</strong> if all its deliveries have the same answer. There's a simple trick to measure how mixed up a group is: pick two deliveries at random. What's the chance that one is "late" and the other is "on time"? If the group is pure, zero. If it's half and half, the highest possible.</p>
+    <p>The tree tries <strong>every possible question</strong> and keeps the one that leaves the least mix-up overall. Move the distance cut and find the best one yourself:</p>
+  </div>
+  <figure class="fig"><svg id="cut" role="img" aria-label="Deliveries sorted by distance with a movable cut and the mix-up on each side"></svg></figure>
+  <div class="slider col"><label for="cut-x">Cut: distance ≤ … km? <output id="cut-x-o"></output></label><input type="range" id="cut-x" min="4" max="42" step="0.5" value="17"><div class="ends"><span>4 km</span><span>42 km</span></div></div>
+  <p class="col status" id="cut-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 5</p>
+    <h2>Asking too much is memorizing</h2>
+    <p>If you let the tree ask as many questions as it wants, it ends up with a leaf for every odd case: it gets 100% of the data it learned from right and fails on new data. It's the same <strong>overfitting</strong> as in polynomial regression, in a different costume.</p>
+  </div>
+  <div class="lab">
+    <figure class="fig"><svg id="ovr" role="img" aria-label="Tree partition by depth, with learning data and new data"></svg></figure>
+    <figure class="fig"><svg id="ovrE" role="img" aria-label="Accuracy on learning data and on new data by depth"></svg><figcaption id="ovr-c"></figcaption></figure>
+  </div>
+  <div class="slider col"><label for="ovr-d">Depth <output id="ovr-d-o"></output></label><input type="range" id="ovr-d" min="1" max="12" step="1" value="3"><div class="ends"><span>1</span><span>12</span></div></div>
+  <div class="legend">
+    <span><svg viewBox="0 0 28 14"><circle cx="14" cy="7" r="5" fill="var(--point)"/></svg>Data to learn from</span>
+    <span><svg viewBox="0 0 28 14"><circle cx="14" cy="7" r="4.5" fill="var(--surface)" stroke="var(--ink)" stroke-width="2"/></svg>New data (the real exam)</span>
+  </div>
+  <p class="col note">The cure is called <strong>pruning</strong>: limiting how many questions in a row the tree may ask, or requiring each leaf to have a minimum number of cases. A smaller tree makes a few more mistakes on what it has already seen, but gets more right on what's new.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 5</p>
+    <h2>It can only cut in straight lines</h2>
+    <p>Each question looks at just one thing at a time ("distance ≤ 20?"), so the cuts are always horizontal or vertical. If the real boundary is diagonal, the tree imitates it with a <strong>staircase</strong>: it needs many questions for something a straight line would do with one.</p>
+  </div>
+  <div class="grid2">
+    <figure class="fig"><svg id="stA" role="img" aria-label="Shallow tree with a diagonal boundary"></svg><figcaption id="stA-c"></figcaption></figure>
+    <figure class="fig"><svg id="stB" role="img" aria-label="Deep tree imitating the diagonal with a staircase"></svg><figcaption id="stB-c"></figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 5</p>
+    <h2>A tree is jumpy</h2>
+    <p>Change the data a little (another sample of the same problem) and the tree may change completely: a different first question, different cuts. That instability is its big weakness.</p>
+  </div>
+  <div class="grid2">
+    <figure class="fig"><svg id="nvA" role="img" aria-label="Tree trained on one sample"></svg><figcaption>Sample 1</figcaption></figure>
+    <figure class="fig"><svg id="nvB" role="img" aria-label="Tree trained on another sample of the same problem"></svg><figcaption>Sample 2, from the same problem</figcaption></figure>
+  </div>
+  <div class="btns"><button type="button" id="nv-again">Draw two more samples</button></div>
+  <p class="col note">The fix, which we'll see in the next topic, is brilliant in its simplicity: <strong>instead of one tree, train hundreds</strong>, each on a different sample, and let them vote. Their individual jitters cancel out. That's a <em>Random Forest</em>.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The complete recipe</h2>
+    <ol class="steps">
+      <li><div><strong>Start with all the cases</strong> in a single group.</div></li>
+      <li><div><strong>Try every possible question</strong> ("distance ≤ 10?", "≤ 11?", "rush hour?"…) and pick the one that leaves the two purest groups.</div></li>
+      <li><div><strong>Repeat in each group</strong> separately.</div></li>
+      <li><div><strong>Stop</strong> when a group is pure, is very small, or the maximum depth is reached.</div></li>
+      <li><div><strong>Each leaf answers</strong> with the most common answer among its cases (and its share works as a probability).</div></li>
+      <li><div><strong>Choose the depth</strong> by looking at accuracy on new data, not on the learning data.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>What is it used for?</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4v8M20 12l-10 10M20 12l10 10M10 22v8M30 22v8"/><circle cx="20" cy="12" r="3"/></svg><h3>Rules you can explain</h3><p>Banks, insurers and hospitals use them when every decision has to be justified: the path through the tree is the explanation.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="13" cy="28" r="4"/><circle cx="29" cy="28" r="4"/><path d="M4 28V14h20v14M24 18h7l5 6v4"/></svg><h3>Diagnosis and maintenance</h3><p>Which combination of fault codes, mileage and temperature predicts a breakdown? A small tree sums it up in rules a maintenance shop can follow.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 6h28v28H6z"/><path d="M6 18h14v16M20 6v12h14"/></svg><h3>Exploring data</h3><p>A quick tree shows which features matter and at which thresholds behavior changes, before you build a more complex model.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M12 34V22M20 34V14M28 34V24"/><path d="M8 22l4-6 4 6M16 14l4-8 4 8M24 24l4-6 4 6"/></svg><h3>The foundation of the champions</h3><p>Random Forest and Gradient Boosting (XGBoost, LightGBM), the models that win most often on tabular data, are teams of trees.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>The good and the not so good</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>The good</h3><ul class="pc">
+      <li>You can <strong>read and explain it</strong>: every prediction is a path of questions.</li>
+      <li>It doesn't care about the scale of the data: no need to standardize.</li>
+      <li>It mixes numbers and categories ("rush hour: yes/no") with no trouble.</li>
+      <li>It picks up combinations ("far away <em>and</em> at rush hour") without being told.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>The not so good</h3><ul class="pc">
+      <li>It overfits easily if it isn't pruned.</li>
+      <li>It's <strong>unstable</strong>: a small change in the data changes the tree.</li>
+      <li>It only cuts in straight lines: diagonal boundaries are hard for it.</li>
+      <li>On its own, it's rarely the most accurate model. As a team (forests), it is.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Node</dt><dd>Each question in the tree.</dd>
+      <dt>Root</dt><dd>The first question.</dd>
+      <dt>Leaf</dt><dd>The end of a path: the answer.</dd>
+      <dt>Depth</dt><dd>The maximum number of questions in a row from the root to a leaf.</dd>
+      <dt>Purity</dt><dd>How alike the answers within a group are.</dd>
+      <dt>Gini</dt><dd>The most widely used measure of mix-up: the probability that two random cases from the group have different answers.</dd>
+      <dt>Pruning</dt><dd>Trimming the tree so it doesn't memorize.</dd>
+      <dt>Overfitting</dt><dd>Learning the data by heart instead of the general rule.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the formulas behind it all</summary>
+    <p style="padding-top:10px">You don't need them to understand the idea:</p>
+    <div class="formula">mix-up of a group (Gini) = 1 − (share "late")² − (share "on time")²
+
+quality of a question = average mix-up of the two groups it leaves,
+                        weighted by the size of each group
+the tree picks the question with the lowest value</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in one minute</h2>
+    <p>An animated recap: the questions that cut up the map, how to pick the best one, the tree that memorizes, and the staircase. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFiqoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWAoWA/9k=" aria-label="Animation: decision trees">
+      <source src="decision-trees-with-audio-en.mp4" type="video/mp4">
+      Your browser can't play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- shared library: 2D CART trees + drawing ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,class],...]; returns the root node with children and box */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* tree diagram */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"yes",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} leaves`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"too big to draw well",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"orange":"purple"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} of ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+
+/* ---------- hero ---------- */
+(function(){
+  const r=mulberry32(5),EX=[];
+  for(let i=0;i<46;i++){const x=0.5+r()*9,y=0.5+r()*9;const inside=(x>3.2&&x<7.6&&y>2.6&&y<6.8)||(x>6.8&&y>7.4);EX.push([x,y,(r()<0.93)===inside?1:0]);}
+  let P=EX.map(p=>p.slice()),cls=1;
+  const svg=document.getElementById("hero"),pl=new Plot(svg,{W:520,H:460,pad:{l:10,r:10,t:10,b:10}}),gF=el("g",null,pl.g),gP=el("g",null,svg);svg.style.cursor="crosshair";
+  const id=document.getElementById("h-d");
+  function draw(){const d=+id.value;document.getElementById("h-d-o").textContent=d;gP.textContent="";
+    const root=buildTree(P,{maxDepth:d,minLeaf:1});drawPartition(pl,gF,root);dotsP(pl,gP,P,7);
+    drawTree(document.getElementById("heroT"),root,{W:520,H:460,names:["x","y"]});
+    const ok=P.filter(p=>{const lf=predictT(root,p[0],p[1]);return (lf.c1/lf.n>=0.5?1:0)===p[2];}).length,nl=leaves(root).length;
+    document.getElementById("h-kpi").innerHTML=`<span>points: <b>${P.length}</b></span><span>leaves: <b>${nl}</b></span><span>correct: <b>${ok}/${P.length}</b></span>`;
+    document.getElementById("h-status").innerHTML=P.length<2?"Tap the map to add points.":d>=6?"With so many questions, the tree draws little boxes around stray points. Do you think that would hold up with new data?":"Each line on the map is a question in the tree. Tap to add a point, or tap one to remove it.";}
+  svg.addEventListener("click",e=>{const p=pl.toSvg(e);if(!p)return;for(let i=0;i<P.length;i++)if(Math.hypot(pl.sx(P[i][0])-p.x,pl.sy(P[i][1])-p.y)<15){P.splice(i,1);draw();return;}const x=pl.ix(p.x),y=pl.iy(p.y);if(x<0||x>10||y<0||y>10)return;P.push([x,y,cls]);draw();});
+  const ba=document.getElementById("h-a"),bb=document.getElementById("h-b");ba.onclick=()=>{cls=1;ba.setAttribute("aria-pressed","true");bb.setAttribute("aria-pressed","false");};bb.onclick=()=>{cls=0;bb.setAttribute("aria-pressed","true");ba.setAttribute("aria-pressed","false");};
+  id.addEventListener("input",draw);document.getElementById("h-undo").onclick=()=>{P.pop();draw();};document.getElementById("h-clear").onclick=()=>{P=[];draw();};document.getElementById("h-ex").onclick=()=>{P=EX.map(p=>p.slice());id.value=3;draw();};
+  draw();
+})();
+
+/* ---------- mechanic's tree ---------- */
+(function(){const s=document.getElementById("mech");s.setAttribute("viewBox","0 0 900 300");
+  const N=[[450,40,"Does the engine start?",0],[230,140,"Do the lights come on?",0],[670,140,"Any strange noises?",0],[120,245,"Battery",1],[340,245,"Starter motor",1],[560,245,"Get it inspected",1],[780,245,"All good",1]];
+  const E=[[0,1,"no"],[0,2,"yes"],[1,3,"no"],[1,4,"yes"],[2,5,"yes"],[2,6,"no"]];
+  for(const [a,b,l] of E){el("line",{x1:N[a][0],y1:N[a][1]+16,x2:N[b][0],y2:N[b][1]-16,stroke:"var(--muted)","stroke-width":1.6},s);txt(s,(N[a][0]+N[b][0])/2+(N[b][0]<N[a][0]?-8:8),(N[a][1]+N[b][1])/2,l,{"font-size":13,"text-anchor":N[b][0]<N[a][0]?"end":"start"});}
+  for(const [x,y,t,leaf] of N){const w=t.length*8.4+26;el("rect",{x:x-w/2,y:y-17,width:w,height:34,rx:leaf?17:9,fill:leaf?"var(--hl)":"var(--surface)",stroke:leaf?"var(--point)":"var(--ink)","stroke-width":1.5},s);txt(s,x,y+5,t,{"text-anchor":"middle","font-size":14,class:"t-ink"});}})();
+
+/* ---------- deliveries step by step ---------- */
+const DEL=[[12,0,0],[18,0,0],[25,0,0],[30,0,1],[40,0,1],[8,1,0],[15,1,1],[22,1,1],[28,1,1],[35,1,1]];
+const DELP=DEL.map(([d,h,y])=>[d,h+0.5,y]);
+const delLabel=n=>n.j===0?`Distance ≤ ${n.t} km?`:"Outside rush hour?";
+(function(){const pl=new Plot(document.getElementById("del"),{W:520,H:360,pad:{l:96,r:14,t:14,b:40},x0:0,x1:45,y0:0,y1:2,xt:[0,10,20,30,40],fx:v=>v+" km",xl:"distance"});
+  txt(pl.gGrid,pl.o.pad.l-10,pl.sy(1.5)+4,"rush hour",{"text-anchor":"end","font-size":13,class:"t-ink"});txt(pl.gGrid,pl.o.pad.l-10,pl.sy(0.5)+4,"normal",{"text-anchor":"end","font-size":13,class:"t-ink"});
+  const gF=el("g",null,pl.g);dotsP(pl,pl.top,DELP,8);
+  const Q=["Ten deliveries, all mixed up: 6 late and 4 on time. What do we ask first?",
+    "<strong>Question 1: distance ≤ 26.5 km?</strong> The 4 long deliveries all arrived late: that group is already pure. The short ones are still mixed (2 late, 4 on time).",
+    "<strong>Question 2, only for the short ones: outside rush hour?</strong> Yes → all 3 arrived on time (pure). At rush hour: 2 late and 1 on time.",
+    "<strong>Question 3: distance ≤ 11.5 km?</strong> The 8 km one arrived on time; the other two, late. Every leaf is pure: the tree gets all 10 right. Too much? Idea 3 answers that."];
+  let k=0;function draw(){const root=buildTree(DELP,{maxDepth:k,box:[0,45,0,2]});drawPartition(pl,gF,root);
+    drawTree(document.getElementById("delT"),root,{W:520,H:360,labels:delLabel,leafName:p=>p>=0.5?"late":"on time"});document.getElementById("del-q").innerHTML=Q[k];
+    document.getElementById("del-next").disabled=k>=3;}
+  document.getElementById("del-next").onclick=()=>{k=Math.min(3,k+1);draw();};document.getElementById("del-reset").onclick=()=>{k=0;draw();};draw();})();
+
+/* ---------- cut and purity ---------- */
+(function(){const s=document.getElementById("cut");const W=900,H=300;s.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const X=d=>50+(d-4)/38*(W-100);const ys=[...DEL].sort((a,b)=>a[0]-b[0]);
+  el("line",{x1:40,x2:W-40,y1:110,y2:110,class:"g-line"},s);ys.forEach(([d,h,y])=>{el("circle",{cx:X(d),cy:110,r:12,fill:y?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2.5},s);txt(s,X(d),142,d,{"text-anchor":"middle","font-size":12});});
+  const ln=el("line",{y1:58,y2:160,stroke:"var(--ink)","stroke-width":3},s);const gB=el("g",null,s);
+  const ix=document.getElementById("cut-x");
+  const gin=(a,b)=>{const n=a+b;return n?1-(a/n)**2-(b/n)**2:0;};
+  function draw(){const t=+ix.value,L=ys.filter(r=>r[0]<=t),R=ys.filter(r=>r[0]>t);const l1=L.filter(r=>r[2]).length,r1=R.filter(r=>r[2]).length;
+    const gl=gin(l1,L.length-l1),gr=gin(r1,R.length-r1),w=(L.length*gl+R.length*gr)/10;ln.setAttribute("x1",X(t));ln.setAttribute("x2",X(t));gB.textContent="";
+    const bar=(x,y,v,lab)=>{txt(gB,x,y-8,lab,{"font-size":13,class:"t-ink","text-anchor":"middle"});el("rect",{x:x-90,y,width:180,height:12,rx:6,fill:"var(--line)"},gB);el("rect",{x:x-90,y,width:180*v/0.5,height:12,rx:6,fill:"var(--sample)"},gB);};
+    bar(Math.max(150,Math.min(W/2-120,X(t)/2+25)),205,gl,`left: ${L.length} deliveries, ${l1} late · mix-up ${gl.toFixed(2)}`);bar(Math.min(W-150,Math.max(W/2+120,(X(t)+W)/2-25)),205,gr,`right: ${R.length} deliveries, ${r1} late · mix-up ${gr.toFixed(2)}`);
+    txt(gB,W/2,270,`total mix-up (weighted by size): ${w.toFixed(3)}   ·   with no question: 0.480`,{"text-anchor":"middle","font-size":15,class:"t-ink"});
+    document.getElementById("cut-x-o").textContent="≤ "+t.toFixed(1)+" km";
+    document.getElementById("cut-msg").innerHTML=w<0.27?"<b>This is the best question!</b> Any cut between 25 and 28 km gives 0.267: the right side ends up completely pure.":w<0.32?"Good cut, but there's a better one.":"Move the cut, looking for the lowest total mix-up.";}
+  ix.addEventListener("input",draw);draw();})();
+
+/* ---------- overfitting ---------- */
+(function(){const r=mulberry32(31),truth=(x,y)=>(x-5)**2/9+(y-5)**2/5<1.6?1:0,gen=n=>[...Array(n)].map(()=>{const x=0.3+r()*9.4,y=0.3+r()*9.4;let c=truth(x,y);if(r()<0.16)c=1-c;return [x,y,c];});
+  const TR=gen(80),TE=gen(120);
+  const pl=new Plot(document.getElementById("ovr"),{W:560,H:420,pad:{l:10,r:10,t:10,b:10}});const gF=el("g",null,pl.g);dotsP(pl,pl.top,TR,5.5);
+  for(const [x,y,c] of TE)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:4.5,fill:"var(--surface)",stroke:c?"var(--point)":"var(--sample)","stroke-width":2,opacity:.85},pl.top);
+  const acc=(root,S)=>S.filter(p=>{const lf=predictT(root,p[0],p[1]);return (lf.c1/lf.n>=0.5?1:0)===p[2];}).length/S.length;
+  const D=[...Array(12)].map((_,i)=>i+1),aTr=[],aTe=[];for(const d of D){const t=buildTree(TR,{maxDepth:d});aTr.push(acc(t,TR));aTe.push(acc(t,TE));}
+  const pe=new Plot(document.getElementById("ovrE"),{W:380,H:420,pad:{l:44,r:12,t:24,b:40},x0:0.5,x1:12.5,y0:0.5,y1:1.02,xt:[1,4,8,12],yt:[0.5,0.6,0.7,0.8,0.9,1],fy:v=>Math.round(v*100)+"%",xl:"depth",yl:"accuracy"});
+  const pth=(a,c,da)=>el("path",{d:pe.ppath(a.map((v,i)=>[D[i],v])),fill:"none",stroke:c,"stroke-width":3,"stroke-dasharray":da||""},pe.g);pth(aTr,"var(--point)");pth(aTe,"var(--ink)","7 5");
+  let best=0;aTe.forEach((v,i)=>{if(v>aTe[best])best=i;});
+  txt(pe.top,pe.sx(12),pe.sy(aTr[11])+18,"data to learn from",{"text-anchor":"end","font-size":11,style:"fill:var(--point)"});txt(pe.top,pe.sx(12),pe.sy(aTe[11])+18,"new data",{"text-anchor":"end","font-size":11,class:"t-ink"});
+  const mk=el("line",{stroke:"var(--muted)","stroke-dasharray":"4 4"},pe.top),m1=el("circle",{r:6,fill:"var(--point)"},pe.top),m2=el("circle",{r:6,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":2.5},pe.top);
+  const id=document.getElementById("ovr-d");
+  function draw(){const d=+id.value,root=buildTree(TR,{maxDepth:d});drawPartition(pl,gF,root);const X=pe.sx(d);mk.setAttribute("x1",X);mk.setAttribute("x2",X);mk.setAttribute("y1",pe.o.pad.t);mk.setAttribute("y2",pe.o.H-pe.o.pad.b);
+    m1.setAttribute("cx",X);m1.setAttribute("cy",pe.sy(aTr[d-1]));m2.setAttribute("cx",X);m2.setAttribute("cy",pe.sy(aTe[d-1]));document.getElementById("ovr-d-o").textContent=d+" · "+leaves(root).length+" leaves";
+    document.getElementById("ovr-c").textContent=`Depth ${d}: ${Math.round(aTr[d-1]*100)}% correct on what it learned and ${Math.round(aTe[d-1]*100)}% on new data. `+(d-1===best?"The best depth for new data.":d-1>best?"It's already memorizing the noise.":"It still needs more questions.");}
+  id.addEventListener("input",draw);draw();})();
+
+/* ---------- staircase ---------- */
+(function(){const r=mulberry32(12),P=[...Array(90)].map(()=>{const x=0.3+r()*9.4,y=0.3+r()*9.4;return [x,y,y>x?1:0];});
+  for(const [id,d] of [["stA",2],["stB",7]]){const pl=new Plot(document.getElementById(id),{W:440,H:440,pad:{l:10,r:10,t:10,b:10}});const g=el("g",null,pl.g);const root=buildTree(P,{maxDepth:d});drawPartition(pl,g,root);
+    el("line",{x1:pl.sx(0),y1:pl.sy(0),x2:pl.sx(10),y2:pl.sy(10),stroke:"var(--good)","stroke-width":2.5,"stroke-dasharray":"7 5"},pl.top);dotsP(pl,pl.top,P,5);
+    document.getElementById(id+"-c").innerHTML=`<strong>Depth ${d}: ${leaves(root).length} leaves.</strong> `+(d<4?"With few questions, the diagonal (green) is approximated very poorly.":"With many questions it gets a fine staircase, but it's a huge model for such a simple rule.");}})();
+
+/* ---------- instability ---------- */
+(function(){let seed=7;function run(){const r=mulberry32(seed);const gen=()=>[...Array(60)].map(()=>{const x=0.3+r()*9.4,y=0.3+r()*9.4;let c=(x-5)**2/9+(y-5)**2/5<1.6?1:0;if(r()<0.15)c=1-c;return [x,y,c];});
+  for(const id of ["nvA","nvB"]){const svg=document.getElementById(id);svg.textContent="";const P=gen(),pl=new Plot(svg,{W:440,H:440,pad:{l:10,r:10,t:10,b:10}});const g=el("g",null,pl.g);drawPartition(pl,g,buildTree(P,{maxDepth:4}));dotsP(pl,pl.top,P,5);}}
+  document.getElementById("nv-again").onclick=()=>{seed+=3;run();};run();})();
+})();
+</script>
+</body>
+</html>

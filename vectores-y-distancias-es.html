@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vectores y distancias</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.segs{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.segs .lab{font-size:.9rem;color:var(--muted)}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:210px minmax(0,1fr) 72px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden}
+.meter2 .bar i{display:block;height:100%;border-radius:7px;transition:width .35s}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.meter2 .row{grid-template-columns:118px minmax(0,1fr) 58px;font-size:.84rem}}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.verdict{display:inline-block;border-radius:999px;padding:2px 10px;font-size:.85rem;font-weight:600}
+.verdict.ok{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.verdict.no{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.verdict.mid{background:color-mix(in srgb,var(--sample) 18%,transparent);color:var(--sample)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.situ h3{font-size:1.1rem}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec ul{margin:0;padding-left:18px;font-size:.93rem;color:var(--muted);display:grid;gap:4px}
+.dec ul b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+</style>
+<style>
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.case{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:8px;align-content:start}
+.case h3{font-size:1rem}
+.case dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0;font-size:.9rem}
+.case dt{color:var(--muted)}.case dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.case .ans{font-size:.9rem;color:var(--muted);min-height:1.2em}
+.case .ans b.ok{color:var(--good)}.case .ans b.no{color:var(--warn)}
+.case .btns button{padding:6px 12px;font-size:.88rem}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:230px minmax(0,1fr) 92px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden;position:relative}
+.meter2 .bar i{display:block;height:100%;border-radius:7px;transition:width .35s}
+.meter2 .bar u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.meter2 .row{grid-template-columns:120px minmax(0,1fr) 70px;font-size:.84rem}}
+</style>
+<style>
+.narrow{max-width:780px;width:100%;justify-self:center}
+select{font:inherit;font-size:.95rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:6px 10px;max-width:100%}
+.selrow{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.selrow label{font-weight:700;font-size:.98rem}
+svg .halo{paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round}
+svg .drag{cursor:grab;touch-action:none}
+svg .pick{cursor:pointer}
+.big3 b.sm{font-size:1.35rem}
+@media (max-width:520px){.fig svg text{font-size:22px}.fig svg text.halo{font-size:26px;stroke-width:6px}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Las matemáticas debajo del ML · tema 1 · explicado con dibujos · <a href="vectores-y-distancias-tecnico-es.html" target="_self">ver la versión técnica</a> · <a href="matematicas-del-ml-es.html" target="_self">todos los temas</a> · <a href="vectors-and-distances-en.html" target="_self">in English</a></p>
+  <h1>Vectores y distancias</h1>
+  <p class="lede">Para un ordenador, un camión es una lista de números. Si esa lista se dibuja como una flecha, se puede medir lo lejos que está un camión de otro. Esa medida es la base de buscar «el más parecido», de agrupar y de detectar lo raro.</p>
+</header>
+
+<section class="first" aria-label="Juguete interactivo">
+  <div class="situ col">
+    <p class="eyebrow">La situación del juguete</p>
+    <p>Una flota tiene 12 camiones. De cada uno guardamos solo <strong>dos números</strong>, medias de un mes: cuántas <strong>paradas</strong> hace al día (entregas, recogidas) y cuántas <strong>horas trabaja</strong> al día. Con esos dos números, cada camión es un punto en un plano: tantas paradas hacia la derecha y tantas horas hacia arriba.</p>
+    <p>La pregunta es sencilla: <strong>¿qué camión se parece más a uno dado?</strong> Sirve, por ejemplo, para elegir qué camión sustituye a otro que entra en el taller. La respuesta será el punto que quede <strong>más cerca</strong>.</p>
+  </div>
+  <figure class="fig narrow"><svg id="hero" role="img" aria-label="Doce camiones como puntos según paradas y horas al día, con el camión de referencia y el más parecido"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada punto <b style="color:var(--point)">naranja</b> es un camión, con su número. El punto <b style="color:var(--mean)">azul</b> es el camión de referencia; la <b style="color:var(--mean)">flecha azul</b> sale del cero y llega hasta él, y las dos líneas <b style="color:var(--sample)">violetas</b> son sus dos números: lo que avanza hacia la derecha (paradas) y lo que sube (horas). El camión <b style="color:var(--good)">verde</b> es el más parecido, y la línea verde es el camino que se mide hasta él. Puedes tocar cualquier camión para que sea la referencia, o arrastrar el punto azul a donde quieras.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>¿Qué camión es la referencia?</h3>
+      <div class="selrow"><label for="h-ref">Camión</label><select id="h-ref"></select></div>
+      <p>Es el camión al que le buscamos pareja. Si arrastras el punto azul, se convierte en un camión imaginario: uno nuevo que todavía no está en la flota.</p>
+    </div>
+    <div class="dec">
+      <h3>¿Cómo medimos la distancia?</h3>
+      <div class="seg" role="group" aria-label="Tipo de distancia"><button type="button" id="h-l2" aria-pressed="true">En línea recta</button><button type="button" id="h-l1" aria-pressed="false">Por cuadras</button></div>
+      <ul>
+        <li><b>En línea recta</b>: como un pájaro, en diagonal si hace falta.</li>
+        <li><b>Por cuadras</b>: como un camión en una ciudad de calles rectas: primero en horizontal y luego en vertical, sumando los dos tramos.</li>
+      </ul>
+      <p>De momento, una parada cuenta lo mismo que una hora. En la idea 4 veremos que eso es una decisión, y de las importantes.</p>
+    </div>
+  </div>
+  <div class="big3 col" id="h-big"></div>
+  <div class="col stack">
+    <p><strong>Prueba en este orden:</strong></p>
+    <ol class="try">
+      <li>Empieza con el camión 2 (reparto urbano). El más parecido es el camión 1, que hace media parada más y trabaja media hora menos.</li>
+      <li>Elige el camión 5 y cambia entre «en línea recta» y «por cuadras»: el más parecido pasa del camión 6 al 7. La forma de medir cambia la respuesta.</li>
+      <li>Arrastra el punto azul a una zona vacía, por ejemplo a 14 paradas y 11 horas. El más parecido queda lejos: un camión así sería raro en esta flota.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="h-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Lo que acabas de ver</p>
+    <h2>Parecido es lo mismo que cerca</h2>
+    <p>Has convertido cada camión en dos números y has dibujado esos números como un punto. A partir de ahí, «¿qué camión se parece más?» se convierte en «¿qué punto está más cerca?», y eso se puede calcular.</p>
+    <p>Muchos métodos de aprendizaje automático funcionan así por dentro: el de los <a href="k-vecinos-mas-cercanos-es.html" target="_self">vecinos más cercanos</a> decide mirando a los más parecidos; <a href="k-means-es.html" target="_self">k-means</a> agrupa lo que está cerca. Para que funcionen bien hay que entender cuatro cosas: qué es exactamente esa flecha, cómo se mide su longitud, de cuántas formas se puede medir una distancia, y qué pasa cuando los números están en unidades distintas o son muchos.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 5</p>
+    <h2>Un dato es una lista de números, y una lista de números es una flecha</h2>
+    <p>Una lista de números con un orden fijo (primero las paradas, luego las horas) se llama <strong>vector</strong>. Se puede dibujar como una flecha que sale del cero. Con las flechas se pueden hacer dos operaciones que tienen sentido en la vida real:</p>
+    <ul>
+      <li><strong>Sumar</strong>: el trabajo del lunes más el del martes es el trabajo de los dos días. Se suman paradas con paradas y horas con horas. En el dibujo, es poner una flecha a continuación de la otra.</li>
+      <li><strong>Multiplicar por un número</strong>: el doble de trabajo es el doble de paradas y el doble de horas. La flecha apunta hacia el mismo sitio y mide el doble.</li>
+    </ul>
+  </div>
+  <figure class="fig"><svg id="vec" role="img" aria-label="Suma de dos flechas y flecha multiplicada por un número"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> En horizontal, paradas; en vertical, horas. La flecha <b style="color:var(--point)">naranja</b> es el lunes. Al sumar, la <b style="color:var(--sample)">violeta</b> es el martes, colocada al final de la del lunes, y la <b style="color:var(--mean)">azul</b> es el total. Al multiplicar, la azul es el lunes multiplicado por el número que elijas.</p>
+  <div class="seg" role="group" aria-label="Operación"><button type="button" id="v-sum" aria-pressed="true">Sumar dos días</button><button type="button" id="v-mul" aria-pressed="false">Multiplicar por un número</button></div>
+  <div class="controls">
+    <div class="slider"><label for="v-a1">Lunes: paradas <output id="v-a1-o"></output></label><input type="range" id="v-a1" min="0" max="8" step="1" value="6"><div class="ends"><span>0</span><span>8</span></div></div>
+    <div class="slider"><label for="v-a2">Lunes: horas <output id="v-a2-o"></output></label><input type="range" id="v-a2" min="0" max="8" step="0.5" value="4"><div class="ends"><span>0</span><span>8</span></div></div>
+    <div class="slider v-s"><label for="v-b1">Martes: paradas <output id="v-b1-o"></output></label><input type="range" id="v-b1" min="0" max="8" step="1" value="3"><div class="ends"><span>0</span><span>8</span></div></div>
+    <div class="slider v-s"><label for="v-b2">Martes: horas <output id="v-b2-o"></output></label><input type="range" id="v-b2" min="0" max="8" step="0.5" value="5"><div class="ends"><span>0</span><span>8</span></div></div>
+    <div class="slider v-m" hidden><label for="v-k">Multiplicar el lunes por <output id="v-k-o"></output></label><input type="range" id="v-k" min="0" max="3" step="0.5" value="2"><div class="ends"><span>0 (nada)</span><span>3 (el triple)</span></div></div>
+  </div>
+  <p class="qcard col" id="v-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 5</p>
+    <h2>Lo que mide una flecha: el teorema de Pitágoras</h2>
+    <p>Imagina un camión que sale del almacén y, en un mapa de calles en cuadrícula, termina 3 cuadras al este y 4 al norte. Su vector es (3, 4). ¿A qué distancia está del almacén, en línea recta?</p>
+    <p>Los dos números y la flecha forman un triángulo con un ángulo recto. Pitágoras dice que el lado largo al cuadrado es la suma de los otros dos al cuadrado: 3² + 4² = 9 + 16 = 25, y la raíz de 25 es <strong>5</strong>. A esa medida se le llama la <strong>longitud</strong> (o norma) del vector.</p>
+  </div>
+  <figure class="fig narrow"><svg id="len" role="img" aria-label="Triángulo rectángulo formado por un vector y sus dos componentes"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Las líneas finas son las calles. El cuadrado gris es el almacén. La línea <b style="color:var(--point)">naranja</b> es lo que el camión avanza hacia el este y la <b style="color:var(--sample)">violeta</b>, hacia el norte. La flecha <b style="color:var(--mean)">azul</b> es la distancia en línea recta. <b>Arrastra la punta de la flecha</b> (el punto azul) a otro cruce.</p>
+  <p class="qcard col" id="l-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 5</p>
+    <h2>La distancia entre dos camiones es la longitud de su resta</h2>
+    <p>Para saber lo lejos que está B de A, se restan sus números (cuánto hay que moverse en cada dirección para ir de A a B) y se mide la longitud de esa flecha. Hay varias formas razonables de medirla:</p>
+    <ul>
+      <li><strong>En línea recta</strong> (distancia <em>euclídea</em>): Pitágoras, como en la idea 2.</li>
+      <li><strong>Por cuadras</strong> (distancia <em>Manhattan</em>): se suman los dos tramos, como un camión que solo puede ir por calles en cuadrícula.</li>
+      <li><strong>Por el lado más largo</strong> (distancia del <em>máximo</em>): solo cuenta la mayor de las diferencias. Es útil cuando lo que importa es el peor caso: «ningún número puede diferir más de tanto».</li>
+    </ul>
+  </div>
+  <figure class="fig narrow"><svg id="dist" role="img" aria-label="Dos camiones en un mapa de calles con tres formas de medir la distancia"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> <b>Arrastra</b> los camiones <b style="color:var(--point)">A</b> y <b style="color:var(--sample)">B</b>. La línea <b style="color:var(--good)">verde</b> es el camino que se mide. La figura <b style="color:var(--mean)">azul</b> rellena contiene todos los puntos que están a la misma distancia de A que B: con la línea recta es un círculo; por cuadras, un rombo; por el lado más largo, un cuadrado. Las otras dos figuras aparecen discontinuas para comparar.</p>
+  <div class="seg" role="group" aria-label="Tipo de distancia"><button type="button" id="d-0" aria-pressed="true">En línea recta</button><button type="button" id="d-1" aria-pressed="false">Por cuadras</button><button type="button" id="d-2" aria-pressed="false">Por el lado más largo</button></div>
+  <div class="kpis col" id="d-k"></div>
+  <p class="qcard col" id="d-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 de 5</p>
+    <h2>Las unidades mandan</h2>
+    <p>Cambiemos un número: en vez de horas, usamos los <strong>kilómetros al día</strong>. Los kilómetros van de 130 a 750; las paradas, de 1 a 13,5. Si se calcula la distancia tal cual, una diferencia de 40 km pesa lo mismo que una diferencia de 40 paradas, y 40 paradas no existen en esta flota. Resultado: <strong>los kilómetros deciden todo</strong> y las paradas casi no cuentan.</p>
+    <p>La solución es <strong>escalar</strong> (estandarizar): a cada número se le resta su media y se divide entre su <em>desviación</em>, que es lo que suele alejarse ese número de la media en la flota. En esta flota, la desviación de los km es de unos 200 km y la de las paradas, de unas 4,25 paradas. Después de escalar, «200 km más» y «4,25 paradas más» pesan lo mismo.</p>
+  </div>
+  <figure class="fig"><svg id="units" role="img" aria-label="Doce camiones según kilómetros y paradas al día, con la zona de los que estarían más cerca"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> En horizontal, kilómetros al día; en vertical, paradas al día. El punto <b style="color:var(--mean)">azul</b> es la referencia y el <b style="color:var(--good)">verde</b>, su camión más parecido. La zona <b style="color:var(--mean)">azul clara</b> son todos los sitios que estarían a la misma distancia o más cerca que ese camión. Sin escalar, la zona es una franja estrecha y altísima: solo importa estar cerca en kilómetros, las paradas dan igual. Al escalar se convierte en un óvalo que mira las dos cosas.</p>
+  <div class="decs">
+    <div class="dec"><h3>¿Escalamos?</h3><div class="seg" role="group" aria-label="Escalado"><button type="button" id="u-0" aria-pressed="true">Sin escalar</button><button type="button" id="u-1" aria-pressed="false">Escalado</button></div><p>Sin escalar: km y paradas tal cual. Escalado: cada número medido en desviaciones.</p></div>
+    <div class="dec"><h3>Camión de referencia</h3><div class="selrow"><label for="u-ref">Camión</label><select id="u-ref"></select></div><p>Empieza con el 2 y luego prueba el 5, el 8 y el 12.</p></div>
+  </div>
+  <div class="kpis col" id="u-k"></div>
+  <p class="qcard col" id="u-msg"></p>
+  <p class="col">Por eso, antes de usar distancias casi siempre se escalan los datos: lo explica el tema <a href="preparar-variables-es.html" target="_self">preparar las variables</a> de «Preparar los datos», y es la primera advertencia del método de los <a href="k-vecinos-mas-cercanos-es.html" target="_self">vecinos más cercanos</a>.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 de 5</p>
+    <h2>Con muchos números, todo está igual de lejos</h2>
+    <p>Un camión real no tiene dos números, tiene decenas o cientos: velocidades, frenazos, consumo, temperaturas, horas por franja… Las fórmulas son las mismas: con 3 números, Pitágoras suma tres cuadrados; con 100, suma cien. Pero pasa algo sorprendente: cuantos más números, más se parecen <strong>todas</strong> las distancias entre sí. El más cercano y el más lejano acaban casi a la misma distancia, y «el más parecido» deja de significar algo. Se le llama la <strong>maldición de la dimensión</strong> (cada número es una dimensión).</p>
+  </div>
+  <figure class="fig"><svg id="dim" role="img" aria-label="Histograma de las distancias entre puntos al azar según el número de dimensiones"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Se reparten 120 camiones inventados al azar y se miden las 7 140 distancias entre cada par. Las barras cuentan cuántas distancias hay de cada tamaño, comparadas con la distancia media (el 1 del centro). La línea <b style="color:var(--good)">verde</b> marca a qué distancia está el vecino más cercano de un camión y la <b style="color:var(--warn)">roja</b>, el más lejano. La altura de las barras se ajusta sola.</p>
+  <div class="slider col"><label for="m-d">Números por camión (dimensiones) <output id="m-d-o"></output></label><input type="range" id="m-d" min="0" max="9" step="1" value="0"><div class="ends"><span>2</span><span>1 000</span></div></div>
+  <div class="big3 col" id="m-big"></div>
+  <p class="qcard col" id="m-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta para medir parecidos</h2>
+    <ol class="steps">
+      <li><div><strong>Convierte cada cosa en una lista de números</strong>, siempre en el mismo orden: eso es su vector.</div></li>
+      <li><div><strong>Elige qué números entran.</strong> Solo los que importan para el parecido que buscas: un número que no tiene nada que ver solo añade ruido.</div></li>
+      <li><div><strong>Ponlos en la misma escala</strong> (estandarizar) para que ninguno mande por sus unidades.</div></li>
+      <li><div><strong>Elige la forma de medir</strong>: en línea recta por defecto; por cuadras si hay valores extremos o muchos números; por el lado más largo si importa el peor caso.</div></li>
+      <li><div><strong>Busca los más cercanos</strong> o los que están lejos de todos, según la pregunta.</div></li>
+      <li><div><strong>Con muchos números, comprueba</strong> que el más cercano está claramente más cerca que el resto. Si no, reduce el número de dimensiones.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>Dónde se usan las distancias en la telemetría de flota</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 30C12 18 18 26 24 14S34 10 34 10"/><path d="M6 34C12 22 18 30 24 18S34 14 34 14" stroke-dasharray="3 3"/></svg><h3>Viajes parecidos</h3><p>Cada viaje es un vector (km, duración, paradas, consumo, hora de salida). Buscar los viajes más cercanos a uno nuevo da una estimación de su duración o de su consumo.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="12" cy="14" r="2.5"/><circle cx="17" cy="20" r="2.5"/><circle cx="11" cy="23" r="2.5"/><circle cx="31" cy="30" r="3.5"/><path d="M31 22v2M31 36v1"/></svg><h3>Un camión raro</h3><p>Un camión que está lejos de todos los demás (consumo, temperaturas, vibraciones) merece una revisión: puede ser una avería, un sensor mal calibrado o un uso indebido.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="12" cy="13" r="6"/><circle cx="28" cy="13" r="6"/><circle cx="20" cy="28" r="6"/></svg><h3>Agrupar rutas</h3><p>k-means junta rutas cercanas en grupos (reparto urbano, regional, larga distancia) para planificar vehículos, turnos y mantenimiento por tipo de uso.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="14" cy="13" r="5"/><path d="M5 32c1-7 5-10 9-10s8 3 9 10"/><path d="M26 18h9M31 14l4 4-4 4"/></svg><h3>Un conductor sustituto</h3><p>Si un conductor se ausenta, se busca otro con un historial cercano: mismas zonas, horarios, tipo de vehículo y estilo de conducción.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Conexiones</p>
+    <h2>Con los modelos de la serie ML y con «Preparar los datos»</h2>
+    <p>Los <a href="k-vecinos-mas-cercanos-es.html" target="_self">vecinos más cercanos</a> deciden con las distancias de este tema. <a href="k-means-es.html" target="_self">k-means</a> agrupa puntos cercanos y calcula el centro de cada grupo como una media de flechas. Las <a href="maquinas-de-vectores-soporte-es.html" target="_self">máquinas de vectores soporte</a> buscan la frontera más alejada de los dos grupos, y su versión con «núcleo» compara puntos con una distancia. El <a href="pca-es.html" target="_self">análisis de componentes principales</a> reduce muchos números a unos pocos, lo que ayuda contra la maldición de la dimensión. Para escalar bien los datos, el tema <a href="preparar-variables-es.html" target="_self">preparar las variables</a>. El siguiente tema de esta colección, el <a href="producto-punto-y-coseno-es.html" target="_self">producto punto</a>, mide hacia dónde apuntan dos flechas en lugar de lo lejos que están.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo que ayuda y dónde engaña</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Lo que ayuda</h3><ul class="pc">
+      <li>Una idea muy intuitiva: parecido = cerca. Se explica con un dibujo.</li>
+      <li>Funciona con cualquier cosa que se pueda describir con números.</li>
+      <li>No hay que entrenar nada: basta con guardar los datos y medir.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Dónde engaña</h3><ul class="pc">
+      <li>Las unidades deciden en silencio quién es «el más parecido».</li>
+      <li>Un número que no tiene nada que ver con lo que buscas lo estropea igual.</li>
+      <li>Con muchos números, todas las distancias se parecen.</li>
+      <li>Medir contra millones de puntos es lento si no se organiza bien la búsqueda.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Vector</dt><dd>Una lista de números en un orden fijo. Se dibuja como una flecha desde el cero.</dd>
+      <dt>Componente</dt><dd>Cada uno de los números del vector (las paradas, las horas).</dd>
+      <dt>Dimensión</dt><dd>Cuántos números tiene el vector. Dos números, dos dimensiones: un plano.</dd>
+      <dt>Longitud (norma)</dt><dd>Lo que mide la flecha. En línea recta, con Pitágoras.</dd>
+      <dt>Distancia euclídea</dt><dd>La distancia en línea recta.</dd>
+      <dt>Distancia Manhattan</dt><dd>La distancia por cuadras: la suma de las diferencias.</dd>
+      <dt>Distancia del máximo</dt><dd>Solo cuenta la mayor de las diferencias.</dd>
+      <dt>Estandarizar</dt><dd>Restar la media y dividir entre la desviación, para que todos los números pesen parecido.</dd>
+      <dt>Vecino más cercano</dt><dd>El punto que está a menor distancia de uno dado.</dd>
+      <dt>Maldición de la dimensión</dt><dd>Con muchos números, todas las distancias se vuelven parecidas.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: las cuentas detrás de todo</summary>
+    <p style="padding-top:10px">No hacen falta para entender la idea:</p>
+    <div class="formula">camión A = (a1, a2)      camión B = (b1, b2)
+suma      A + B = (a1 + b1, a2 + b2)
+por k     k · A = (k·a1, k·a2)
+
+longitud en línea recta:  √(a1² + a2²)        (3, 4) → √25 = 5
+distancia en línea recta: √((a1−b1)² + (a2−b2)²)
+distancia por cuadras:    |a1−b1| + |a2−b2|
+distancia por el máximo:  el mayor de |a1−b1| y |a2−b2|
+
+estandarizar:  z = (número − media) / desviación
+   km:      media 368,3   desviación 200,1
+   paradas: media 7,7     desviación 4,25
+
+con n números, lo mismo con n términos:
+   √((a1−b1)² + (a2−b2)² + … + (an−bn)²)</div>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2>Todo en un minuto</h2>
+    <p>Un repaso animado: el camión como flecha, sumar flechas, Pitágoras, las tres formas de medir, por qué hay que escalar y qué pasa con muchas dimensiones. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xACpAAEAAgMBAQEAAAAAAAAAAAAABgcFBAgDAQIBAQEBAQAAAAAAAAAAAAAAAAABAgMQAQACAQMCBAIEBwgNCAkBCQABAgMEBRESBgcxEyFRQWEUInGBQiMVMlI2dJFicjW0F7Nz1JJ1soKUoaJVUzM0JGPBFpOxQ1TTCMI3xIPwhKPDteEm0tGkJWTxEQEBAQACAwEBAQEAAAAAAAAAEQFBMUIhAhIiYTL/wAARCAQ4B4ADASIAAhEAAxEA/9oADAMBAAIRAxEAPwCkgHVgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/2Q==" aria-label="Animación: vectores y distancias">
+      <source src="vectores-y-distancias-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+/* horas de trabajo al día, paradas al día, km al día (medias de un mes) */
+const TR=[[7.5,13.5,180],[8,13,250],[6,13.5,160],[7,10.5,300],[8,6,370],[10,7,470],[8,8.5,330],[5.5,5,210],[10,2.5,660],[12,1,750],[9,2.5,610],[4,9.5,130]];
+const TIPO=["reparto urbano","reparto urbano","reparto urbano","mixto","regional","regional","regional","lanzadera entre almacenes","larga distancia","larga distancia","larga distancia","media jornada"];
+const f1=(v,d)=>{const s=Math.abs(v).toFixed(d??1).split(".");const a=s[0].replace(/\B(?=(\d{3})+(?!\d))/g," ");const neg=v<0&&Math.abs(v)>=0.5*10**(-(d??1));return (neg?"−":"")+a+(s[1]?","+s[1]:"");};
+const fx=v=>f1(v,Math.abs(v-Math.round(v))<1e-9?0:1);           /* 6 / 6,5 */
+const fd=v=>f1(v,Math.abs(v*100-Math.round(v*100))<1e-6&&Math.abs(v-Math.round(v))<1e-9?0:2);
+const seg=(ids,cb)=>{const b=ids.map(i=>document.getElementById(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});};
+const dist=(a,b,t)=>{const dx=Math.abs(a[0]-b[0]),dy=Math.abs(a[1]-b[1]);return t===0?Math.hypot(dx,dy):t===1?dx+dy:Math.max(dx,dy);};
+function nearest(P,r,t,skip){let bi=-1,bd=Infinity;P.forEach((q,i)=>{if(i===skip)return;const d=dist(r,q,t);if(d<bd-1e-9){bd=d;bi=i;}});return [bi,bd];}
+function arrow(g,x1,y1,x2,y2,col,w,dash){const dx=x2-x1,dy=y2-y1,L=Math.hypot(dx,dy);if(L<2)return;const ux=dx/L,uy=dy/L,h=Math.min(18,L*0.5),hw=h*0.48,bx=x2-ux*h,by=y2-uy*h;
+  const a={x1,y1,x2:bx+ux*2,y2:by+uy*2,stroke:col,"stroke-width":w,"stroke-linecap":"round"};if(dash)a["stroke-dasharray"]=dash;el("line",a,g);
+  el("path",{d:`M${x2.toFixed(1)} ${y2.toFixed(1)}L${(bx-uy*hw).toFixed(1)} ${(by+ux*hw).toFixed(1)}L${(bx+uy*hw).toFixed(1)} ${(by-ux*hw).toFixed(1)}Z`,fill:col},g);}
+function vgrid(pl,xs){for(const x of xs)el("line",{x1:pl.sx(x),x2:pl.sx(x),y1:pl.sy(pl.o.y0),y2:pl.sy(pl.o.y1),class:"g-line"},pl.gGrid);}
+function dragger(pl,h,onMove){h.addEventListener("pointerdown",e=>{e.preventDefault();h.setPointerCapture(e.pointerId);
+  const mv=ev=>{const p=pl.toSvg(ev);if(p)onMove(pl.ix(p.x),pl.iy(p.y));},up=()=>{h.removeEventListener("pointermove",mv);h.removeEventListener("pointerup",up);h.removeEventListener("pointercancel",up);};
+  h.addEventListener("pointermove",mv);h.addEventListener("pointerup",up);h.addEventListener("pointercancel",up);});}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lab=(g,x,y,s,a)=>txt(g,x,y,s,Object.assign({class:"halo","font-size":13},a||{}));
+
+/* ---------- héroe: el camión más parecido ---------- */
+(function(){const P=TR.map(r=>[r[1],r[0]]);/* x = paradas, y = horas */
+  const svg=document.getElementById("hero"),pad={l:50,r:16,t:16,b:46},u=(900-pad.l-pad.r)/15,H=Math.round(13*u+pad.t+pad.b);
+  const pl=new Plot(svg,{W:900,H,pad,x0:0,x1:15,y0:0,y1:13,xt:[0,2,4,6,8,10,12,14],yt:[0,2,4,6,8,10,12],fx:v=>v,fy:v=>v,xl:"paradas al día →",yl:"horas de trabajo al día ↑"});
+  vgrid(pl,[0,2,4,6,8,10,12,14]);
+  const gp=el("g",null,pl.top),hits=P.map((p,i)=>{const c=el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:20,class:"hit pick"},gp);c.addEventListener("click",()=>{ref=i;rp=P[i].slice();draw();});return c;});
+  const hd=el("circle",{r:22,class:"hit drag"},pl.top);
+  let ref=1,rp=P[1].slice(),t=0;
+  const sel=document.getElementById("h-ref");sel.innerHTML=P.map((_,i)=>`<option value="${i}">${i+1} · ${TIPO[i]}</option>`).join("")+`<option value="-1">imaginario (arrastrado)</option>`;
+  sel.onchange=()=>{const v=+sel.value;if(v>=0){ref=v;rp=P[v].slice();}draw();};
+  dragger(pl,hd,(x,y)=>{ref=-1;rp=[Math.round(clamp(x,0,15)*2)/2,Math.round(clamp(y,0,13)*2)/2];draw();});
+  function draw(){pl.g.textContent="";const g=pl.g,[nb,d]=nearest(P,rp,t,ref),[nb2,d2]=nearest(P,rp,1-t,ref);
+    sel.value=String(ref);
+    /* flecha y componentes */
+    el("line",{x1:pl.sx(0),y1:pl.sy(0),x2:pl.sx(rp[0]),y2:pl.sy(0),stroke:"var(--sample)","stroke-width":3,"stroke-dasharray":"7 5"},g);
+    el("line",{x1:pl.sx(rp[0]),y1:pl.sy(0),x2:pl.sx(rp[0]),y2:pl.sy(rp[1]),stroke:"var(--sample)","stroke-width":3,"stroke-dasharray":"7 5"},g);
+    arrow(g,pl.sx(0),pl.sy(0),pl.sx(rp[0]),pl.sy(rp[1]),"var(--mean)",3.5);
+    lab(g,pl.sx(rp[0]/2),pl.sy(0)-8,fx(rp[0])+" paradas",{"text-anchor":"middle",style:"fill:var(--sample)"});
+    lab(g,pl.sx(rp[0])+8,pl.sy(rp[1]/2),fx(rp[1])+" h",{style:"fill:var(--sample)"});
+    /* camino al más parecido */
+    const q=P[nb];
+    if(t===0)el("line",{x1:pl.sx(rp[0]),y1:pl.sy(rp[1]),x2:pl.sx(q[0]),y2:pl.sy(q[1]),stroke:"var(--good)","stroke-width":4,"stroke-linecap":"round"},g);
+    else el("path",{d:`M${pl.sx(rp[0])} ${pl.sy(rp[1])}H${pl.sx(q[0])}V${pl.sy(q[1])}`,fill:"none",stroke:"var(--good)","stroke-width":4,"stroke-linejoin":"round","stroke-linecap":"round"},g);
+    /* camiones */
+    P.forEach((p,i)=>{if(i===ref)return;const isN=i===nb;el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:isN?11:8,fill:isN?"var(--good)":"var(--point)",stroke:"var(--point-ring)","stroke-width":2.5},g);
+      lab(g,pl.sx(p[0])+12,pl.sy(p[1])-9,String(i+1),{"font-size":14,class:"halo t-ink","font-weight":isN?700:400});});
+    el("circle",{cx:pl.sx(rp[0]),cy:pl.sy(rp[1]),r:12,fill:"var(--mean)",stroke:"var(--point-ring)","stroke-width":3},g);
+    lab(g,pl.sx(rp[0])-14,pl.sy(rp[1])-12,ref>=0?String(ref+1):"?",{"font-size":15,"text-anchor":"end",class:"halo t-ink","font-weight":700});
+    hd.setAttribute("cx",pl.sx(rp[0]));hd.setAttribute("cy",pl.sy(rp[1]));
+    hits.forEach((c,i)=>c.style.display=i===ref?"none":"");
+    const kind=t?"por cuadras":"en línea recta",other=t?"en línea recta":"por cuadras";
+    document.getElementById("h-big").innerHTML=`<div><b class="sm">${fx(rp[0])} paradas · ${fx(rp[1])} h</b><span>${ref>=0?`camión ${ref+1} (${TIPO[ref]}), el de referencia`:"camión imaginario de referencia"}</span></div><div><b>${fd(d)}</b><span>distancia ${kind} al más parecido</span></div><div><b class="sm">camión ${nb+1}</b><span>el más parecido (${TIPO[nb]})</span></div>`;
+    const dp=q[0]-rp[0],dh=q[1]-rp[1];
+    const dif=`${dp===0?"las mismas paradas":(dp>0?fx(dp)+" paradas más":fx(-dp)+" paradas menos")} y ${dh===0?"las mismas horas":(dh>0?fx(dh)+" h más":fx(-dh)+" h menos")}`;
+    let m=(ref>=0?`El camión ${ref+1} (${TIPO[ref]}) hace ${fx(rp[0])} paradas y trabaja ${fx(rp[1])} horas al día: su flecha avanza ${fx(rp[0])} hacia la derecha y sube ${fx(rp[1])}.`:`Tu camión imaginario hace ${fx(rp[0])} paradas y trabaja ${fx(rp[1])} horas al día.`)+
+      ` El más parecido es el <b>camión ${nb+1}</b> (${TIPO[nb]}), con ${dif}: distancia ${kind} <b>${fd(d)}</b>.`;
+    if(t===0)m+=` Sale de Pitágoras: √(${fx(Math.abs(dp))}² + ${fx(Math.abs(dh))}²) = ${fd(d)}.`;else m+=` Es la suma de los dos tramos: ${fx(Math.abs(dp))} + ${fx(Math.abs(dh))} = ${fd(d)}.`;
+    if(nb2!==nb)m+=` Ojo: midiendo ${other}, el más parecido sería el camión ${nb2+1} (a ${fd(d2)}). La forma de medir cambia la respuesta.`;
+    if(ref<0)m+=d>(t?3.8:3.0)?` Está <b>lejos de todos</b>: en esta flota, un camión así sería raro y merecería una mirada.`:` Tiene compañía cerca: sería un camión normal en esta flota.`;
+    document.getElementById("h-msg").innerHTML=m;}
+  seg(["h-l2","h-l1"],i=>{t=i;draw();});draw();})();
+
+/* ---------- idea 1: sumar y multiplicar flechas ---------- */
+(function(){const svg=document.getElementById("vec"),ids=["v-a1","v-a2","v-b1","v-b2","v-k"],I=ids.map(i=>document.getElementById(i));let mode=0;
+  function draw(){svg.textContent="";const R=mode?24:16,tk=mode?[0,4,8,12,16,20,24]:[0,2,4,6,8,10,12,14,16];
+    const pl=new Plot(svg,{W:900,H:440,pad:{l:44,r:16,t:16,b:44},x0:0,x1:R,y0:0,y1:R,xt:tk,yt:tk,xl:"paradas →",yl:"horas ↑"});vgrid(pl,tk);
+    const [a1,a2,b1,b2,k]=I.map(i=>+i.value),g=pl.g;
+    ids.forEach((id,j)=>document.getElementById(id+"-o").textContent=fx(+I[j].value));
+    document.querySelectorAll(".v-s").forEach(e=>e.hidden=mode!==0);document.querySelectorAll(".v-m").forEach(e=>e.hidden=mode!==1);
+    const S=(x,y)=>[pl.sx(x),pl.sy(y)];
+    if(mode===0){const s1=a1+b1,s2=a2+b2;
+      el("line",{x1:pl.sx(b1),y1:pl.sy(b2),x2:pl.sx(s1),y2:pl.sy(s2),stroke:"var(--point)","stroke-width":1.6,"stroke-dasharray":"5 5",opacity:.7},g);
+      el("line",{x1:pl.sx(0),y1:pl.sy(0),x2:pl.sx(b1),y2:pl.sy(b2),stroke:"var(--sample)","stroke-width":1.6,"stroke-dasharray":"5 5",opacity:.7},g);
+      arrow(g,...S(0,0),...S(s1,s2),"var(--mean)",5);
+      arrow(g,...S(0,0),...S(a1,a2),"var(--point)",3.5);
+      arrow(g,...S(a1,a2),...S(s1,s2),"var(--sample)",3.5);
+      lab(g,pl.sx(a1)+10,pl.sy(a2)+18,`lunes (${fx(a1)}, ${fx(a2)})`,{style:"fill:var(--point)"});
+      lab(g,pl.sx(s1)+10,pl.sy(s2)-6,`total (${fx(s1)}, ${fx(s2)})`,{style:"fill:var(--mean)","font-weight":700});
+      lab(g,pl.sx((a1+s1)/2)+10,pl.sy((a2+s2)/2)+4,`martes (${fx(b1)}, ${fx(b2)})`,{style:"fill:var(--sample)"});
+      document.getElementById("v-msg").innerHTML=`Lunes (${fx(a1)} paradas, ${fx(a2)} h) + martes (${fx(b1)} paradas, ${fx(b2)} h) = <b>(${fx(s1)}, ${fx(s2)})</b>: ${fx(s1)} paradas y ${fx(s2)} horas en los dos días. En el dibujo, la flecha del martes empieza donde acaba la del lunes, y la azul va directa del cero al final. Si sumas en el otro orden (martes primero, líneas discontinuas) llegas al mismo sitio.`;}
+    else{const c1=k*a1,c2=k*a2;
+      arrow(g,...S(0,0),...S(c1,c2),"var(--mean)",7);
+      arrow(g,...S(0,0),...S(a1,a2),"var(--point)",3.5);
+      lab(g,pl.sx(a1)+10,pl.sy(a2)+18,`lunes (${fx(a1)}, ${fx(a2)})`,{style:"fill:var(--point)"});
+      if(k>0)lab(g,pl.sx(c1)+10,pl.sy(c2)-6,`${fx(k)} × lunes = (${fx(c1)}, ${fx(c2)})`,{style:"fill:var(--mean)","font-weight":700});
+      const L=Math.hypot(a1,a2);
+      document.getElementById("v-msg").innerHTML=k===0?`Multiplicar por 0 deja la flecha en el cero: ningún trabajo.`:`${fx(k)} × (${fx(a1)}, ${fx(a2)}) = <b>(${fx(c1)}, ${fx(c2)})</b>. Se multiplican los dos números por ${fx(k)}. La flecha apunta en la misma dirección${k===1?" y no cambia":` y mide ${fx(k)} veces lo mismo`}${k<1?": menos trabajo, flecha más corta":k>1?": más trabajo, flecha más larga":""}.${L>0?"":" (Con el lunes en (0, 0) no hay flecha que alargar.)"}`;}}
+  I.forEach(i=>i.addEventListener("input",draw));seg(["v-sum","v-mul"],i=>{mode=i;draw();});draw();})();
+
+/* ---------- idea 2: Pitágoras ---------- */
+(function(){const svg=document.getElementById("len"),pad={l:36,r:16,t:16,b:36},u=(900-pad.l-pad.r)/9,H=Math.round(6*u+pad.t+pad.b);
+  const pl=new Plot(svg,{W:900,H,pad,x0:-0.5,x1:8.5,y0:-0.5,y1:5.5,xt:[0,1,2,3,4,5,6,7,8],yt:[0,1,2,3,4,5],xl:"cuadras al este →",yl:"cuadras al norte ↑"});
+  vgrid(pl,[0,1,2,3,4,5,6,7,8]);
+  const hd=el("circle",{r:24,class:"hit drag"},pl.top);let p=[3,4];
+  dragger(pl,hd,(x,y)=>{const q=[clamp(Math.round(x),0,8),clamp(Math.round(y),0,5)];if(q[0]!==p[0]||q[1]!==p[1]){p=q;draw();}});
+  function draw(){const g=pl.g;g.textContent="";const [a,b]=p,L=Math.hypot(a,b);
+    el("rect",{x:pl.sx(0)-13,y:pl.sy(0)-13,width:26,height:26,rx:4,fill:"var(--muted)"},g);
+    if(a>0&&b>0){const s=16;el("path",{d:`M${pl.sx(a)-s} ${pl.sy(0)}V${pl.sy(0)-s}H${pl.sx(a)}`,fill:"none",stroke:"var(--ink)","stroke-width":1.5},g);}
+    if(a>0)el("line",{x1:pl.sx(0),y1:pl.sy(0),x2:pl.sx(a),y2:pl.sy(0),stroke:"var(--point)","stroke-width":5,"stroke-linecap":"round"},g);
+    if(b>0)el("line",{x1:pl.sx(a),y1:pl.sy(0),x2:pl.sx(a),y2:pl.sy(b),stroke:"var(--sample)","stroke-width":5,"stroke-linecap":"round"},g);
+    arrow(g,pl.sx(0),pl.sy(0),pl.sx(a),pl.sy(b),"var(--mean)",4.5);
+    if(a>0)lab(g,pl.sx(a/2),pl.sy(0)+24,String(a),{"text-anchor":"middle","font-size":18,"font-weight":700,style:"fill:var(--point)"});
+    if(b>0)lab(g,pl.sx(a)+12,pl.sy(b/2)+6,String(b),{"font-size":18,"font-weight":700,style:"fill:var(--sample)"});
+    if(L>0)lab(g,pl.sx(a/2)-14,pl.sy(b/2)-10,fd(L),{"text-anchor":"end","font-size":20,"font-weight":800,style:"fill:var(--mean)"});
+    el("circle",{cx:pl.sx(a),cy:pl.sy(b),r:10,fill:"var(--mean)",stroke:"var(--point-ring)","stroke-width":3},g);
+    hd.setAttribute("cx",pl.sx(a));hd.setAttribute("cy",pl.sy(b));
+    const exact=Math.abs(L-Math.round(L))<1e-9;
+    document.getElementById("l-msg").innerHTML=L===0?"El camión está en el almacén: su vector es (0, 0) y su longitud, 0.":
+      (a===0||b===0)?`El camión solo se ha movido en una dirección: la longitud es simplemente <b>${fd(L)}</b> cuadras, no hace falta Pitágoras.`:
+      `Vector (${a}, ${b}): √(${a}² + ${b}²) = √(${a*a} + ${b*b}) = √${a*a+b*b} = <b>${fd(L)}</b> cuadras en línea recta${exact?" (¡sale exacto, como el famoso 3-4-5!)":""}. Fíjate en que siempre es menos que ${a} + ${b} = ${a+b}, lo que recorre el camión por las calles: la línea recta es el camino más corto.`;}
+  draw();})();
+
+/* ---------- idea 3: tres distancias ---------- */
+(function(){const svg=document.getElementById("dist"),pad={l:36,r:16,t:16,b:36},u=(900-pad.l-pad.r)/11,H=Math.round(7*u+pad.t+pad.b);
+  const pl=new Plot(svg,{W:900,H,pad,x0:-0.5,x1:10.5,y0:-0.5,y1:6.5,xt:[0,2,4,6,8,10],yt:[0,2,4,6],xl:"cuadras al este →",yl:"cuadras al norte ↑"});
+  vgrid(pl,[0,1,2,3,4,5,6,7,8,9,10]);[1,3,5].forEach(y=>el("line",{x1:pl.sx(-0.5),x2:pl.sx(10.5),y1:pl.sy(y),y2:pl.sy(y),class:"g-line"},pl.gGrid));
+  let A=[4,3],B=[7,5],t=0;const hA=el("circle",{r:22,class:"hit drag"},pl.top),hB=el("circle",{r:22,class:"hit drag"},pl.top);
+  const mv=w=>(x,y)=>{const q=[clamp(Math.round(x),0,10),clamp(Math.round(y),0,6)];const o=w?B:A;if(q[0]!==o[0]||q[1]!==o[1]){if(w)B=q;else A=q;draw();}};
+  dragger(pl,hA,mv(0));dragger(pl,hB,mv(1));
+  const NAMES=["En línea recta","Por cuadras","Por el lado más largo"];
+  function shape(tp,r){const cx=pl.sx(A[0]),cy=pl.sy(A[1]),R=r*u;if(tp===0)return ["circle",{cx,cy,r:R}];if(tp===1)return ["path",{d:`M${cx-R} ${cy}L${cx} ${cy-R}L${cx+R} ${cy}L${cx} ${cy+R}Z`}];return ["rect",{x:cx-R,y:cy-R,width:2*R,height:2*R}];}
+  function draw(){const g=pl.g;g.textContent="";const D=[0,1,2].map(k=>dist(A,B,k)),r=D[t],dx=B[0]-A[0],dy=B[1]-A[1];
+    if(r>0){[0,1,2].forEach(k=>{if(k===t)return;const [tag,a]=shape(k,r);el(tag,Object.assign(a,{fill:"none",stroke:"var(--muted)","stroke-width":1.5,"stroke-dasharray":"6 5"}),g);});
+      const [tag,a]=shape(t,r);el(tag,Object.assign(a,{fill:"var(--band)",stroke:"var(--mean)","stroke-width":2.5}),g);}
+    const sA=[pl.sx(A[0]),pl.sy(A[1])],sB=[pl.sx(B[0]),pl.sy(B[1])],C=[pl.sx(B[0]),pl.sy(A[1])];
+    if(t===0)el("line",{x1:sA[0],y1:sA[1],x2:sB[0],y2:sB[1],stroke:"var(--good)","stroke-width":5,"stroke-linecap":"round"},g);
+    else if(t===1)el("path",{d:`M${sA[0]} ${sA[1]}H${C[0]}V${sB[1]}`,fill:"none",stroke:"var(--good)","stroke-width":5,"stroke-linejoin":"round","stroke-linecap":"round"},g);
+    else{el("path",{d:`M${sA[0]} ${sA[1]}H${C[0]}V${sB[1]}`,fill:"none",stroke:"var(--muted)","stroke-width":2,"stroke-dasharray":"4 4"},g);
+      if(Math.abs(dx)>=Math.abs(dy))el("line",{x1:sA[0],y1:sA[1],x2:C[0],y2:C[1],stroke:"var(--good)","stroke-width":6,"stroke-linecap":"round"},g);
+      else el("line",{x1:C[0],y1:C[1],x2:sB[0],y2:sB[1],stroke:"var(--good)","stroke-width":6,"stroke-linecap":"round"},g);}
+    [[A,"A","var(--point)"],[B,"B","var(--sample)"]].forEach(([p,n,c])=>{el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:12,fill:c,stroke:"var(--point-ring)","stroke-width":3},g);lab(g,pl.sx(p[0])-14,pl.sy(p[1])-12,n,{"text-anchor":"end","font-size":17,"font-weight":800,class:"halo t-ink"});});
+    hA.setAttribute("cx",sA[0]);hA.setAttribute("cy",sA[1]);hB.setAttribute("cx",sB[0]);hB.setAttribute("cy",sB[1]);
+    document.getElementById("d-k").innerHTML=NAMES.map((n,k)=>`<span>${n}: <b>${fd(D[k])}</b></span>`).join("");
+    const ax=Math.abs(dx),ay=Math.abs(dy);
+    const m=r===0?"A y B están en el mismo cruce: distancia 0, midas como midas.":
+      t===0?`B está ${ax} cuadras ${dx>=0?"al este":"al oeste"} y ${ay} ${dy>=0?"al norte":"al sur"} de A. En línea recta: √(${ax}² + ${ay}²) = <b>${fd(D[0])}</b>. El círculo azul pasa por B: todos sus puntos están a ${fd(D[0])} de A.`:
+      t===1?`Por cuadras: ${ax} + ${ay} = <b>${fd(D[1])}</b>. Hay muchos caminos por las calles con esa misma longitud (en escalera, en otro orden…), y todos los cruces a ${fd(D[1])} cuadras de A forman un rombo. Por cuadras nunca sale menos que en línea recta (${fd(D[0])}).`:
+      `Por el lado más largo: el mayor de ${ax} y ${ay} es <b>${fd(D[2])}</b>. El otro tramo no cuenta. Los puntos a esa distancia forman un cuadrado. Es la distancia que importa si la pregunta es «¿cuánto difiere en lo que más difiere?».`;
+    document.getElementById("d-msg").innerHTML=m+(r>0&&ax>0&&ay>0?` Siempre se cumple: lado más largo (${fd(D[2])}) ≤ línea recta (${fd(D[0])}) ≤ por cuadras (${fd(D[1])}).`:"");}
+  seg(["d-0","d-1","d-2"],i=>{t=i;draw();});draw();})();
+
+/* ---------- idea 4: las unidades mandan ---------- */
+(function(){const K=TR.map(r=>[r[2],r[1]]),n=K.length,mu=[0,1].map(j=>K.reduce((s,p)=>s+p[j],0)/n),sd=[0,1].map(j=>Math.sqrt(K.reduce((s,p)=>s+(p[j]-mu[j])**2,0)/n));
+  const Z=K.map(p=>[(p[0]-mu[0])/sd[0],(p[1]-mu[1])/sd[1]]);
+  const svg=document.getElementById("units"),pl=new Plot(svg,{W:900,H:420,pad:{l:44,r:16,t:16,b:44},x0:0,x1:800,y0:0,y1:16,xt:[0,100,200,300,400,500,600,700,800],yt:[0,4,8,12,16],xl:"km al día →",yl:"paradas al día ↑"});
+  vgrid(pl,[0,100,200,300,400,500,600,700,800]);
+  let ref=1,sc=0;const sel=document.getElementById("u-ref");sel.innerHTML=K.map((_,i)=>`<option value="${i}">${i+1} · ${TIPO[i]}</option>`).join("");sel.value="1";sel.onchange=()=>{ref=+sel.value;draw();};
+  const nnOf=(X,i)=>nearest(X,X[i],0,i);
+  const changed=K.map((_,i)=>nnOf(K,i)[0]!==nnOf(Z,i)[0]);
+  function draw(){const g=pl.g;g.textContent="";const X=sc?Z:K,[nb,d]=nnOf(X,ref),r=K[ref],q=K[nb];
+    const rx=(sc?d*sd[0]:d)*(pl.sx(1)-pl.sx(0)),ry=(sc?d*sd[1]:d)*(pl.sy(0)-pl.sy(1));
+    el("ellipse",{cx:pl.sx(r[0]),cy:pl.sy(r[1]),rx,ry,fill:"var(--band)",stroke:"var(--mean)","stroke-width":2,"stroke-dasharray":"6 4"},g);
+    el("line",{x1:pl.sx(r[0]),y1:pl.sy(r[1]),x2:pl.sx(q[0]),y2:pl.sy(q[1]),stroke:"var(--good)","stroke-width":4,"stroke-linecap":"round"},g);
+    K.forEach((p,i)=>{if(i===ref)return;const isN=i===nb;el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:isN?11:8,fill:isN?"var(--good)":"var(--point)",stroke:"var(--point-ring)","stroke-width":2.5},g);
+      lab(g,pl.sx(p[0])+11,pl.sy(p[1])-9,String(i+1),{"font-size":14,class:"halo t-ink","font-weight":isN?700:400});});
+    el("circle",{cx:pl.sx(r[0]),cy:pl.sy(r[1]),r:12,fill:"var(--mean)",stroke:"var(--point-ring)","stroke-width":3},g);
+    lab(g,pl.sx(r[0])-14,pl.sy(r[1])-12,String(ref+1),{"font-size":15,"text-anchor":"end",class:"halo t-ink","font-weight":700});
+    const dk=q[0]-r[0],dp=q[1]-r[1],ck=sc?(dk/sd[0])**2:dk*dk,cp=sc?(dp/sd[1])**2:dp*dp,share=ck/(ck+cp);
+    const nb0=nnOf(K,ref)[0],nb1=nnOf(Z,ref)[0];
+    document.getElementById("u-k").innerHTML=`<span>referencia: <b>camión ${ref+1}</b>, ${fx(r[0])} km y ${fx(r[1])} paradas</span><span>más parecido: <b>camión ${nb+1}</b> (${TIPO[nb]})</span><span>distancia: <b>${fd(d)}</b></span><span>lo que ponen los km: <b>${Math.round(share*100)} %</b></span>`;
+    const lista=changed.map((c,i)=>c?i+1:0).filter(Boolean);
+    let m;
+    if(!sc)m=`Sin escalar, la distancia del camión ${ref+1} al ${nb+1} es √(${fx(Math.abs(dk))}² + ${fx(Math.abs(dp))}²) = ${fd(d)}: los <b>km ponen el ${Math.round(share*100)} %</b> de la cuenta (${fx(ck)} frente a ${fx(cp)}). El más parecido es el <b>camión ${nb+1}</b> (${TIPO[nb]}), con ${fx(q[0])} km y ${fx(q[1])} paradas.`+(nb0!==nb1?` ¿Te parece el más parecido? Pulsa «Escalado».`:` Aquí coincide con el escalado, pero no siempre pasa.`);
+    else m=`Escalado, cada diferencia se divide entre su desviación: ${fx(Math.abs(dk))} km / 200,1 = ${f1(Math.abs(dk)/sd[0],2)} y ${fx(Math.abs(dp))} paradas / 4,25 = ${f1(Math.abs(dp)/sd[1],2)}; distancia √(${f1(Math.abs(dk)/sd[0],2)}² + ${f1(Math.abs(dp)/sd[1],2)}²) = ${fd(d)}. El más parecido es el <b>camión ${nb+1}</b> (${TIPO[nb]})`+(nb0!==nb1?`, y no el ${nb0+1} (${TIPO[nb0]}) que salía sin escalar.`:`, el mismo que sin escalar.`)+` Al escalar cambia el más parecido de ${lista.length} de los 12 camiones: ${lista.slice(0,-1).join(", ")} y ${lista[lista.length-1]}.`;
+    document.getElementById("u-msg").innerHTML=m;}
+  seg(["u-0","u-1"],i=>{sc=i;draw();});draw();})();
+
+/* ---------- idea 5: la maldición de la dimensión ---------- */
+(function(){const DS=[2,3,5,10,20,50,100,200,500,1000],cache={},n=120,svg=document.getElementById("dim"),it=document.getElementById("m-d");
+  function stats(d){if(cache[d])return cache[d];const r=mulberry32(1000+d),X=new Float64Array(n*d);for(let i=0;i<X.length;i++)X[i]=r();
+    const D=[],M=new Float64Array(n*n);for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){let s=0;for(let k=0;k<d;k++){const v=X[i*d+k]-X[j*d+k];s+=v*v;}const v=Math.sqrt(s);D.push(v);M[i*n+j]=M[j*n+i]=v;}
+    const mean=D.reduce((a,b)=>a+b,0)/D.length,sdv=Math.sqrt(D.reduce((a,b)=>a+(b-mean)**2,0)/D.length);
+    let ratio=0;const q=30;for(let i=0;i<q;i++){let mn=Infinity,mx=0;for(let j=0;j<n;j++){if(j===i)continue;const v=M[i*n+j];if(v<mn)mn=v;if(v>mx)mx=v;}ratio+=mn/mx;}
+    let mn0=Infinity,mx0=0;for(let j=1;j<n;j++){mn0=Math.min(mn0,M[j]);mx0=Math.max(mx0,M[j]);}
+    return cache[d]={D,mean,sdv,ratio:ratio/q,mn0,mx0};}
+  function draw(){svg.textContent="";const d=DS[+it.value],s=stats(d),nb=50,h=new Array(nb).fill(0);
+    s.D.forEach(v=>{const b=Math.floor(v/s.mean/2*nb);if(b>=0&&b<nb)h[b]++;});const mx=Math.max(...h)/s.D.length;
+    const pl=new Plot(svg,{W:900,H:320,pad:{l:52,r:16,t:16,b:44},x0:0,x1:2,y0:0,y1:mx*1.08,xt:[0,0.25,0.5,0.75,1,1.25,1.5,1.75,2],fx:v=>f1(v,2),yt:[],xl:"distancia ÷ distancia media"});
+    h.forEach((c,b)=>{const f=c/s.D.length;if(f>0)el("rect",{x:pl.sx(b*2/nb)+1,y:pl.sy(f),width:pl.sx(2/nb)-pl.sx(0)-2,height:pl.sy(0)-pl.sy(f),fill:"var(--mean)","fill-opacity":.75,rx:2},pl.g);});
+    el("line",{x1:pl.sx(0),x2:pl.sx(2),y1:pl.sy(0),y2:pl.sy(0),class:"g-axis"},pl.g);
+    [[s.mn0,"var(--good)","más cercano"],[s.mx0,"var(--warn)","más lejano"]].forEach(([v,c,t],k)=>{const x=pl.sx(Math.min(v/s.mean,1.99));el("line",{x1:x,x2:x,y1:pl.sy(0),y2:pl.sy(mx*1.08),stroke:c,"stroke-width":3},pl.g);
+      const right=k?x<760:x<200;lab(pl.top,x+(right?8:-8),30,t,{"text-anchor":right?"start":"end",style:`fill:${c}`,"font-weight":700});});
+    document.getElementById("m-d-o").textContent=d.toLocaleString("es-ES");
+    document.getElementById("m-big").innerHTML=`<div><b>${d.toLocaleString("es-ES")}</b><span>números por camión</span></div><div><b>${Math.round(s.ratio*100)} %</b><span>distancia al más cercano / al más lejano (media de 30 camiones)</span></div><div><b>±${f1(s.sdv/s.mean*100,1)} %</b><span>lo que suelen alejarse las distancias de la media</span></div>`;
+    document.getElementById("m-msg").innerHTML=d<=3?`Con ${d} números hay de todo: parejas casi pegadas y parejas muy lejos. Para un camión, el más cercano está, de media, a un <b>${Math.round(s.ratio*100)} %</b> de la distancia del más lejano: hay una diferencia clara. Sube el número de dimensiones.`:
+      d<=50?`Con ${d} números, las barras ya se agrupan alrededor del 1: el más cercano está a un ${Math.round(s.ratio*100)} % de la distancia del más lejano. Todavía se distinguen, pero cada vez menos.`:
+      `Con ${d.toLocaleString("es-ES")} números, casi todas las distancias están a ±${f1(s.sdv/s.mean*100,1)} % de la media, y el más cercano está a un <b>${Math.round(s.ratio*100)} %</b> de la distancia del más lejano. «El más parecido» apenas se distingue del resto. En la práctica, los datos reales no son puntos al azar (los números están relacionados entre sí) y la maldición es menos fuerte; aun así, conviene quitar números que no aportan y comprobar siempre que el más cercano está claramente más cerca.`;}
+  it.addEventListener("input",draw);draw();})();
+})();
+</script>
+</body>
+</html>

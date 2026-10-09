@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aprender viendo · Explicaciones visuales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{--bg:#F2F5FA;--surface:#FFFFFF;--ink:#16202E;--muted:#5A6678;--line:#D6DEE9;--mean:#1D5FD1;--point:#DD6A26;--sample:#7563C9;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;--f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;--f-mono:"JetBrains Mono",ui-monospace,monospace}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0E131B;--surface:#161D28;--ink:#E4EAF3;--muted:#9BA7B9;--line:#2B3545;--mean:#6EA6FF;--point:#FF9A55;--sample:#AE9FF3;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0E131B;--surface:#161D28;--ink:#E4EAF3;--muted:#9BA7B9;--line:#2B3545;--mean:#6EA6FF;--point:#FF9A55;--sample:#AE9FF3;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.55;padding:0 16px 64px}
+.wrap{max-width:980px;margin:0 auto}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-top:24px}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
+.lang{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--surface)}
+.lang button{font:inherit;font-family:var(--f-mono);font-size:.82rem;border:0;background:transparent;color:var(--ink);padding:7px 14px;cursor:pointer}
+.lang button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.lang button:focus-visible{outline:3px solid var(--mean);outline-offset:-3px}
+header{padding:36px 0 32px;display:grid;gap:14px}
+h1{font-family:var(--f-display);font-weight:800;font-size:clamp(2.4rem,7vw,4.2rem);line-height:1.02;letter-spacing:-.02em;margin:0}
+.lede{color:var(--muted);max-width:60ch;margin:0;font-size:1.1rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:18px}
+@media (max-width:720px){.grid{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px;display:grid;gap:12px;align-content:start}
+.card svg{width:100%;height:auto;display:block;border-radius:10px;background:var(--bg)}
+.card h2{font-family:var(--f-display);font-weight:700;font-size:1.6rem;line-height:1.1;margin:0}
+.card p{margin:0;color:var(--muted);font-size:.97rem}
+.meta{font-family:var(--f-mono);font-size:.8rem}
+.go{display:block;text-align:center;text-decoration:none;font-weight:700;border-radius:999px;padding:11px 16px;border:1px solid var(--mean);color:var(--mean);background:var(--bg);margin-top:4px}
+.go:hover{background:var(--mean);color:var(--surface)}
+.go:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+footer{margin-top:36px;color:var(--muted);font-size:.9rem}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="top">
+    <p class="eyebrow" data-i="eyebrow">Aprender viendo · machine learning sin cajas negras</p>
+    <div class="lang" role="group" aria-label="Idioma / Language">
+      <button type="button" data-lang="es" aria-pressed="true">ES</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN</button>
+    </div>
+  </div>
+  <header>
+    <h1 data-i="h1">Explicaciones visuales</h1>
+    <p class="lede" data-i="lede">Tres colecciones. Cada tema tiene una versión sencilla con gráficos interactivos y un vídeo corto, y una versión técnica con matemáticas y código verificado.</p>
+  </header>
+
+  <div class="grid">
+    <article class="card">
+      <svg viewBox="0 0 320 120" aria-hidden="true">
+        <path d="M10 80 C60 75 80 15 130 25 S220 85 310 10 L310 40 C220 115 180 55 130 55 S60 105 10 110 Z" fill="var(--mean)" fill-opacity=".12"/>
+        <path d="M10 95 C60 90 80 30 130 40 S220 100 310 25" fill="none" stroke="var(--mean)" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="60" cy="80" r="6" fill="var(--point)"/><circle cx="130" cy="40" r="6" fill="var(--point)"/><circle cx="220" cy="78" r="6" fill="var(--point)"/><circle cx="290" cy="32" r="6" fill="var(--point)"/>
+      </svg>
+      <h2 data-i="ml_t">Serie ML visual</h2>
+      <p data-i="ml_d">Catorce algoritmos de machine learning: regresión, árboles, boosting, vecinos, k-means, PCA, SVM, Bayes, procesos gaussianos, Markov y Kalman.</p>
+      <p class="meta" data-i="ml_m">14 temas · 28 páginas · 14 vídeos</p>
+      <a class="go" data-href="ml" href="serie-ml-visual-es.html" data-i="open">Abrir la colección →</a>
+    </article>
+
+    <article class="card">
+      <svg viewBox="0 0 320 120" aria-hidden="true">
+        <g fill="var(--line)"><rect x="20" y="20" width="26" height="16" rx="3"/><rect x="52" y="20" width="26" height="16" rx="3"/><rect x="84" y="20" width="26" height="16" rx="3"/><rect x="20" y="44" width="26" height="16" rx="3"/><rect x="84" y="44" width="26" height="16" rx="3"/><rect x="20" y="68" width="26" height="16" rx="3"/><rect x="52" y="68" width="26" height="16" rx="3"/><rect x="84" y="92" width="26" height="16" rx="3"/></g>
+        <rect x="52" y="44" width="26" height="16" rx="3" fill="var(--point)" transform="rotate(10 65 52)"/><rect x="84" y="68" width="26" height="16" rx="3" fill="var(--point)" transform="rotate(-8 97 76)"/>
+        <path d="M130 64H178" stroke="var(--muted)" stroke-width="3"/><path d="M178 64l-10-6v12z" fill="var(--muted)"/>
+        <g fill="var(--mean)" fill-opacity=".55"><rect x="196" y="20" width="26" height="16" rx="3"/><rect x="228" y="20" width="26" height="16" rx="3"/><rect x="260" y="20" width="26" height="16" rx="3"/><rect x="196" y="44" width="26" height="16" rx="3"/><rect x="228" y="44" width="26" height="16" rx="3"/><rect x="260" y="44" width="26" height="16" rx="3"/><rect x="196" y="68" width="26" height="16" rx="3"/><rect x="228" y="68" width="26" height="16" rx="3"/><rect x="260" y="68" width="26" height="16" rx="3"/></g>
+        <g fill="var(--sample)"><rect x="196" y="92" width="26" height="16" rx="3"/><rect x="228" y="92" width="26" height="16" rx="3"/><rect x="260" y="92" width="26" height="16" rx="3"/></g>
+      </svg>
+      <h2 data-i="dt_t">Preparar los datos</h2>
+      <p data-i="dt_d">Lo que va antes del modelo: separar el examen, explorar, limpiar, atípicos, huecos, clases raras, preparar variables y un proyecto completo.</p>
+      <p class="meta" data-i="dt_m">8 temas · 16 páginas · 8 vídeos</p>
+      <a class="go" data-href="dt" href="preparar-los-datos-es.html" data-i="open">Abrir la colección →</a>
+    </article>
+
+    <article class="card">
+      <svg viewBox="0 0 320 120" aria-hidden="true">
+        <g stroke="var(--line)" stroke-width="1.5"><path d="M20 10V110M70 10V110M120 10V110M170 10V110M220 10V110M270 10V110M20 110H300M20 60H300M20 10H300"/></g>
+        <path d="M20 110C90 110 110 20 160 20S230 110 300 110" fill="var(--sample)" fill-opacity=".12" stroke="var(--sample)" stroke-width="3"/>
+        <path d="M40 100L170 35" stroke="var(--mean)" stroke-width="4" stroke-linecap="round"/><circle cx="170" cy="35" r="6" fill="var(--mean)"/>
+        <path d="M40 100L250 70" stroke="var(--point)" stroke-width="4" stroke-linecap="round"/><circle cx="250" cy="70" r="6" fill="var(--point)"/>
+        <path d="M170 35L250 70" stroke="var(--good, #1C8A5A)" stroke-width="3" stroke-dasharray="6 4"/>
+      </svg>
+      <h2 data-i="mt_t">Las matemáticas debajo del ML</h2>
+      <p data-i="mt_d">Los cimientos: vectores, distancias, productos punto, matrices, estadística, probabilidad y el cálculo que hay detrás de cómo aprende un modelo.</p>
+      <p class="meta" data-i="mt_m">2 de 16 temas · 4 páginas · 2 vídeos</p>
+      <a class="go" data-href="mt" href="matematicas-del-ml-es.html" data-i="open">Abrir la colección →</a>
+    </article>
+  </div>
+
+  <footer><p data-i="foot">Los vídeos deben estar en esta misma carpeta que las páginas.</p></footer>
+</main>
+<script>
+(function(){
+"use strict";
+var T={
+ es:{title:"Aprender viendo · Explicaciones visuales",eyebrow:"Aprender viendo · machine learning sin cajas negras",h1:"Explicaciones visuales",
+  lede:"Tres colecciones. Cada tema tiene una versión sencilla con gráficos interactivos y un vídeo corto, y una versión técnica con matemáticas y código verificado.",
+  ml_t:"Serie ML visual",ml_d:"Catorce algoritmos de machine learning: regresión, árboles, boosting, vecinos, k-means, PCA, SVM, Bayes, procesos gaussianos, Markov y Kalman.",ml_m:"14 temas · 28 páginas · 14 vídeos",
+  dt_t:"Preparar los datos",dt_d:"Lo que va antes del modelo: separar el examen, explorar, limpiar, atípicos, huecos, clases raras, preparar variables y un proyecto completo.",dt_m:"8 temas · 16 páginas · 8 vídeos",
+  mt_t:"Las matemáticas debajo del ML",mt_d:"Los cimientos: vectores, distancias, productos punto, matrices, estadística, probabilidad y el cálculo que hay detrás de cómo aprende un modelo.",mt_m:"2 de 16 temas · 4 páginas · 2 vídeos",
+  open:"Abrir la colección →",foot:"Los vídeos deben estar en esta misma carpeta que las páginas.",
+  href:{ml:"serie-ml-visual-es.html",dt:"preparar-los-datos-es.html",mt:"matematicas-del-ml-es.html"}},
+ en:{title:"Learn by seeing · Visual explainers",eyebrow:"Learn by seeing · machine learning, no black boxes",h1:"Visual explainers",
+  lede:"Three collections. Each topic has a simple version with interactive charts and a short video, and a technical version with the math and verified code.",
+  ml_t:"Visual ML series",ml_d:"Fourteen machine learning algorithms: regression, trees, boosting, neighbors, k-means, PCA, SVM, Bayes, Gaussian processes, Markov and Kalman.",ml_m:"14 topics · 28 pages · 14 videos",
+  dt_t:"Preparing the data",dt_d:"What comes before the model: setting the exam aside, exploring, cleaning, outliers, gaps, rare classes, preparing features and an end-to-end project.",dt_m:"8 topics · 16 pages · 8 videos",
+  mt_t:"The math under ML",mt_d:"The foundations: vectors, distances, dot products, matrices, statistics, probability and the calculus behind how a model learns.",mt_m:"2 of 16 topics · 4 pages · 2 videos",
+  open:"Open the collection →",foot:"Videos must be in the same folder as the pages.",
+  href:{ml:"visual-ml-series-en.html",dt:"preparing-the-data-en.html",mt:"math-under-ml-en.html"}}
+};
+function set(l){var t=T[l];document.documentElement.lang=l;document.title=t.title;
+  document.querySelectorAll("[data-i]").forEach(function(e){e.textContent=t[e.getAttribute("data-i")];});
+  document.querySelectorAll("[data-href]").forEach(function(e){e.href=t.href[e.getAttribute("data-href")];});
+  document.querySelectorAll("[data-lang]").forEach(function(b){b.setAttribute("aria-pressed",String(b.getAttribute("data-lang")===l));});
+  try{localStorage.setItem("gauss-lang",l);}catch(e){}}
+document.querySelectorAll("[data-lang]").forEach(function(b){b.addEventListener("click",function(){set(b.getAttribute("data-lang"));});});
+var saved=null;try{saved=localStorage.getItem("gauss-lang");}catch(e){}
+set(saved||((navigator.language||"es").toLowerCase().indexOf("es")===0?"es":"en"));
+})();
+</script>
+</body>
+</html>

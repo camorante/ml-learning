@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Preparing the data</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: índice de la serie. Cabecera con el progreso y una ruta numerada de temas (el orden es la ruta de aprendizaje). Misma paleta que las páginas */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9; --soft:#E8EDF5;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --point:#DD6A26; --point-ring:#FFFFFF; --good:#1C8A5A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545; --soft:#1C2533;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --point:#FF9A55; --point-ring:#0E131B; --good:#4CC38A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545; --soft:#1C2533;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --point:#FF9A55; --point-ring:#0E131B; --good:#4CC38A;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.55;padding-inline:20px;padding-block:0 72px}
+.wrap{max-width:1060px;margin:0 auto}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;margin:0;text-wrap:balance}
+p{margin:0}
+.eyebrow{font-family:var(--f-mono);font-size:.76rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+header.top{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:28px;align-items:center;padding-block:56px 36px}
+header.top>*{min-width:0}
+h1{font-size:clamp(2.6rem,7vw,4.8rem);font-weight:800;letter-spacing:-.025em}
+.lede{font-size:1.18rem;color:var(--muted);max-width:44ch;margin-top:14px}
+.heroart{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:10px}
+.heroart svg{display:block;width:100%;height:auto}
+@media (max-width:760px){header.top{grid-template-columns:1fr;padding-top:40px}}
+
+.stats{display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:22px}
+.stat{display:grid}
+.stat b{font-family:var(--f-display);font-size:1.9rem;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.stat span{font-size:.85rem;color:var(--muted)}
+.progress{margin-top:18px;height:8px;border-radius:4px;background:var(--soft);overflow:hidden;max-width:420px}
+.progress i{display:block;height:100%;background:var(--mean);border-radius:4px}
+
+.bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding-block:8px 18px;border-top:1px solid var(--line);padding-top:22px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:inherit;font-size:.9rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 14px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.chip:hover{border-color:var(--mean)}
+.search{font:inherit;font-size:.95rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 16px;min-width:0;width:240px;max-width:100%}
+:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:grid;grid-template-rows:auto 1fr;transition:transform .15s,border-color .15s,box-shadow .15s}
+.card.ready:hover{transform:translateY(-2px);border-color:var(--band-edge);box-shadow:0 10px 30px -18px rgba(20,40,80,.45)}
+.card .art{background:var(--soft);border-bottom:1px solid var(--line);aspect-ratio:16/8;position:relative}
+.card .art svg{position:absolute;inset:0;width:100%;height:100%}
+.card .num{position:absolute;top:10px;left:12px;font-family:var(--f-mono);font-size:.78rem;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:2px 9px}
+.card .tag{position:absolute;top:10px;right:12px;font-family:var(--f-mono);font-size:.72rem;letter-spacing:.04em;border-radius:999px;padding:3px 9px}
+.tag.ok{background:var(--good);color:var(--surface)}
+.tag.soon{background:var(--surface);color:var(--muted);border:1px dashed var(--line)}
+.card .body{padding:16px 18px 18px;display:grid;gap:10px;align-content:start}
+.card h3{font-size:1.25rem;font-weight:700}
+.card .fam{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mean)}
+.card p.d{font-size:.95rem;color:var(--muted)}
+.links{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.links a{display:inline-flex;align-items:center;gap:7px;font-size:.9rem;text-decoration:none;border-radius:999px;padding:6px 13px;border:1px solid var(--line);color:var(--ink);background:var(--surface)}
+.links a.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+.links a:hover{border-color:var(--mean)}
+.links svg{width:15px;height:15px;flex:none}
+.meta{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.8rem;color:var(--muted);font-family:var(--f-mono)}
+.meta span{display:inline-flex;align-items:center;gap:5px}
+.card.soon .art svg{opacity:.45;filter:grayscale(.6)}
+.card.soon h3{color:var(--muted)}
+.empty{color:var(--muted);padding:30px 0}
+footer{margin-top:44px;padding-top:22px;border-top:1px solid var(--line);color:var(--muted);font-size:.9rem;display:grid;gap:6px}
+@media (prefers-reduced-motion: reduce){.card{transition:none}.card.ready:hover{transform:none}}
+</style>
+</head>
+<body>
+
+<main class="wrap">
+  <header class="top">
+    <div>
+      <p class="eyebrow">Collection · before the model · <a href="visual-ml-series-en.html" id="mlhub" target="_blank" rel="noopener" style="color:inherit">see the visual ML series</a> · <a href="preparar-los-datos-es.html" id="eshub" target="_blank" rel="noopener" style="color:inherit">en español</a></p>
+      <h1>Preparing the data</h1>
+      <p class="lede">What you have to do before training any model: set the test data aside, explore, clean logging errors, decide what to do with outliers and gaps, handle rare classes and build features without leakage. With fleet telemetry data and the same structure for every topic: a simple version with a video and a technical version with verified code.</p>
+      <div class="stats" id="stats"></div>
+      <div class="progress" aria-hidden="true"><i id="prog"></i></div>
+    </div>
+    <div class="heroart"><svg id="heroart" viewBox="0 0 480 300" role="img" aria-label="Illustration: messy data turning into a clean table"></svg></div>
+  </header>
+
+  <div class="bar">
+    <div class="chips" role="group" aria-label="Filter topics">
+      <button class="chip" type="button" data-f="all" aria-pressed="true">All</button>
+      <button class="chip" type="button" data-f="ready" aria-pressed="false">Available</button>
+      <button class="chip" type="button" data-f="soon" aria-pressed="false">Coming soon</button>
+    </div>
+    <input class="search" id="q" type="search" placeholder="Search a topic…" aria-label="Search a topic">
+  </div>
+
+  <p class="eyebrow" style="margin-bottom:14px">Suggested path: each topic builds on the previous ones</p>
+  <div class="grid" id="grid"></div>
+  <p class="empty" id="empty" hidden>No topic matches your search.</p>
+
+  <footer>
+    <p>Each topic includes a simple page with interactive charts and a short video with music, and a technical page with equations, widgets, verified Python code and a step-by-step worked example. Each topic links to the models of the visual ML series where it shows up.</p>
+    <p>Suggested order: split first, then explore and clean, and finally prepare the features inside a pipeline.</p>
+    <p id="mode"></p>
+  </footer>
+</main>
+
+<script>
+(function(){
+"use strict";
+/* Catálogo. Para añadir un tema: rellenar simple/tech (archivo local y artifact) y poner ready:true. */
+const TOPICS=[
+  {n:1,id:"separar",title:"Split before you look",fam:"Evaluation",ready:true,video:true,
+   d:"Training, validation and test; splitting by date and by truck; data leakage and why an almost perfect model collapses in production.",
+   simple:{file:"split-before-you-look-en.html",url:"https://claude.ai/artifact/WFNYPc31SdyQYjwZHseXGd"},
+   tech:{file:"split-before-you-look-technical-en.html",url:"https://claude.ai/artifact/XFmAMkKapg11Pst1okF1vs"},
+   example:"The same model, two different scores",kw:"train test validation cross validation kfold timeseriessplit groupkfold leakage pipeline purge"},
+  {n:2,id:"eda",title:"Exploratory data analysis",fam:"Explore",ready:true,video:true,
+   d:"Histograms, impossible values and error codes, mean versus median, correlations, redundant columns and Simpson's paradox.",
+   simple:{file:"exploratory-data-analysis-en.html",url:"https://claude.ai/artifact/XkdFqijFDHZKx3gyzdCacX"},
+   tech:{file:"exploratory-data-analysis-technical-en.html",url:"https://claude.ai/artifact/CAY9vZPZoccLUN6YQMGiai"},
+   example:"An error code that flips a correlation",kw:"eda histogram correlation pearson spearman skewness redundancy vif simpson sentinel median mad"},
+  {n:3,id:"registros",title:"Duplicates and logging errors",fam:"Clean",ready:true,video:true,
+   d:"Duplicate resends, out-of-order messages, clocks that run fast, GPS jumps and frozen sensors: why the GPS adds up twice the kilometers.",
+   simple:{file:"duplicates-and-logging-errors-en.html",url:"https://claude.ai/artifact/Levxj2CRvbMD9ZR4dMJTBs"},
+   tech:{file:"duplicates-and-logging-errors-technical-en.html",url:"https://claude.ai/artifact/Vi9ChienfvyTYnsaiXTwT7"},
+   example:"From 11 km to 2 km, by hand",kw:"duplicates resend idempotency timestamp ordering watermark clock drift theil-sen gps haversine jump frozen sensor telemetry"},
+  {n:4,id:"atipicos",title:"Outliers",fam:"Clean",ready:true,video:true,
+   d:"Mistake or rare but real? Fences, robust z, masking, outliers in combinations of columns, Isolation Forest and robust regression.",
+   simple:{file:"outliers-en.html",url:"https://claude.ai/artifact/DJrGq6YNQSXdBh7RMTBRpX"},
+   tech:{file:"outliers-technical-en.html",url:"https://claude.ai/artifact/3iMNSrW9aZxksbWXy1PDmq"},
+   example:"A misplaced decimal that quadruples the slope",kw:"outliers iqr tukey mad robust z masking mahalanobis mcd isolation forest huber theil-sen cook leverage robust"},
+  {n:5,id:"faltantes",title:"Missing data",fam:"Clean",ready:true,video:true,
+   d:"Why values are missing (at random, because of something visible, or because of the value itself) and what to do: drop, fill without flattening, multiple imputation, an indicator column, or let the model handle it.",
+   simple:{file:"missing-data-en.html",url:"https://claude.ai/artifact/Lc3YLvm9MpTxK8jEYHrXeP"},
+   tech:{file:"missing-data-technical-en.html",url:"https://claude.ai/artifact/NNfSny7cF6YQwuxGZLqPcn"},
+   example:"Eight deliveries, three gaps and Rubin's rules",kw:"missing imputation mcar mar mnar rubin mice knn indicator hot deck interpolation sensitivity delta"},
+  {n:6,id:"desbalance",title:"Imbalanced classes",fam:"Evaluation",ready:true,video:true,
+   d:"When what you look for is rare: why accuracy misleads, precision, recall, the PR curve, putting a price on each error, choosing the alert threshold and what weights and resampling really do.",
+   simple:{file:"imbalanced-classes-en.html",url:"https://claude.ai/artifact/H8FxXsjSgjUYz9Cny7X4XV"},
+   tech:{file:"imbalanced-classes-technical-en.html",url:"https://claude.ai/artifact/JbmgmYkKHrntGhMN7YJocR"},
+   example:"A thousand trucks, 23 breakdowns and a 5% threshold",kw:"imbalance precision recall pr roc auc ap smote weights class weight threshold cost calibration prior mcc f1 base rate"},
+  {n:7,id:"variables",title:"Preparing features",fam:"Transform",ready:true,video:true,
+   d:"Turning each piece of data into numbers a model can learn from: scaling, one column per category, each customer's mean without leakage, the hour on a clock and time windows that don't look into the future, all in one pipeline.",
+   simple:{file:"preparing-features-en.html",url:"https://claude.ai/artifact/UhCWghRNqEGuFLoaxCsXg5"},
+   tech:{file:"preparing-features-technical-en.html",url:"https://claude.ai/artifact/Kqv9RALsWBtKzJuVFtN6WL"},
+   example:"Three trips, two customers, two hours and a truck",kw:"scaling standardize minmax robust encoding one hot ordinal target encoding smoothing cross fitting cyclical sine cosine hour windows rolling aggregation pipeline columntransformer leakage"},
+  {n:8,id:"proyecto",title:"End-to-end project",fam:"Project",ready:true,video:true,
+   d:"The seven topics together: from raw fleet data to the weekly maintenance-shop list, which decisions change the result, how a report can lie and how to monitor the model when a sensor changes.",
+   simple:{file:"end-to-end-project-en.html",url:"https://claude.ai/artifact/8XdQaywuCvP4ZFyz7dwGuj"},
+   tech:{file:"end-to-end-project-technical-en.html",url:"https://claude.ai/artifact/CuMTX6RUgi6ASCgssvqn1e"},
+   example:"Week 81, by hand: alerts, PSI and Kolmogorov-Smirnov",kw:"project end to end ablation production monitoring drift psi kolmogorov smirnov retrain leakage label delay sensor"},
+];
+const LOCAL=location.protocol==="file:";
+const href=o=>o?(LOCAL?o.file:o.url):"#";
+const NS="http://www.w3.org/2000/svg";
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a||{})e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const path=(pts)=>pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join("");
+
+/* mini ilustraciones (viewBox 320x160) */
+const ART={
+  separar(s){for(let i=0;i<20;i++){const t=i>=15;el("rect",{x:20+i*14,y:40,width:11,height:30,rx:2,fill:t?"var(--point)":"var(--mean)","fill-opacity":t?1:.55},s);}
+    el("line",{x1:228,x2:228,y1:30,y2:80,stroke:"var(--ink)","stroke-width":2},s);
+    el("rect",{x:40,y:100,width:120,height:14,rx:7,fill:"var(--sample)"},s);el("rect",{x:40,y:124,width:200,height:14,rx:7,fill:"var(--point)"},s);},
+  eda(s){const r=mulberry32(3);[[20,0.6],[120,1],[220,0.4]].forEach(([ox,k])=>{for(let i=0;i<8;i++){const h=10+90*k*Math.exp(-((i-3+ox/200)**2)/4)*(0.8+0.4*r());el("rect",{x:ox+i*11,y:140-h,width:9,height:h,rx:2,fill:"var(--mean)","fill-opacity":.75},s);}});},
+  registros(s){for(let i=0;i<7;i++){const y=22+i*18,dup=i===2||i===5;el("rect",{x:40,y,width:240,height:13,rx:3,fill:dup?"var(--point)":"var(--line)","fill-opacity":dup?.85:1},s);}},
+  atipicos(s){const r=mulberry32(5);for(let i=0;i<22;i++){const x=25+i*11,y=120-x*0.3+(r()-.5)*18;el("circle",{cx:x,cy:y,r:4,fill:"var(--sample)","fill-opacity":.8},s);}el("circle",{cx:200,cy:38,r:7,fill:"var(--point)"},s);},
+  faltantes(s){const r=mulberry32(9);for(let i=0;i<6;i++)for(let j=0;j<10;j++){const m=r()<0.18;el("rect",{x:30+j*27,y:20+i*21,width:22,height:16,rx:3,fill:m?"none":"var(--mean)","fill-opacity":.55,stroke:m?"var(--point)":"none","stroke-dasharray":"3 2","stroke-width":1.5},s);}},
+  desbalance(s){const r=mulberry32(4);for(let i=0;i<60;i++){const x=25+(i%15)*18,y=25+Math.floor(i/15)*30;el("circle",{cx:x,cy:y,r:6,fill:[7,33,48].includes(i)?"var(--point)":"var(--line)"},s);}},
+  variables(s){[["var(--mean)",20],["var(--sample)",60],["var(--point)",100]].forEach(([c,y])=>{el("rect",{x:30,y,width:90,height:26,rx:5,fill:c,"fill-opacity":.7},s);el("path",{d:`M130 ${y+13}H190`,stroke:"var(--muted)","stroke-width":2.5},s);el("rect",{x:200,y,width:90,height:26,rx:5,fill:c},s);});},
+  proyecto(s){const P=[[30,80],[100,80],[170,80],[240,80],[290,80]];el("path",{d:"M30 80H290",stroke:"var(--line)","stroke-width":4},s);P.forEach(([x,y],i)=>el("circle",{cx:x,cy:y,r:11,fill:i<4?"var(--mean)":"var(--point)"},s));}
+};
+const ICON={
+  play:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>',
+  sigma:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.5 3H3.5l5 5-5 5h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>'
+};
+
+/* cabecera */
+const ready=TOPICS.filter(t=>t.ready).length;
+document.getElementById("stats").innerHTML=`<div class="stat"><b>${ready}</b><span>topics ready</span></div><div class="stat"><b>${ready*2}</b><span>pages</span></div><div class="stat"><b>${TOPICS.filter(t=>t.video).length}</b><span>videos</span></div><div class="stat"><b>${TOPICS.length-ready}</b><span>on the way</span></div>`;
+document.getElementById("prog").style.width=(ready/TOPICS.length*100)+"%";
+if(LOCAL){const m=document.getElementById("mlhub");m.href="visual-ml-series-en.html";m.target="_self";const e=document.getElementById("eshub");e.href="preparar-los-datos-es.html";e.target="_self";}
+document.getElementById("mode").textContent=LOCAL?"Opened from your folder: links go to the local HTML files (videos must be in the same folder).":"Opened online: links go to the published pages.";
+(function(){const s=document.getElementById("heroart"),r=mulberry32(7);
+  for(let i=0;i<8;i++)for(let j=0;j<5;j++){const x=30+j*38,y=40+i*28,bad=r()<0.22;const a={x,y,width:30,height:20,rx:3,fill:bad?"var(--point)":"var(--line)","fill-opacity":bad?.8:1};if(bad)a.transform=`rotate(${(r()-.5)*24} ${x+15} ${y+10})`;el("rect",a,s);}
+  el("path",{d:"M228 150H262",stroke:"var(--muted)","stroke-width":3},s);el("path",{d:"M262 150l-10-6v12z",fill:"var(--muted)"},s);
+  for(let i=0;i<8;i++)for(let j=0;j<5;j++)el("rect",{x:280+j*36,y:40+i*28,width:28,height:20,rx:3,fill:i>=6?"var(--sample)":"var(--mean)","fill-opacity":i>=6?.9:.55},s);
+})();
+
+/* tarjetas */
+const grid=document.getElementById("grid");
+for(const t of TOPICS){
+  const c=document.createElement("article");c.className="card "+(t.ready?"ready":"soon");c.dataset.state=t.ready?"ready":"soon";
+  c.dataset.text=(t.title+" "+t.fam+" "+t.d+" "+(t.kw||"")).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+  c.innerHTML=`<div class="art"><svg viewBox="0 0 320 160" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg><span class="num">${String(t.n).padStart(2,"0")}</span><span class="tag ${t.ready?"ok":"soon"}">${t.ready?"Available":"Coming soon"}</span></div>
+  <div class="body"><p class="fam">${t.fam}</p><h3>${t.title}</h3><p class="d">${t.d}</p>
+  ${t.ready?`<div class="meta">${t.video?"<span>▶ video included</span>":""}${t.example?`<span>example: ${t.example}</span>`:""}</div>
+  <div class="links"><a class="primary" href="${href(t.simple)}" target="${LOCAL?"_self":"_blank"}" rel="noopener">${ICON.play}Simple version</a><a href="${href(t.tech)}" target="${LOCAL?"_self":"_blank"}" rel="noopener">${ICON.sigma}Technical version</a></div>`:""}</div>`;
+  grid.appendChild(c);ART[t.id](c.querySelector("svg"));
+}
+/* filtros */
+let F="all";const q=document.getElementById("q");
+function apply(){const s=q.value.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim();let n=0;
+  grid.querySelectorAll(".card").forEach(c=>{const ok=(F==="all"||c.dataset.state===F)&&(!s||c.dataset.text.includes(s));c.hidden=!ok;if(ok)n++;});
+  document.getElementById("empty").hidden=n>0;}
+document.querySelectorAll(".chip").forEach(b=>b.addEventListener("click",()=>{F=b.dataset.f;document.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));apply();}));
+q.addEventListener("input",apply);
+})();
+</script>
+</body>
+</html>

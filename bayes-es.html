@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bayes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:190px minmax(0,1fr) 72px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden}
+.meter2 .bar i{display:block;height:100%;border-radius:7px}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.meter2 .row{grid-template-columns:112px minmax(0,1fr) 60px;font-size:.84rem}}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.big{font-family:var(--f-display);font-size:2.4rem;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Serie ML visual · explicado sin fórmulas · <a href="bayes-tecnico-es.html" target="_self">ver la versión técnica</a> · <a href="serie-ml-visual-es.html" target="_self">todos los temas</a> · <a href="bayes-en.html" target="_self">in English</a></p>
+  <h1>Bayes</h1>
+  <p class="lede">Una regla para cambiar de opinión de forma ordenada: lo que ya sabías, corregido por la pista nueva según lo mucho o poco que esa pista distinga entre las posibilidades. Debajo de los procesos gaussianos, de Markov y de Kalman está siempre esta misma idea.</p>
+</header>
+
+<section class="first" aria-label="Juguete interactivo">
+  <figure class="fig"><svg id="hero" role="img" aria-label="Mil camiones: cuáles tienen avería y cuáles dan alerta"></svg></figure>
+  <div class="controls">
+    <div class="slider"><label for="h-b">Camiones con avería <output id="h-b-o"></output></label><input type="range" id="h-b" min="0.5" max="20" step="0.5" value="2"><div class="ends"><span>0,5 %</span><span>20 %</span></div></div>
+    <div class="slider"><label for="h-s">Avisa si hay avería <output id="h-s-o"></output></label><input type="range" id="h-s" min="50" max="99" step="1" value="90"><div class="ends"><span>50 %</span><span>99 %</span></div></div>
+    <div class="slider"><label for="h-f">Falsas alarmas en camiones sanos <output id="h-f-o"></output></label><input type="range" id="h-f" min="1" max="30" step="1" value="5"><div class="ends"><span>1 %</span><span>30 %</span></div></div>
+  </div>
+  <div class="legend">
+    <span><svg viewBox="0 0 28 14"><rect x="8" y="1" width="12" height="12" rx="2" fill="var(--point)"/></svg>Avería y alerta</span>
+    <span><svg viewBox="0 0 28 14"><rect x="9" y="2" width="10" height="10" rx="2" fill="none" stroke="var(--point)" stroke-width="2"/></svg>Avería sin alerta</span>
+    <span><svg viewBox="0 0 28 14"><rect x="8" y="1" width="12" height="12" rx="2" fill="var(--sample)"/></svg>Sano con alerta (falsa)</span>
+    <span><svg viewBox="0 0 28 14"><rect x="8" y="1" width="12" height="12" rx="2" fill="var(--line)"/></svg>Sano sin alerta</span>
+  </div>
+  <p class="qcard col" id="h-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Antes de empezar</p>
+    <h2>Lo que ya sabías más la pista nueva</h2>
+    <p>Salta una alerta de avería en un camión. ¿Está averiado? Casi todo el mundo responde "probablemente sí: el sistema acierta el 90 %". Pero falta una pieza: <strong>qué tan raras son las averías</strong>. Si solo 2 de cada 100 camiones tienen una, las alertas falsas de los 98 sanos superan con creces a las verdaderas.</p>
+    <p>Bayes ordena el razonamiento en tres pasos: lo que creías antes (las averías son raras), cuánto distingue la pista (una alerta es 18 veces más probable en un camión averiado que en uno sano) y lo que debes creer ahora. El juguete de arriba lo hace con 1 000 camiones contados uno a uno.</p>
+  </div>
+  <figure class="fig"><svg id="steps" role="img" aria-label="Antes 2 por ciento, la alerta multiplica por 18 las probabilidades, después 27 por ciento"></svg></figure>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 5</p>
+    <h2>Cada pista mueve la creencia</h2>
+    <p>Lo que crees después de una pista se convierte en lo que crees antes de la siguiente. Una segunda alerta independiente (otro sensor) empuja mucho más, porque ya partimos del 27 %. Una revisión sin alerta empuja hacia abajo. Prueba combinaciones: el orden no importa, solo cuántas pistas de cada tipo llegan.</p>
+  </div>
+  <figure class="fig"><svg id="seq" role="img" aria-label="Probabilidad de avería tras cada pista"></svg></figure>
+  <div class="btns"><button type="button" class="primary" id="q-a">Llega una alerta</button><button type="button" id="q-n">Revisión sin alerta</button><button type="button" id="q-r">Empezar de cero</button></div>
+  <p class="qcard col" id="q-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 5</p>
+    <h2>Aprender una proporción con pocos datos</h2>
+    <p>¿Qué porcentaje de sus viajes llega tarde un conductor nuevo? Tras un solo viaje tarde, la cuenta directa dice "100 %", lo que es absurdo. Bayes empieza con lo que sabemos de la flota (en torno al 20 %, con bastante margen) y cada viaje lo va ajustando. La curva muestra qué valores son creíbles: con pocos viajes es ancha y se va estrechando con cada viaje.</p>
+  </div>
+  <figure class="fig"><svg id="beta" role="img" aria-label="Creencia sobre el porcentaje de viajes tarde de un conductor"></svg></figure>
+  <div class="btns"><button type="button" class="primary" id="b-late">Viaje con retraso</button><button type="button" id="b-ok">Viaje a tiempo</button><button type="button" id="b-10">10 viajes más</button><button type="button" id="b-r">Empezar de cero</button></div>
+  <div class="kpis col" id="b-k"></div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 5</p>
+    <h2>Un clasificador que multiplica pistas: Naive Bayes</h2>
+    <p>¿Fue agresivo este viaje? Partimos de que lo es 1 de cada 10. Cada señal del acelerómetro y el GPS <strong>multiplica</strong> las probabilidades a favor por un factor: cuántas veces más frecuente es esa señal en viajes agresivos que en normales. Así funciona Naive Bayes: un factor por pista, y se multiplican todos. Activa y desactiva señales.</p>
+  </div>
+  <div class="chips col" id="nb-chips" role="group" aria-label="Señales del viaje"></div>
+  <figure class="fig"><svg id="nb" role="img" aria-label="Cómo cada señal multiplica la probabilidad de viaje agresivo"></svg></figure>
+  <p class="qcard col" id="nb-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 de 5</p>
+    <h2>"Ingenuo": cuidado con contar dos veces la misma pista</h2>
+    <p>Lo de "ingenuo" (naive) viene de que trata cada pista como si fuera independiente de las demás. Si dos sensores miden lo mismo, por ejemplo la frenada según el acelerómetro y según la caída de velocidad del GPS, la cuenta multiplica dos veces por lo que en realidad es una sola pista. Sigue acertando de qué lado cae, pero se vuelve <strong>demasiado seguro</strong>.</p>
+  </div>
+  <div class="meter2 col" id="dup-bars"></div>
+  <div class="seg" role="group" aria-label="Sensores de frenada"><button type="button" id="d-1" aria-pressed="true">Un sensor de frenada</button><button type="button" id="d-2" aria-pressed="false">Añadir otro que mide lo mismo</button><button type="button" id="d-3" aria-pressed="false">Y otro más</button></div>
+  <p class="qcard col" id="d-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 de 5</p>
+    <h2>Cuando lo que creías antes estaba mal</h2>
+    <p>El punto de partida pesa. Un conductor llega tarde de verdad en la mitad de sus viajes, pero partimos de la media de la flota, el 20 %. Si nos aferramos fuerte a esa creencia (como si ya hubiéramos visto 100 viajes), harán falta muchos viajes para convencernos. Si partimos con poca convicción, los datos mandan enseguida. Mueve la fuerza de la creencia inicial.</p>
+  </div>
+  <figure class="fig"><svg id="prior" role="img" aria-label="Estimación del porcentaje de retrasos viaje a viaje según la fuerza de la creencia inicial"></svg></figure>
+  <div class="slider col"><label for="p-s">Fuerza de la creencia inicial <output id="p-s-o"></output></label><input type="range" id="p-s" min="1" max="200" step="1" value="10"><div class="ends"><span>débil</span><span>muy fuerte</span></div></div>
+  <p class="qcard col" id="p-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta completa</h2>
+    <ol class="steps">
+      <li><div><strong>Empieza por lo que ya sabes</strong>: qué tan frecuente es cada posibilidad antes de mirar el caso.</div></li>
+      <li><div><strong>Mide cuánto distingue cada pista</strong>: cuántas veces más probable es en un caso que en el otro.</div></li>
+      <li><div><strong>Multiplica</strong>: la creencia de antes por la fuerza de la pista, y vuelve a pasarla a porcentaje.</div></li>
+      <li><div><strong>Encadena</strong>: lo que crees ahora es el punto de partida para la próxima pista.</div></li>
+      <li><div><strong>Para estimar una proporción</strong>, suma lo observado a una creencia inicial razonable, no a cero.</div></li>
+      <li><div><strong>Desconfía de la seguridad excesiva</strong> si tus pistas se repiten entre sí.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>¿Para qué se usa?</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6L34 32H6Z"/><path d="M20 16v8M20 28v1"/></svg><h3>Diseñar alertas</h3><p>Saber, antes de lanzar una alerta, cuántas serán falsas según lo rara que sea la avería, y ajustar el umbral en consecuencia.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="14" cy="14" r="6"/><circle cx="28" cy="26" r="6"/><path d="M6 34h28"/></svg><h3>Pocos datos por grupo</h3><p>Tasas por conductor, por ruta o por taller con pocos casos: se tira hacia la media de la flota hasta que hay datos suficientes.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="7" y="7" width="26" height="26" rx="3"/><path d="M12 14h16M12 20h16M12 26h10"/></svg><h3>Clasificar texto</h3><p>Filtros de spam y clasificación de notas de taller: Naive Bayes es rapidísimo y funciona sorprendentemente bien con palabras.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 30C14 30 16 10 20 10S26 30 34 30"/></svg><h3>Medir la incertidumbre</h3><p>Todos los métodos bayesianos (procesos gaussianos, Kalman) dan la respuesta junto con cuánto se puede fiar uno de ella.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo bueno y lo no tan bueno</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Lo bueno</h3><ul class="pc">
+      <li>Una sola regla, siempre la misma, para combinar conocimiento previo y datos.</li>
+      <li>Funciona con pocos datos y da su incertidumbre.</li>
+      <li>Naive Bayes entrena en un instante y necesita muy pocos ejemplos.</li>
+      <li>Las cuentas se pueden explicar con "de cada 1 000 casos…".</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Lo no tan bueno</h3><ul class="pc">
+      <li>Hay que elegir la creencia inicial, y una mala elección pesa con pocos datos.</li>
+      <li>Naive Bayes da probabilidades demasiado extremas si las pistas se repiten.</li>
+      <li>Más allá de los casos sencillos, las cuentas exactas son imposibles y hacen falta aproximaciones (simulación).</li>
+      <li>Para clasificar con muchos datos, otros modelos (logística, árboles) suelen acertar más.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Probabilidad previa (prior)</dt><dd>Lo que creías antes de ver la pista: por ejemplo, que el 2 % de los camiones tiene avería.</dd>
+      <dt>Verosimilitud</dt><dd>Qué tan probable es la pista en cada caso: alerta en el 90 % de los averiados y en el 5 % de los sanos.</dd>
+      <dt>Probabilidad posterior</dt><dd>Lo que debes creer después de ver la pista.</dd>
+      <dt>Razón de verosimilitudes</dt><dd>Cuántas veces más probable es la pista en un caso que en el otro (90 / 5 = 18). Es la "fuerza" de la pista.</dd>
+      <dt>Tasa base</dt><dd>Lo frecuente que es algo en general. Olvidarla es el error más común.</dd>
+      <dt>Naive Bayes</dt><dd>Clasificador que multiplica la fuerza de cada pista como si fueran independientes.</dd>
+      <dt>Intervalo creíble</dt><dd>Rango donde creemos que está el valor con, por ejemplo, un 90 % de probabilidad.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: las fórmulas detrás de todo</summary>
+    <p style="padding-top:10px">No hacen falta para entender la idea:</p>
+    <div class="formula">P(avería | alerta) = P(alerta | avería) × P(avería) / P(alerta)
+
+en "apuestas" (odds):  después = antes × fuerza de la pista
+                       fuerza = P(pista | avería) / P(pista | sana)
+
+proporción con creencia inicial de a "éxitos" y b "fracasos":
+   estimación = (éxitos vistos + a) / (viajes vistos + a + b)</div>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2>Todo en un minuto</h2>
+    <p>Un repaso animado: mil camiones y una alerta, la creencia que se actualiza con cada pista, una proporción que se aprende con pocos datos y el clasificador que multiplica pistas. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACRVQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAf/2Q==" aria-label="Animación: Bayes">
+      <source src="bayes-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+/* ---- Bayes: posterior, Beta, log-gamma ---- */
+function byPost(prior,sens,fpr){const a=prior*sens;return a/(a+(1-prior)*fpr);}
+function lgam(x){const c=[76.18009172947146,-86.50532032941677,24.01409824083091,-1.231739572450155,0.1208650973866179e-2,-0.5395239384953e-5];let y=x,t=x+5.5;t-=(x+0.5)*Math.log(t);let s=1.000000000190015;for(const k of c)s+=k/++y;return -t+Math.log(2.5066282746310005*s/x);}
+function betaPdf(p,a,b){if(p<=0||p>=1)return 0;return Math.exp((a-1)*Math.log(p)+(b-1)*Math.log(1-p)+lgam(a+b)-lgam(a)-lgam(b));}
+function betaQ(q,a,b){let lo=0,hi=1;for(let i=0;i<60;i++){const m=(lo+hi)/2;let s=0,n=400;for(let k=0;k<n;k++){const x=(k+0.5)/n*m;s+=betaPdf(x,a,b)*m/n;}if(s<q)lo=m;else hi=m;}return (lo+hi)/2;}
+
+const bars=(id,rows)=>{document.getElementById(id).innerHTML=rows.map(([lab,v,col,t])=>`<div class="row"><span>${lab}</span><span class="bar"><i style="width:${Math.max(0.5,Math.min(1,v)*100).toFixed(1)}%;background:${col}"></i></span><span class="num">${t}</span></div>`).join("");};
+const pct=(v,d)=>(v*100).toFixed(d??0).replace(".",",")+" %";
+
+/* ---------- héroe: mil camiones ---------- */
+(function(){const svg=document.getElementById("hero"),W=900,H=420,cols=50,rows=20,cs=17,ox=(W-cols*cs)/2,oy=12;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const cells=[];for(let i=0;i<1000;i++){const c=i%cols,r=Math.floor(i/cols);cells.push(el("rect",{x:ox+c*cs+1.5,y:oy+r*cs+1.5,width:cs-3,height:cs-3,rx:2.5},svg));}
+  const g=el("g",null,svg);
+  const ib=document.getElementById("h-b"),is=document.getElementById("h-s"),iff=document.getElementById("h-f");
+  function draw(){const b=+ib.value/100,s=+is.value/100,f=+iff.value/100,nF=Math.round(1000*b),tp=Math.round(nF*s),fn=nF-tp,fp=Math.round((1000-nF)*f),tn=1000-nF-fp;
+    cells.forEach((c,i)=>{let fill,stroke="none",sw=0;if(i<tp)fill="var(--point)";else if(i<nF){fill="transparent";stroke="var(--point)";sw=2;}else if(i<nF+fp)fill="var(--sample)";else fill="var(--line)";c.setAttribute("fill",fill);c.setAttribute("stroke",stroke);c.setAttribute("stroke-width",sw);});
+    g.textContent="";const rowsUsed=20;txt(g,W/2,oy+rowsUsed*cs+30,"cada cuadrito es un camión · 1 000 camiones",{"text-anchor":"middle","font-size":13});
+    document.getElementById("h-b-o").textContent=pct(b,b<0.1?1:0);document.getElementById("h-s-o").textContent=pct(s);document.getElementById("h-f-o").textContent=pct(f);
+    const al=tp+fp,post=al?tp/al:0;
+    document.getElementById("h-msg").innerHTML=`Saltan <b>${al}</b> alertas: <b style="color:var(--point)">${tp}</b> son averías de verdad y <b style="color:var(--sample)">${fp}</b> son falsas. Si salta una alerta, la probabilidad de avería es <b>${tp} / ${al} = ${pct(post)}</b>. ${post<0.5?"Aunque el sistema \"acierta el "+pct(s)+"\", la mayoría de alertas son falsas, porque hay muchísimos más camiones sanos que averiados.":"Con averías tan frecuentes o tan pocas falsas alarmas, ya la mayoría de alertas son reales."}`;}
+  [ib,is,iff].forEach(i=>i.addEventListener("input",draw));draw();})();
+
+/* ---------- antes / pista / después ---------- */
+(function(){const s=document.getElementById("steps"),W=900,H=240;s.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const col=(x,lab,v,c,sub)=>{const h=150;el("rect",{x:x-45,y:30,width:90,height:h,rx:8,fill:"var(--line)"},s);el("rect",{x:x-45,y:30+h*(1-v),width:90,height:h*v,rx:8,fill:c},s);
+    txt(s,x,22,pct(v),{"text-anchor":"middle","font-size":16,"font-weight":700,class:"t-ink"});txt(s,x,204,lab,{"text-anchor":"middle","font-size":14,"font-weight":600,class:"t-ink"});txt(s,x,224,sub,{"text-anchor":"middle","font-size":12});};
+  col(160,"antes",0.02,"var(--point)","2 de cada 100 averiados");
+  col(740,"después de la alerta",0.2687,"var(--point)","18 de cada 67 alertas");
+  el("path",{d:"M240 105H640",stroke:"var(--muted)","stroke-width":2.5,fill:"none"},s);el("path",{d:"M640 105l-14-8v16z",fill:"var(--muted)"},s);
+  el("rect",{x:330,y:62,width:220,height:86,rx:12,fill:"var(--hl)"},s);
+  txt(s,440,92,"pista: salta la alerta",{"text-anchor":"middle","font-size":14,"font-weight":600,class:"t-ink"});txt(s,440,116,"18 veces más probable",{"text-anchor":"middle","font-size":13,class:"t-ink"});txt(s,440,134,"si hay avería (90 % / 5 %)",{"text-anchor":"middle","font-size":12});})();
+
+/* ---------- idea 1: secuencia ---------- */
+(function(){const pl=new Plot(document.getElementById("seq"),{W:900,H:300,pad:{l:52,r:16,t:16,b:40},x0:-0.5,x1:8.5,y0:0,y1:1,xt:[0,1,2,3,4,5,6,7,8],fx:v=>v?String(v):"inicio",yt:[0,0.25,0.5,0.75,1],fy:v=>Math.round(v*100)+"%",xl:"pistas"});
+  const g=el("g",null,pl.g);let P=[0.02],ev=[];const LR={a:0.9/0.05,n:0.1/0.95};
+  function draw(){g.textContent="";el("path",{d:pl.ppath(P.map((p,i)=>[i,p])),fill:"none",stroke:"var(--point)","stroke-width":3},g);
+    P.forEach((p,i)=>{el("circle",{cx:pl.sx(i),cy:pl.sy(p),r:7,fill:i?(ev[i-1]==="a"?"var(--point)":"var(--sample)"):"var(--muted)",stroke:"var(--surface)","stroke-width":2},g);txt(g,pl.sx(i),pl.sy(p)-12,pct(p,p<0.1&&p>0.001?1:0),{"text-anchor":"middle","font-size":12,class:"t-ink"});});
+    const na=ev.filter(e=>e==="a").length,nn=ev.length-na,p=P[P.length-1];
+    document.getElementById("q-msg").innerHTML=ev.length?`${na} alerta${na===1?"":"s"} y ${nn} revisi${nn===1?"ón":"ones"} sin alerta: probabilidad de avería <b>${pct(p,1)}</b>. Cada alerta multiplica las "apuestas" a favor por 18; cada revisión limpia las divide entre 9,5.`:"Empezamos con un 2 %. Añade pistas.";
+    document.getElementById("q-a").disabled=document.getElementById("q-n").disabled=P.length>8;}
+  const add=e=>{if(P.length>8)return;const p=P[P.length-1],o=p/(1-p)*LR[e];P.push(o/(1+o));ev.push(e);draw();};
+  document.getElementById("q-a").onclick=()=>add("a");document.getElementById("q-n").onclick=()=>add("n");document.getElementById("q-r").onclick=()=>{P=[0.02];ev=[];draw();};draw();})();
+
+/* ---------- idea 2: Beta ---------- */
+(function(){const pl=new Plot(document.getElementById("beta"),{W:900,H:320,pad:{l:16,r:16,t:16,b:40},x0:0,x1:1,y0:0,y1:6,xt:[0,0.2,0.4,0.6,0.8,1],fx:v=>Math.round(v*100)+"%",xl:"porcentaje de viajes que llega tarde"});
+  const A0=2,B0=8,TRUE=0.35;let k=0,n=0,r=mulberry32(9);const g=el("g",null,pl.g);
+  function draw(){g.textContent="";const a=A0+k,b=B0+n-k,ymax=Math.max(6,1.1*betaPdf(Math.min(0.999,Math.max(0.001,(a-1)/(a+b-2))),a,b));
+    const f=p=>Math.min(betaPdf(p,a,b),ymax)*6/ymax;
+    el("path",{d:pl.fpath(p=>betaPdf(p,A0,B0)*6/ymax,0.001,0.999,300),fill:"none",stroke:"var(--muted)","stroke-width":2,"stroke-dasharray":"6 5"},g);
+    const lo=betaQ(0.05,a,b),hi=betaQ(0.95,a,b);
+    el("path",{d:pl.fpath(f,lo,hi,200)+`L${pl.sx(hi)} ${pl.sy(0)}L${pl.sx(lo)} ${pl.sy(0)}Z`,fill:"var(--mean)","fill-opacity":.18},g);
+    el("path",{d:pl.fpath(f,0.001,0.999,400),fill:"none",stroke:"var(--mean)","stroke-width":3.2},g);
+    const m=a/(a+b);el("line",{x1:pl.sx(m),x2:pl.sx(m),y1:pl.sy(0),y2:pl.sy(5.8),stroke:"var(--mean)","stroke-width":2},g);txt(g,pl.sx(m)+6,pl.sy(5.5),"Bayes "+pct(m),{"font-size":13,style:"fill:var(--mean)","font-weight":600});
+    if(n){const raw=k/n;el("line",{x1:pl.sx(raw),x2:pl.sx(raw),y1:pl.sy(0),y2:pl.sy(4.6),stroke:"var(--point)","stroke-width":2.5,"stroke-dasharray":"5 4"},g);txt(g,pl.sx(raw)+(raw>0.8?-6:6),pl.sy(4.3),"cuenta directa "+pct(raw),{"font-size":13,style:"fill:var(--point)","font-weight":600,"text-anchor":raw>0.8?"end":"start"});}
+    document.getElementById("b-k").innerHTML=`<span>viajes <b>${n}</b></span><span>tarde <b>${k}</b></span><span>estimación bayesiana <b>${pct(m)}</b></span><span>90 % creíble entre <b>${pct(lo)}</b> y <b>${pct(hi)}</b></span><span>(gris discontinua: lo que se sabía de la flota)</span>`;}
+  document.getElementById("b-late").onclick=()=>{k++;n++;draw();};document.getElementById("b-ok").onclick=()=>{n++;draw();};
+  document.getElementById("b-10").onclick=()=>{for(let i=0;i<10;i++){n++;if(r()<TRUE)k++;}draw();};document.getElementById("b-r").onclick=()=>{k=0;n=0;r=mulberry32(9);draw();};draw();})();
+
+/* ---------- idea 3: Naive Bayes ---------- */
+const SIG=[["Frenadas bruscas",0.6,0.1],["Acelerones",0.5,0.15],["Exceso de velocidad",0.4,0.08],["Giros bruscos",0.35,0.1],["Viaje nocturno",0.3,0.2]];
+(function(){const chips=document.getElementById("nb-chips"),on=[true,false,false,false,false];
+  SIG.forEach(([n],i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=n;b.setAttribute("aria-pressed",String(on[i]));b.onclick=()=>{on[i]=!on[i];b.setAttribute("aria-pressed",String(on[i]));draw();};chips.appendChild(b);});
+  const svg=document.getElementById("nb"),W=900,H=300;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  function draw(){svg.textContent="";const prior=0.1;let odds=prior/(1-prior);const steps=[["Antes de mirar",odds,null]];
+    SIG.forEach(([n,pa,pn],i)=>{const lr=on[i]?pa/pn:(1-pa)/(1-pn);odds*=lr;steps.push([(on[i]?"sí: ":"no: ")+n.toLowerCase(),odds,lr]);});
+    const L=v=>Math.log10(v),x0=60,x1=W-20,sx=v=>x0+(L(v)+3)/6*(x1-x0),bh=34;
+    [0.001,0.01,0.1,0.5,0.9,0.99,0.999].forEach(p=>{const x=sx(p/(1-p));el("line",{x1:x,x2:x,y1:10,y2:H-34,class:"g-line"},svg);txt(svg,x,H-16,pct(p,p<0.01||p>0.99?1:0),{"text-anchor":"middle","font-size":11});});
+    el("line",{x1:sx(1),x2:sx(1),y1:10,y2:H-34,stroke:"var(--ink)","stroke-width":1.5,"stroke-dasharray":"4 4"},svg);
+    steps.forEach(([lab,o,lr],i)=>{const y=14+i*(bh+8),x=sx(o),p=o/(1+o);
+      if(i){const xp=sx(steps[i-1][1]);el("path",{d:`M${xp} ${y-8}L${x} ${y+bh/2}`,stroke:"var(--muted)","stroke-width":1.2,fill:"none"},svg);}
+      el("circle",{cx:x,cy:y+bh/2,r:8,fill:i===steps.length-1?"var(--point)":lr===null?"var(--muted)":lr>1?"var(--point)":"var(--sample)"},svg);
+      txt(svg,x+(p>0.5?-14:14),y+bh/2+4,`${lab}${lr!==null?` (×${lr<1?lr.toFixed(2).replace(".",","):lr.toFixed(1).replace(".",",")})`:""}`,{"font-size":12.5,class:"t-ink","text-anchor":p>0.5?"end":"start"});});
+    const p=odds/(1+odds);
+    document.getElementById("nb-msg").innerHTML=`Probabilidad de viaje agresivo: <b>${pct(p,p<0.1?1:0)}</b>. Cada señal presente multiplica las apuestas por "qué tanto más frecuente es en viajes agresivos" (por ejemplo, frenadas bruscas: 60 % de los agresivos frente a 10 % de los normales, ×6). Cada señal <b>ausente</b> también cuenta, y empuja un poco hacia "normal".`;}
+  draw();})();
+
+/* ---------- idea 4: contar dos veces ---------- */
+(function(){let k=1;const b=[document.getElementById("d-1"),document.getElementById("d-2"),document.getElementById("d-3")];
+  function draw(){const prior=0.1,lr=6,real=prior/(1-prior)*lr,nbO=prior/(1-prior)*lr**k,pr=real/(1+real),pn=nbO/(1+nbO);
+    bars("dup-bars",[["Contando bien (una pista)",pr,"var(--mean)",pct(pr)],["Naive Bayes",pn,"var(--point)",pct(pn)]]);
+    document.getElementById("d-msg").innerHTML=k===1?"Con un sensor, Naive Bayes y la cuenta correcta coinciden: una frenada brusca lleva del 10 % al 40 %.":`Con ${k} sensores que miden <b>la misma</b> frenada, Naive Bayes multiplica ${k} veces por 6 y salta al <b>${pct(pn)}</b>, cuando la información real sigue siendo la misma: un ${pct(pr)}. Si usas sus probabilidades para decidir (por ejemplo, avisar al conductor), conviene recalibrarlas o quitar las señales repetidas.`;}
+  b.forEach((x,i)=>x.onclick=()=>{k=i+1;b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));draw();});draw();})();
+
+/* ---------- idea 5: fuerza del prior ---------- */
+(function(){const N=80,TRUE=0.5,r=mulberry32(21),seq=[...Array(N)].map(()=>r()<TRUE?1:0);
+  const pl=new Plot(document.getElementById("prior"),{W:900,H:320,pad:{l:52,r:16,t:16,b:40},x0:0,x1:N,y0:0,y1:1,xt:[0,10,20,30,40,50,60,70,80],yt:[0,0.2,0.5,0.8,1],fy:v=>Math.round(v*100)+"%",xl:"viajes observados"});
+  el("line",{x1:pl.sx(0),x2:pl.sx(N),y1:pl.sy(TRUE),y2:pl.sy(TRUE),stroke:"var(--good)","stroke-width":2,"stroke-dasharray":"6 4"},pl.g);txt(pl.g,pl.sx(N)-4,pl.sy(TRUE)+18,"verdad: 50 %",{"text-anchor":"end","font-size":12,style:"fill:var(--good)"});
+  el("line",{x1:pl.sx(0),x2:pl.sx(N),y1:pl.sy(0.2),y2:pl.sy(0.2),stroke:"var(--muted)","stroke-width":1.5,"stroke-dasharray":"3 5"},pl.g);txt(pl.g,pl.sx(N)-4,pl.sy(0.2)+16,"creencia inicial: 20 %",{"text-anchor":"end","font-size":12});
+  const raw=[];let c=0;seq.forEach((v,i)=>{c+=v;raw.push([i+1,c/(i+1)]);});el("path",{d:pl.ppath(raw),fill:"none",stroke:"var(--point)","stroke-width":1.6,"stroke-opacity":.7},pl.g);
+  const g=el("g",null,pl.g),is=document.getElementById("p-s");
+  function draw(){const s=+is.value,a=0.2*s,b=0.8*s;let c=0;const est=[[0,0.2]];seq.forEach((v,i)=>{c+=v;est.push([i+1,(a+c)/(s+i+1)]);});g.textContent="";
+    el("path",{d:pl.ppath(est),fill:"none",stroke:"var(--mean)","stroke-width":3.2},g);
+    const n10=est.findIndex(([n,e])=>Math.abs(e-TRUE)<0.1);document.getElementById("p-s-o").textContent=`como ${s} viaje${s===1?"":"s"}`;
+    document.getElementById("p-msg").innerHTML=`Azul: estimación bayesiana. Naranja fina: la cuenta directa, que salta mucho al principio. ${n10<0?`Con una creencia tan fuerte, <b>ni con ${N} viajes</b> se acerca a menos de 10 puntos de la verdad.`:`Llega a menos de 10 puntos de la verdad tras <b>${n10} viajes</b>.`} Con la creencia débil, al principio se parece a la cuenta directa pero sin sus saltos extremos.`;}
+  is.addEventListener("input",draw);draw();})();
+})();
+</script>
+
+</body>
+</html>

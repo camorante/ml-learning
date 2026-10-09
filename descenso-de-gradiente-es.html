@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Descenso de gradiente</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.p-curve{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round}
+.p-path{fill:none;stroke:var(--point);stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round}
+.p-step{fill:var(--point);stroke:var(--point-ring);stroke-width:2}
+.p-ball{fill:var(--point);stroke:var(--point-ring);stroke-width:3}
+.p-tan{stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-cont{fill:none;stroke:var(--ink);stroke-opacity:.18;stroke-width:1}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content;flex-wrap:wrap}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:760px){.grid3{grid-template-columns:1fr}}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Serie ML visual · explicado sin fórmulas · <a href="descenso-de-gradiente-tecnico-es.html" target="_self">ver la versión técnica</a> · <a href="serie-ml-visual-es.html" target="_self">todos los temas</a> · <a href="gradient-descent-en.html" target="_self">in English</a></p>
+  <h1>Descenso de gradiente</h1>
+  <p class="lede">Cómo aprende casi todo el machine learning: bajar una montaña con niebla, sintiendo solo la inclinación del suelo bajo tus pies.</p>
+</header>
+
+<section class="first" aria-label="Juguete interactivo">
+  <div class="fig"><svg id="hero" role="img" aria-label="Mapa topográfico del error: toca para soltar una pelota y verla bajar"></svg></div>
+  <div class="legend">
+    <span><svg viewBox="0 0 28 14"><rect x="1" y="1" width="26" height="12" rx="2" fill="var(--mean)" fill-opacity=".55"/></svg>Zonas bajas (poco error)</span>
+    <span><svg viewBox="0 0 28 14"><rect x="1" y="1" width="26" height="12" rx="2" fill="var(--mean)" fill-opacity=".06" stroke="var(--line)"/></svg>Zonas altas (mucho error)</span>
+    <span><svg viewBox="0 0 28 14"><path d="M2 10 Q14 0 26 10" fill="none" stroke="var(--ink)" stroke-opacity=".4"/></svg>Curvas de nivel</span>
+    <span><svg viewBox="0 0 28 14"><path d="M2 12 L9 6 L16 9 L26 3" fill="none" stroke="var(--point)" stroke-width="2.5"/></svg>Camino de la pelota</span>
+  </div>
+  <div class="kpis" id="h-kpi"></div>
+  <p class="status" id="h-status"></p>
+  <div class="controls">
+    <div class="stack" style="gap:8px">
+      <span style="font-weight:700;font-size:.98rem">Terreno</span>
+      <div class="btns" role="group" aria-label="Terreno"><button type="button" data-l="round" aria-pressed="false">Valle redondo</button><button type="button" data-l="long" aria-pressed="true">Valle alargado</button><button type="button" data-l="holes" aria-pressed="false">Varios hoyos</button></div>
+    </div>
+    <div class="slider"><label for="h-eta">Tamaño del paso <output id="h-eta-o"></output></label><input type="range" id="h-eta" min="-2" max="0.3" step="0.01" value="-0.6"><div class="ends"><span>pasitos</span><span>zancadas</span></div></div>
+    <div class="btns">
+      <button type="button" class="primary" id="h-run">Bajar</button>
+      <button type="button" id="h-step">Un paso</button>
+      <button type="button" id="h-mom" aria-pressed="false">Con inercia</button>
+      <button type="button" id="h-reset">Reiniciar</button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Antes de empezar</p>
+    <h2>Algo que tú ya sabes hacer</h2>
+    <p>Imagina que estás en lo alto de una montaña y baja una niebla tan espesa que no ves nada. Tienes que llegar al valle. ¿Qué haces?</p>
+    <p>Tanteas el suelo con los pies, notas hacia dónde baja más, das un paso en esa dirección, y vuelves a tantear. Paso a paso, sin ver el mapa, acabas abajo.</p>
+  </div>
+  <figure class="fig"><svg id="fog" role="img" aria-label="Una montaña con niebla y una persona bajando paso a paso"></svg>
+    <figcaption>No necesitas ver el valle: solo la inclinación bajo tus pies.</figcaption></figure>
+  <p class="col note">En machine learning, la "montaña" es el <strong>error</strong> del modelo, y tu posición son sus <strong>perillas</strong> (por ejemplo, la inclinación y el punto de partida de una recta). Bajar la montaña es ajustar las perillas para que el error sea lo más pequeño posible. Eso es entrenar un modelo.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 5</p>
+    <h2>La pendiente te dice hacia dónde ir</h2>
+    <p>En cada punto, la máquina calcula hacia dónde sube el terreno (eso es el <strong>gradiente</strong>) y da un paso en la dirección contraria. Si el suelo baja hacia la derecha, va a la derecha. Si está casi plano, da un paso cortito: está cerca del fondo.</p>
+  </div>
+  <figure class="fig"><svg id="slope" role="img" aria-label="Una curva con la pendiente en un punto y la dirección del paso"></svg></figure>
+  <div class="slider col"><label for="s-x">Dónde estás <output id="s-x-o"></output></label><input type="range" id="s-x" min="-4" max="5" step="0.02" value="-2.6"><div class="ends"><span>izquierda</span><span>derecha</span></div></div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 5</p>
+    <h2>El tamaño del paso lo cambia todo</h2>
+    <p>Cuánto avanzas en cada paso se llama <strong>tasa de aprendizaje</strong>. Es la perilla más importante del método, y hay que elegirla con cuidado:</p>
+  </div>
+  <div class="grid3">
+    <figure class="fig"><svg id="lr0" role="img" aria-label="Pasos demasiado pequeños: avanza muy lento"></svg><figcaption id="lr0-c"></figcaption></figure>
+    <figure class="fig"><svg id="lr1" role="img" aria-label="Pasos adecuados: llega rápido al fondo"></svg><figcaption id="lr1-c"></figcaption></figure>
+    <figure class="fig"><svg id="lr2" role="img" aria-label="Pasos demasiado grandes: rebota cada vez más lejos"></svg><figcaption id="lr2-c"></figcaption></figure>
+  </div>
+  <p class="col">Si el paso es muy grande, saltas por encima del valle y caes en la ladera de enfrente, más arriba que antes. Cada salto empeora y el entrenamiento "explota". Prueba la zancada máxima en el gráfico de arriba para verlo.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 5</p>
+    <h2>Valles alargados: el zigzag</h2>
+    <p>Con dos o más perillas, el terreno puede ser un valle largo y estrecho, como un cañón. La pendiente apunta sobre todo hacia las paredes, no hacia la salida del cañón, y la pelota rebota de pared en pared avanzando muy poco.</p>
+    <p>Esto pasa cuando las perillas están en escalas muy distintas (por ejemplo, una en kilos y otra en toneladas). La solución más simple es <strong>poner los datos en la misma escala</strong> antes de entrenar: el valle se vuelve redondo y la bajada es directa.</p>
+  </div>
+  <div class="grid2">
+    <figure class="fig"><svg id="zzA" role="img" aria-label="Valle alargado con un camino en zigzag"></svg><figcaption id="zzA-c"></figcaption></figure>
+    <figure class="fig"><svg id="zzB" role="img" aria-label="Valle redondo con un camino directo"></svg><figcaption id="zzB-c"></figcaption></figure>
+  </div>
+  <p class="col note">Un truco muy usado es la <strong>inercia</strong> (momentum): la pelota recuerda hacia dónde iba. Los rebotes contra las paredes se anulan entre sí y la velocidad a lo largo del cañón se acumula. Actívala en el gráfico de arriba con el valle alargado.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 de 5</p>
+    <h2>Hoyos falsos: dónde empiezas importa</h2>
+    <p>Algunas montañas tienen varios hoyos. La pelota baja al hoyo más cercano, y desde ahí todo es cuesta arriba: se queda atrapada aunque haya un valle más profundo en otra parte. A esos hoyos se les llama <strong>mínimos locales</strong>.</p>
+  </div>
+  <figure class="fig"><svg id="holes" role="img" aria-label="Terreno con varios hoyos y caminos desde distintos puntos de partida"></svg>
+    <figcaption>Seis puntos de partida distintos. Cada pelota termina en el hoyo más cercano, no necesariamente en el más profundo.</figcaption></figure>
+  <p class="col">La buena noticia: en la regresión lineal y en la logística de los temas anteriores el terreno tiene un único hoyo, así que siempre se llega al mejor. En las redes neuronales hay muchísimos hoyos, pero en la práctica la mayoría son casi igual de buenos.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 de 5</p>
+    <h2>Con millones de datos: pasos con prisa</h2>
+    <p>Para saber la pendiente exacta hay que mirar <strong>todos</strong> los datos. Con millones, cada paso tardaría muchísimo. El truco es como una encuesta: preguntas a unos pocos (un <strong>lote</strong> de datos elegidos al azar) y estimas la pendiente con ellos.</p>
+    <p>Cada paso es menos preciso y el camino tiembla, pero los pasos son tan baratos que llegas antes. A esto se le llama <strong>descenso de gradiente estocástico</strong> (SGD), y es como se entrenan casi todos los modelos grandes.</p>
+  </div>
+  <figure class="fig"><svg id="sgd" role="img" aria-label="Caminos de bajada usando todos los datos, lotes pequeños y un solo dato"></svg>
+    <figcaption id="sgd-c"></figcaption></figure>
+  <div class="legend">
+    <span><svg viewBox="0 0 28 14"><path d="M2 7H26" stroke="var(--mean)" stroke-width="3"/></svg>Todos los datos en cada paso</span>
+    <span><svg viewBox="0 0 28 14"><path d="M2 7H26" stroke="var(--point)" stroke-width="2.5"/></svg>Lotes de 10 datos</span>
+    <span><svg viewBox="0 0 28 14"><path d="M2 7H26" stroke="var(--sample)" stroke-width="2"/></svg>Un dato por paso</span>
+  </div>
+  <div class="btns"><button type="button" id="sgd-again">Repetir con otros datos al azar</button></div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta completa</h2>
+    <ol class="steps">
+      <li><div><strong>Define el error</strong> que quieres hacer pequeño (por ejemplo, los errores al cuadrado de la regresión).</div></li>
+      <li><div><strong>Pon los datos en la misma escala</strong> para que el valle sea redondo.</div></li>
+      <li><div><strong>Empieza en cualquier punto</strong> y calcula la pendiente (con todos los datos o con un lote).</div></li>
+      <li><div><strong>Da un paso cuesta abajo</strong> del tamaño elegido.</div></li>
+      <li><div><strong>Repite</strong> hasta que el error deje de bajar. Si sube o salta, el paso es demasiado grande.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>¿Dónde se usa?</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="10" cy="12" r="3"/><circle cx="10" cy="28" r="3"/><circle cx="30" cy="20" r="3"/><circle cx="20" cy="12" r="3"/><circle cx="20" cy="28" r="3"/><path d="M13 12h4M13 28h4M23 13l5 5M23 27l5-5M12 14l6 12M12 26l6-12"/></svg><h3>Redes neuronales e IA</h3><p>Desde un clasificador de imágenes hasta los grandes modelos de lenguaje: todos se entrenan con variantes de descenso de gradiente estocástico, con miles de millones de perillas a la vez.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M5 33h30"/><path d="M8 28c6-14 10-14 14-6s8 4 12-12"/></svg><h3>Modelos clásicos con muchos datos</h3><p>La regresión logística de un filtro de spam o de un sistema de fraude se entrena con descenso de gradiente cuando hay millones de ejemplos.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M4 26h8l3-8 5 14 4-10 3 4h9"/></svg><h3>Aprender sobre la marcha</h3><p>Cuando los datos llegan sin parar (telemetría de vehículos, clics de una web), el modelo se actualiza con un pequeño paso por cada dato nuevo, sin reentrenar desde cero.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="8" y="6" width="24" height="28" rx="3"/><path d="M14 14h12M14 20h12M14 26h6"/></svg><h3>Recomendadores</h3><p>Las sugerencias de películas o productos ajustan millones de preferencias ocultas bajando, paso a paso, el error entre lo que predicen y lo que la gente eligió.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo bueno y lo no tan bueno</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Lo bueno</h3><ul class="pc">
+      <li>Funciona con <strong>cualquier</strong> modelo cuyo error se pueda medir y derivar.</li>
+      <li>Escala a millones de datos y miles de millones de perillas.</li>
+      <li>Solo necesita saber la pendiente local, no el mapa entero.</li>
+      <li>Con lotes, cada paso es baratísimo.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Lo no tan bueno</h3><ul class="pc">
+      <li>Hay que elegir el tamaño del paso: muy pequeño es lento, muy grande explota.</li>
+      <li>Puede quedarse en un hoyo falso o avanzar despacio en zonas planas.</li>
+      <li>Sufre con datos en escalas muy distintas.</li>
+      <li>Nunca sabes del todo si llegaste al mejor valle posible.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Función de pérdida</dt><dd>El error del modelo: la altura de la montaña en cada punto.</dd>
+      <dt>Gradiente</dt><dd>La dirección en la que el error sube más rápido. Se camina en contra.</dd>
+      <dt>Tasa de aprendizaje</dt><dd>El tamaño de cada paso.</dd>
+      <dt>Iteración</dt><dd>Un paso.</dd>
+      <dt>Época</dt><dd>Una pasada completa por todos los datos.</dd>
+      <dt>Lote (mini-batch)</dt><dd>El grupito de datos usado para estimar la pendiente en un paso.</dd>
+      <dt>Mínimo local</dt><dd>Un hoyo del que no se puede salir bajando, aunque haya otros más profundos.</dd>
+      <dt>Inercia (momentum)</dt><dd>Recordar la dirección de los pasos anteriores para no zigzaguear.</dd>
+      <dt>Convergencia</dt><dd>Llegar al fondo: el error ya no baja.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: la fórmula detrás de todo</summary>
+    <p style="padding-top:10px">Es una sola línea, repetida miles de veces:</p>
+    <div class="formula">perillas_nuevas = perillas − tamaño_del_paso × pendiente
+
+con inercia:
+velocidad = 0.9 × velocidad − tamaño_del_paso × pendiente
+perillas_nuevas = perillas + velocidad</div>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2 id="vid-title">Todo en un minuto</h2>
+    <p>Un repaso animado: la montaña con niebla, el tamaño del paso, el zigzag, los hoyos falsos y los pasos con prisa. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACRVQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAQJAf/9k=" aria-label="Animación: descenso de gradiente">
+      <source src="descenso-de-gradiente-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+const RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="dc"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b,rx:6},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||240;const sp=this.o.y1-this.o.y0;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n,y=Math.max(this.o.y0-3*sp,Math.min(this.o.y1+3*sp,f(x)));d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(y).toFixed(1);}return d;}
+  ppath(P){const sp=this.o.y1-this.o.y0,sx=this.o.x1-this.o.x0;return P.map((p,i)=>(i?"L":"M")+this.sx(Math.max(this.o.x0-3*sx,Math.min(this.o.x1+3*sx,p[0]))).toFixed(1)+" "+this.sy(Math.max(this.o.y0-3*sp,Math.min(this.o.y1+3*sp,p[1]))).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+/* mapas topográficos (dependientes del tema) */
+const REDRAW=[];const onTheme=()=>REDRAW.forEach(f=>f());try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",onTheme);}catch(e){}
+new MutationObserver(onTheme).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+function hex(name){const v=getComputedStyle(document.documentElement).getPropertyValue(name).trim();const m=v.match(/^#?([0-9a-f]{6})$/i);const n=m?parseInt(m[1],16):0x888888;return [n>>16&255,n>>8&255,n&255];}
+function topo(pl,g,f,opts){opts=opts||{};const {x0,x1,y0,y1}=pl.o,nx=opts.nx||120,ny=Math.round(nx*(pl.sy(y0)-pl.sy(y1))/(pl.sx(x1)-pl.sx(x0)));
+  const V=[];let mn=1e9,mx=-1e9;for(let j=0;j<=ny;j++){const row=[];for(let i=0;i<=nx;i++){const v=f(x0+(x1-x0)*i/nx,y1-(y1-y0)*j/ny);row.push(v);mn=Math.min(mn,v);mx=Math.max(mx,v);}V.push(row);}
+  const tr=opts.tr||(v=>Math.sqrt(v-mn));const tmx=tr(mx);
+  const draw=()=>{g.textContent="";const C=hex("--mean"),cv=document.createElement("canvas");cv.width=nx;cv.height=ny;const cx=cv.getContext("2d"),im=cx.createImageData(nx,ny);
+    for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const t=1-tr(V[j][i])/tmx,k=(j*nx+i)*4;im.data[k]=C[0];im.data[k+1]=C[1];im.data[k+2]=C[2];im.data[k+3]=Math.round(255*(0.05+0.6*t*t));}
+    cx.putImageData(im,0,0);el("image",{href:cv.toDataURL(),x:pl.sx(x0),y:pl.sy(y1),width:pl.sx(x1)-pl.sx(x0),height:pl.sy(y0)-pl.sy(y1),preserveAspectRatio:"none"},g);
+    // curvas de nivel
+    const L=opts.levels||12;let d="";for(let l=1;l<=L;l++){const lev=mn+Math.pow(l/(L+1),2)*(mx-mn)*(opts.cut||0.6);
+      for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const c=[[i,j],[i+1,j],[i+1,j+1],[i,j+1]],pts=[];for(let e=0;e<4;e++){const a=c[e],b=c[(e+1)%4],va=V[a[1]][a[0]]-lev,vb=V[b[1]][b[0]]-lev;if((va>0)!==(vb>0)){const t=va/(va-vb);pts.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);}}
+        for(let k=0;k+1<pts.length;k+=2){const P=q=>[pl.sx(x0+(x1-x0)*q[0]/nx),pl.sy(y1-(y1-y0)*q[1]/ny)];const A=P(pts[k]),B=P(pts[k+1]);d+=`M${A[0].toFixed(1)} ${A[1].toFixed(1)}L${B[0].toFixed(1)} ${B[1].toFixed(1)}`;}}}
+    el("path",{d,class:"p-cont"},g);};
+  draw();REDRAW.push(draw);}
+const grad=(f,x,y)=>{const h=1e-4;return [(f(x+h,y)-f(x-h,y))/(2*h),(f(x,y+h)-f(x,y-h))/(2*h)];};
+function descend(f,start,eta,n,mom){const P=[start.slice()];let v=[0,0],p=start.slice();for(let k=0;k<n;k++){const g=grad(f,p[0],p[1]);if(mom){v=[0.9*v[0]-eta*g[0],0.9*v[1]-eta*g[1]];p=[p[0]+v[0],p[1]+v[1]];}else p=[p[0]-eta*g[0],p[1]-eta*g[1]];P.push(p.slice());if(!isFinite(p[0])||Math.abs(p[0])>1e3)break;}return P;}
+
+/* terrenos */
+const rot=(x,y,a)=>[x*Math.cos(a)+y*Math.sin(a),-x*Math.sin(a)+y*Math.cos(a)];
+const LAND={
+  round:{f:(x,y)=>0.5*(x*x+y*y),start:[-4,3.2]},
+  long:{f:(x,y)=>{const [u,v]=rot(x,y,0.5);return 0.5*(0.06*u*u+1.6*v*v);},start:[-4.2,2.2]},
+  holes:{f:(x,y)=>0.045*(x*x+y*y)-2.4*Math.exp(-((x-2.3)**2+(y-1.4)**2)/2.2)-1.6*Math.exp(-((x+2.6)**2+(y+1.3)**2)/1.6)-1.1*Math.exp(-((x+0.6)**2+(y-3.0)**2)/1.0)-0.9*Math.exp(-((x-1.5)**2+(y+3.0)**2)/1.1),start:[-0.2,-0.4]}
+};
+
+/* ---------- héroe ---------- */
+(function(){
+  const svg=document.getElementById("hero"),pl=new Plot(svg,{W:900,H:460,pad:{l:10,r:10,t:10,b:10},x0:-5.4,x1:5.4,y0:-2.76,y1:2.76});
+  pl.o.y0=-5.4*(460-20)/(900-20);pl.o.y1=-pl.o.y0;
+  const gT=el("g",null,pl.gBack),path=el("path",{class:"p-path"},pl.g),gS=el("g",null,pl.g),ball=el("circle",{r:10,class:"p-ball"},pl.top);
+  svg.style.cursor="crosshair";
+  let key="long",L=LAND.long,pos=L.start.slice(),trail=[pos.slice()],vel=[0,0],mom=false,timer=null,steps=0;
+  const ie=document.getElementById("h-eta");const eta=()=>Math.pow(10,+ie.value);
+  function setLand(k){key=k;L=LAND[k];topo(pl,gT,L.f,{levels:14,cut:k==="holes"?1:0.55});reset();}
+  function reset(p){if(timer){clearInterval(timer);timer=null;}pos=(p||L.start).slice();trail=[pos.slice()];vel=[0,0];steps=0;draw();}
+  function step(){const g=grad(L.f,pos[0],pos[1]);if(mom){vel=[0.85*vel[0]-eta()*g[0],0.85*vel[1]-eta()*g[1]];pos=[pos[0]+vel[0],pos[1]+vel[1]];}else pos=[pos[0]-eta()*g[0],pos[1]-eta()*g[1]];trail.push(pos.slice());steps++;draw();
+    const gn=Math.hypot(...grad(L.f,pos[0],pos[1]));if(!isFinite(pos[0])||Math.abs(pos[0])>60||Math.abs(pos[1])>60||(gn<1e-3&&Math.hypot(vel[0],vel[1])<1e-3)||steps>=400){if(timer){clearInterval(timer);timer=null;}draw(true);}}
+  function draw(done){path.setAttribute("d",pl.ppath(trail));gS.textContent="";if(trail.length<70)trail.forEach((p,i)=>{if(i)el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:3.2,class:"p-step"},gS);});
+    const inside=isFinite(pos[0])&&Math.abs(pos[0])<5.4&&Math.abs(pos[1])<5.4*0.5;ball.setAttribute("cx",pl.sx(Math.max(-5.6,Math.min(5.6,pos[0]))));ball.setAttribute("cy",pl.sy(Math.max(pl.o.y0-0.2,Math.min(pl.o.y1+0.2,pos[1]))));
+    const h=L.f(pos[0],pos[1]),gn=Math.hypot(...grad(L.f,pos[0],pos[1]));
+    document.getElementById("h-eta-o").textContent=eta().toFixed(3);
+    document.getElementById("h-kpi").innerHTML=`<span>pasos: <b>${steps}</b></span><span>altura (error): <b>${isFinite(h)?h.toFixed(3):"∞"}</b></span><span>inclinación: <b>${isFinite(gn)?gn.toFixed(3):"∞"}</b></span>`;
+    const st=document.getElementById("h-status");
+    if(!isFinite(h)||Math.abs(pos[0])>60||Math.abs(pos[1])>60)st.innerHTML="<b>¡Se salió del mapa!</b> El paso es tan grande que cada salto cae más arriba que el anterior. Baja el tamaño del paso.";
+    else if(done&&steps>=400)st.innerHTML=`<b>400 pasos y aún no llega.</b> ${key==="long"&&!mom?"En un valle alargado la pelota zigzaguea. Prueba con inercia o con pasos un poco más grandes.":"Prueba con pasos más grandes."}`;
+    else if(done)st.innerHTML=`<b>Llegó al fondo en ${steps} pasos.</b> ${key==="holes"?"¿Es el hoyo más profundo? Toca en otro punto del mapa para soltar la pelota desde ahí.":"Toca en otro punto del mapa para empezar desde ahí, o cambia el tamaño del paso."}`;
+    else if(!inside)st.innerHTML="<b>La pelota rebota fuera de la vista.</b> Está saltando de ladera en ladera.";
+    else st.innerHTML="Toca el mapa para soltar la pelota donde quieras y pulsa <b>Bajar</b>.";}
+  svg.addEventListener("click",e=>{const p=pl.toSvg(e);if(!p)return;reset([pl.ix(p.x),pl.iy(p.y)]);});
+  document.querySelectorAll("[data-l]").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll("[data-l]").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));setLand(b.dataset.l);}));
+  document.getElementById("h-run").onclick=()=>{if(timer)clearInterval(timer);if(RM){for(let i=0;i<400&&!timer;i++){step();if(trail.length>401)break;}return;}timer=setInterval(step,45);};
+  document.getElementById("h-step").onclick=()=>{if(timer){clearInterval(timer);timer=null;}step();};
+  const mb=document.getElementById("h-mom");mb.onclick=()=>{mom=!mom;mb.setAttribute("aria-pressed",String(mom));reset(trail[0]);};
+  document.getElementById("h-reset").onclick=()=>reset();ie.addEventListener("input",()=>draw());
+  setLand("long");
+})();
+
+/* ---------- montaña con niebla ---------- */
+(function(){const s=document.getElementById("fog");s.setAttribute("viewBox","0 0 900 300");
+  const prof=x=>70+170/(1+Math.exp(-(x-330)/70))+20*Math.sin(x/60)*Math.exp(-(((x-330)/200)**2));
+  let d="M0 300";for(let x=0;x<=900;x+=6)d+=`L${x} ${prof(x).toFixed(1)}`;d+="L900 300Z";
+  el("path",{d,fill:"var(--mean)","fill-opacity":.16,stroke:"var(--mean)","stroke-width":2.5},s);
+  const fog=el("defs",null,s);const lg=el("linearGradient",{id:"fogg",x1:"0",x2:"1",y1:"0",y2:"0"},fog);
+  el("stop",{offset:"0",  "stop-color":"var(--bg)","stop-opacity":"0"},lg);el("stop",{offset:"0.3","stop-color":"var(--bg)","stop-opacity":"0.15"},lg);el("stop",{offset:"0.55","stop-color":"var(--bg)","stop-opacity":"0.9"},lg);el("stop",{offset:"1","stop-color":"var(--bg)","stop-opacity":"0.97"},lg);
+  const xs=[60,110,160,205,245,282,315];xs.forEach((x,i)=>{el("circle",{cx:x,cy:prof(x)-8,r:i===xs.length-1?9:4,fill:"var(--point)","fill-opacity":i===xs.length-1?1:0.5},s);});
+  const X=xs[xs.length-1],Y=prof(X)-8,sl=(prof(X+4)-prof(X-4))/8;el("line",{x1:X-40,y1:Y-40*sl,x2:X+40,y2:Y+40*sl,class:"p-tan"},s);
+  el("path",{d:`M${X+14} ${Y-26} l34 ${34*sl} m-8 -9 l8 9 l-11 4`,fill:"none",stroke:"var(--ink)","stroke-width":2.2,"stroke-linecap":"round"},s);
+  el("rect",{x:0,y:0,width:900,height:300,fill:"url(#fogg)"},s);
+  txt(s,X-30,Y-50,"aquí baja hacia la derecha",{"font-size":14,class:"t-ink"});
+  txt(s,880,40,"niebla: el valle no se ve",{"text-anchor":"end","font-size":14});txt(s,40,40,"tú, arriba",{"font-size":14,class:"t-ink"});
+})();
+
+/* ---------- pendiente ---------- */
+(function(){const f=x=>0.12*(x-1.3)**2+0.03*(x-1.3)**3*0.15+0.4,df=x=>0.24*(x-1.3)+0.0135*(x-1.3)**2;
+  const pl=new Plot(document.getElementById("slope"),{W:900,H:320,pad:{l:20,r:20,t:20,b:20},x0:-4.5,x1:5.5,y0:0,y1:4.3});
+  el("path",{d:pl.fpath(f),class:"p-curve"},pl.g);const tan=el("line",{class:"p-tan"},pl.g),arr=el("path",{fill:"none",stroke:"var(--ink)","stroke-width":2.5,"stroke-linecap":"round","stroke-linejoin":"round"},pl.top),ball=el("circle",{r:10,class:"p-ball"},pl.top),lab=txt(pl.top,0,0,"",{"font-size":14,class:"t-ink"});
+  el("circle",{cx:pl.sx(1.3),cy:pl.sy(f(1.3)),r:5,fill:"var(--good)"},pl.top);txt(pl.top,pl.sx(1.3),pl.sy(f(1.3))+24,"fondo",{"text-anchor":"middle","font-size":12,style:"fill:var(--good)"});
+  const ix=document.getElementById("s-x");
+  function draw(){const x=+ix.value,y=f(x),m=df(x);tan.setAttribute("x1",pl.sx(x-1.4));tan.setAttribute("y1",pl.sy(y-1.4*m));tan.setAttribute("x2",pl.sx(x+1.4));tan.setAttribute("y2",pl.sy(y+1.4*m));
+    ball.setAttribute("cx",pl.sx(x));ball.setAttribute("cy",pl.sy(y));const L=Math.min(150,Math.abs(m)*160),dir=m>0?-1:1,X=pl.sx(x),Y=pl.sy(y)-34;
+    arr.setAttribute("d",Math.abs(m)<0.02?"":`M${X} ${Y} h${dir*L} m${-dir*9} -7 l${dir*9} 7 l${-dir*9} 7`);
+    lab.setAttribute("x",X+(dir>0?6:-6));lab.setAttribute("y",Y-12);lab.setAttribute("text-anchor",dir>0?"start":"end");
+    lab.textContent=Math.abs(m)<0.02?"casi plano: ¡ya estás en el fondo!":`pendiente ${m.toFixed(2)} → paso hacia la ${dir>0?"derecha":"izquierda"}${Math.abs(m)<0.25?" (cortito)":""}`;
+    document.getElementById("s-x-o").textContent=x.toFixed(2);}
+  ix.addEventListener("input",draw);draw();})();
+
+/* ---------- tasas de aprendizaje ---------- */
+(function(){const f=x=>0.5*x*x;const cfg=[["lr0",0.08,"Paso muy pequeño (0.08)"],["lr1",0.6,"Paso adecuado (0.6)"],["lr2",2.15,"Paso demasiado grande (2.15)"]];
+  for(const [id,eta,name] of cfg){const pl=new Plot(document.getElementById(id),{W:340,H:260,pad:{l:10,r:10,t:10,b:10},x0:-5,x1:5,y0:-0.3,y1:12});
+    el("path",{d:pl.fpath(f),class:"p-curve"},pl.g);let x=-3.6;const P=[[x,f(x)]];let n=0;for(;n<12;n++){x=x-eta*x;P.push([x,f(x)]);if(Math.abs(x)>6)break;}
+    el("path",{d:pl.ppath(P),class:"p-path","stroke-width":1.8},pl.g);P.forEach((p,i)=>el("circle",{cx:pl.sx(p[0]),cy:pl.sy(Math.min(p[1],13)),r:i?4.5:7,class:i?"p-step":"p-ball"},pl.g));
+    const end=P[P.length-1];document.getElementById(id+"-c").innerHTML=`<strong>${name}.</strong> `+(eta<0.2?`Tras ${P.length-1} pasos sigue lejos del fondo.`:eta<1?"Llega al fondo en pocos pasos.":"Cada salto cae más lejos: el error crece sin parar.");}
+})();
+
+/* ---------- zigzag ---------- */
+(function(){for(const [id,k,eta,start] of [["zzA","long",1.0,[-4.2,2.2]],["zzB","round",0.55,[-4.2,2.2]]]){
+  const pl=new Plot(document.getElementById(id),{W:440,H:300,pad:{l:8,r:8,t:8,b:8},x0:-5,x1:5,y0:-3.27,y1:3.27});const g=el("g",null,pl.gBack);topo(pl,g,LAND[k].f,{nx:90,levels:12,cut:0.5});
+  const P=descend(LAND[k].f,start,eta,60,false);let n=P.findIndex(p=>Math.hypot(p[0],p[1])<0.15);n=n<0?P.length-1:n;const Q=P.slice(0,n+1);
+  el("path",{d:pl.ppath(Q),class:"p-path"},pl.g);Q.forEach((p,i)=>el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:i?3:7,class:i?"p-step":"p-ball"},pl.g));
+  document.getElementById(id+"-c").innerHTML=k==="long"?`<strong>Valle alargado.</strong> Rebota de pared en pared: ${n>=59?"60 pasos y aún no llega":n+" pasos"}.`:`<strong>Mismos datos, en la misma escala.</strong> Valle redondo: llega en ${n} pasos.`;}})();
+
+/* ---------- hoyos ---------- */
+(function(){const pl=new Plot(document.getElementById("holes"),{W:900,H:420,pad:{l:8,r:8,t:8,b:8},x0:-5.4,x1:5.4,y0:-2.5,y1:2.5});pl.o.y0=-5.4*(420-16)/(900-16);pl.o.y1=-pl.o.y0;
+  const g=el("g",null,pl.gBack);topo(pl,g,LAND.holes.f,{levels:14,cut:1});
+  const starts=[[-4.6,1.8],[-1.6,-2.2],[0.4,0.9],[4.6,-1.6],[3.9,2.1],[-0.5,2.4]];
+  starts.forEach(s=>{const P=descend(LAND.holes.f,s,0.6,140,false);el("path",{d:pl.ppath(P),class:"p-path","stroke-width":2},pl.g);el("circle",{cx:pl.sx(s[0]),cy:pl.sy(s[1]),r:5,fill:"var(--surface)",stroke:"var(--point)","stroke-width":2.5},pl.top);const e=P[P.length-1];el("circle",{cx:pl.sx(e[0]),cy:pl.sy(e[1]),r:8,class:"p-ball"},pl.top);});
+  const best=[2.3,1.4];txt(pl.top,pl.sx(best[0])+14,pl.sy(best[1])-14,"el hoyo más profundo",{"font-size":13,class:"t-ink"});})();
+
+/* ---------- SGD ---------- */
+(function(){const svg=document.getElementById("sgd");let seed=3;
+  function run(){svg.textContent="";const r=mulberry32(seed),N=200,X=[],Y=[];for(let i=0;i<N;i++){const x=gauss(r);X.push(x);Y.push(1.5+2.0*x+gauss(r)*1.2);}
+    const J=(a,b)=>{let s=0;for(let i=0;i<N;i++)s+=(a+b*X[i]-Y[i])**2;return s/N;};
+    const pl=new Plot(svg,{W:900,H:420,pad:{l:46,r:12,t:12,b:40},x0:-4.5,x1:5,y0:-3,y1:4.2,xt:[-4,-2,0,2,4],yt:[-2,0,2,4],xl:"perilla 1 (punto de partida)",yl:"perilla 2 (inclinación)"});
+    const g=el("g",null,pl.gBack);topo(pl,g,J,{nx:110,levels:12,cut:0.5});
+    const start=[-3.8,-2.4];const G=(idx,a,b)=>{let ga=0,gb=0;for(const i of idx){const e=a+b*X[i]-Y[i];ga+=2*e;gb+=2*e*X[i];}return [ga/idx.length,gb/idx.length];};
+    const all=[...Array(N).keys()];
+    const paths=[[N,0.15,"var(--mean)",3],[10,0.15,"var(--point)",2.4],[1,0.15,"var(--sample)",1.8]].map(([bs,eta,col,w])=>{let p=start.slice();const P=[p.slice()];let cost=0;const rr=mulberry32(seed*7+bs);
+      for(let k=0;k<40;k++){const idx=bs===N?all:[...Array(bs)].map(()=>Math.floor(rr()*N));const gg=G(idx,p[0],p[1]);p=[p[0]-eta*gg[0],p[1]-eta*gg[1]];P.push(p.slice());cost+=bs;}
+      el("path",{d:pl.ppath(P),fill:"none",stroke:col,"stroke-width":w,"stroke-linejoin":"round"},pl.g);el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:6,fill:col,stroke:"var(--point-ring)","stroke-width":2},pl.top);return {bs,cost,end:p};});
+    el("circle",{cx:pl.sx(start[0]),cy:pl.sy(start[1]),r:8,class:"p-ball"},pl.top);
+    const fmt=n=>n.toLocaleString("es");
+    document.getElementById("sgd-c").innerHTML=`40 pasos cada uno, sobre 200 datos. <strong>Todos los datos:</strong> camino suave, pero ha mirado ${fmt(paths[0].cost)} datos. <strong>Lotes de 10:</strong> casi igual de bien mirando ${fmt(paths[1].cost)}. <strong>Un dato por paso:</strong> tiembla mucho, pero solo miró ${fmt(paths[2].cost)}.`;}
+  document.getElementById("sgd-again").onclick=()=>{seed++;REDRAW.length=REDRAW.length;run();};run();})();
+})();
+</script>
+</body>
+</html>

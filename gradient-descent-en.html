@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gradient descent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: same identity as the visual ML series. One reading column + live figures. Blue = the model, orange = the data, violet = the errors */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.p-curve{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round}
+.p-path{fill:none;stroke:var(--point);stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round}
+.p-step{fill:var(--point);stroke:var(--point-ring);stroke-width:2}
+.p-ball{fill:var(--point);stroke:var(--point-ring);stroke-width:3}
+.p-tan{stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-cont{fill:none;stroke:var(--ink);stroke-opacity:.18;stroke-width:1}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content;flex-wrap:wrap}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:760px){.grid3{grid-template-columns:1fr}}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Visual ML series · explained without formulas · <a href="gradient-descent-technical-en.html" target="_self">see the technical version</a> · <a href="visual-ml-series-en.html" target="_self">all topics</a> · <a href="descenso-de-gradiente-es.html" target="_self">en español</a></p>
+  <h1>Gradient descent</h1>
+  <p class="lede">How almost all of machine learning learns: walking down a mountain in the fog, feeling only the slope of the ground under your feet.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="fig"><svg id="hero" role="img" aria-label="Topographic map of the error: tap to drop a ball and watch it roll down"></svg></div>
+  <div class="legend">
+    <span><svg viewBox="0 0 28 14"><rect x="1" y="1" width="26" height="12" rx="2" fill="var(--mean)" fill-opacity=".55"/></svg>Low areas (little error)</span>
+    <span><svg viewBox="0 0 28 14"><rect x="1" y="1" width="26" height="12" rx="2" fill="var(--mean)" fill-opacity=".06" stroke="var(--line)"/></svg>High areas (lots of error)</span>
+    <span><svg viewBox="0 0 28 14"><path d="M2 10 Q14 0 26 10" fill="none" stroke="var(--ink)" stroke-opacity=".4"/></svg>Contour lines</span>
+    <span><svg viewBox="0 0 28 14"><path d="M2 12 L9 6 L16 9 L26 3" fill="none" stroke="var(--point)" stroke-width="2.5"/></svg>The ball's path</span>
+  </div>
+  <div class="kpis" id="h-kpi"></div>
+  <p class="status" id="h-status"></p>
+  <div class="controls">
+    <div class="stack" style="gap:8px">
+      <span style="font-weight:700;font-size:.98rem">Terrain</span>
+      <div class="btns" role="group" aria-label="Terrain"><button type="button" data-l="round" aria-pressed="false">Round valley</button><button type="button" data-l="long" aria-pressed="true">Long valley</button><button type="button" data-l="holes" aria-pressed="false">Several holes</button></div>
+    </div>
+    <div class="slider"><label for="h-eta">Step size <output id="h-eta-o"></output></label><input type="range" id="h-eta" min="-2" max="0.3" step="0.01" value="-0.6"><div class="ends"><span>baby steps</span><span>big strides</span></div></div>
+    <div class="btns">
+      <button type="button" class="primary" id="h-run">Go down</button>
+      <button type="button" id="h-step">One step</button>
+      <button type="button" id="h-mom" aria-pressed="false">With momentum</button>
+      <button type="button" id="h-reset">Reset</button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Before we start</p>
+    <h2>Something you already know how to do</h2>
+    <p>Imagine you're at the top of a mountain and a fog rolls in so thick you can't see anything. You need to get down to the valley. What do you do?</p>
+    <p>You feel the ground with your feet, notice which way it slopes down the most, take a step that way, and feel again. Step by step, without seeing the map, you end up at the bottom.</p>
+  </div>
+  <figure class="fig"><svg id="fog" role="img" aria-label="A mountain in the fog and a person walking down step by step"></svg>
+    <figcaption>You don't need to see the valley: just the slope under your feet.</figcaption></figure>
+  <p class="col note">In machine learning, the "mountain" is the model's <strong>error</strong>, and your position is its <strong>knobs</strong> (for example, the slope and the starting point of a line). Walking down the mountain means adjusting the knobs so the error is as small as possible. That is what training a model means.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 5</p>
+    <h2>The slope tells you where to go</h2>
+    <p>At each point, the machine works out which way the ground goes up (that's the <strong>gradient</strong>) and takes a step in the opposite direction. If the ground slopes down to the right, it goes right. If it's almost flat, it takes a tiny step: it's close to the bottom.</p>
+  </div>
+  <figure class="fig"><svg id="slope" role="img" aria-label="A curve with the slope at one point and the direction of the step"></svg></figure>
+  <div class="slider col"><label for="s-x">Where you are <output id="s-x-o"></output></label><input type="range" id="s-x" min="-4" max="5" step="0.02" value="-2.6"><div class="ends"><span>left</span><span>right</span></div></div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 5</p>
+    <h2>The step size changes everything</h2>
+    <p>How far you move on each step is called the <strong>learning rate</strong>. It's the most important knob of the method, and you have to pick it carefully:</p>
+  </div>
+  <div class="grid3">
+    <figure class="fig"><svg id="lr0" role="img" aria-label="Steps too small: very slow progress"></svg><figcaption id="lr0-c"></figcaption></figure>
+    <figure class="fig"><svg id="lr1" role="img" aria-label="Good steps: reaches the bottom quickly"></svg><figcaption id="lr1-c"></figcaption></figure>
+    <figure class="fig"><svg id="lr2" role="img" aria-label="Steps too big: bounces farther and farther away"></svg><figcaption id="lr2-c"></figcaption></figure>
+  </div>
+  <p class="col">If the step is too big, you jump over the valley and land on the opposite slope, higher than before. Every jump makes it worse and training "blows up". Try the biggest stride in the chart at the top to see it.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 5</p>
+    <h2>Long valleys: the zigzag</h2>
+    <p>With two or more knobs, the terrain can be a long, narrow valley, like a canyon. The slope points mostly toward the walls, not toward the way out of the canyon, and the ball bounces from wall to wall while barely moving forward.</p>
+    <p>This happens when the knobs are on very different scales (for example, one in kilograms and another in tonnes). The simplest fix is to <strong>put the data on the same scale</strong> before training: the valley becomes round and the way down is direct.</p>
+  </div>
+  <div class="grid2">
+    <figure class="fig"><svg id="zzA" role="img" aria-label="Long valley with a zigzag path"></svg><figcaption id="zzA-c"></figcaption></figure>
+    <figure class="fig"><svg id="zzB" role="img" aria-label="Round valley with a direct path"></svg><figcaption id="zzB-c"></figcaption></figure>
+  </div>
+  <p class="col note">A very common trick is <strong>momentum</strong>: the ball remembers where it was heading. The bounces off the walls cancel each other out, and the speed along the canyon builds up. Turn it on in the chart at the top with the long valley.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 5</p>
+    <h2>False holes: where you start matters</h2>
+    <p>Some mountains have several holes. The ball rolls into the nearest hole, and from there everything is uphill: it gets stuck even if there's a deeper valley somewhere else. These holes are called <strong>local minima</strong>.</p>
+  </div>
+  <figure class="fig"><svg id="holes" role="img" aria-label="Terrain with several holes and paths from different starting points"></svg>
+    <figcaption>Six different starting points. Each ball ends up in the nearest hole, not necessarily the deepest one.</figcaption></figure>
+  <p class="col">The good news: in the linear and logistic regression from earlier topics, the terrain has a single hole, so you always reach the best one. Neural networks have a huge number of holes, but in practice most of them are almost equally good.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 5</p>
+    <h2>With millions of data points: steps in a hurry</h2>
+    <p>To know the exact slope you have to look at <strong>all</strong> the data. With millions of points, each step would take forever. The trick is like a poll: you ask just a few (a <strong>batch</strong> of data points picked at random) and estimate the slope from them.</p>
+    <p>Each step is less precise and the path wobbles, but the steps are so cheap that you get there sooner. This is called <strong>stochastic gradient descent</strong> (SGD), and it's how almost all large models are trained.</p>
+  </div>
+  <figure class="fig"><svg id="sgd" role="img" aria-label="Paths down using all the data, small batches, and a single data point"></svg>
+    <figcaption id="sgd-c"></figcaption></figure>
+  <div class="legend">
+    <span><svg viewBox="0 0 28 14"><path d="M2 7H26" stroke="var(--mean)" stroke-width="3"/></svg>All the data on every step</span>
+    <span><svg viewBox="0 0 28 14"><path d="M2 7H26" stroke="var(--point)" stroke-width="2.5"/></svg>Batches of 10 data points</span>
+    <span><svg viewBox="0 0 28 14"><path d="M2 7H26" stroke="var(--sample)" stroke-width="2"/></svg>One data point per step</span>
+  </div>
+  <div class="btns"><button type="button" id="sgd-again">Repeat with other random data</button></div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The full recipe</h2>
+    <ol class="steps">
+      <li><div><strong>Define the error</strong> you want to make small (for example, the squared errors of regression).</div></li>
+      <li><div><strong>Put the data on the same scale</strong> so the valley is round.</div></li>
+      <li><div><strong>Start anywhere</strong> and work out the slope (with all the data or with a batch).</div></li>
+      <li><div><strong>Take a step downhill</strong> of the chosen size.</div></li>
+      <li><div><strong>Repeat</strong> until the error stops going down. If it goes up or jumps around, the step is too big.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where is it used?</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="10" cy="12" r="3"/><circle cx="10" cy="28" r="3"/><circle cx="30" cy="20" r="3"/><circle cx="20" cy="12" r="3"/><circle cx="20" cy="28" r="3"/><path d="M13 12h4M13 28h4M23 13l5 5M23 27l5-5M12 14l6 12M12 26l6-12"/></svg><h3>Neural networks and AI</h3><p>From an image classifier to large language models: all of them are trained with variants of stochastic gradient descent, with billions of knobs at once.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M5 33h30"/><path d="M8 28c6-14 10-14 14-6s8 4 12-12"/></svg><h3>Classic models with lots of data</h3><p>The logistic regression behind a spam filter or a fraud system is trained with gradient descent when there are millions of examples.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M4 26h8l3-8 5 14 4-10 3 4h9"/></svg><h3>Learning on the fly</h3><p>When data keeps arriving nonstop (vehicle telemetry, clicks on a website), the model updates with a small step for each new data point, without retraining from scratch.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="8" y="6" width="24" height="28" rx="3"/><path d="M14 14h12M14 20h12M14 26h6"/></svg><h3>Recommenders</h3><p>Movie or product suggestions tune millions of hidden preferences by lowering, step by step, the error between what they predict and what people actually chose.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>The good and the not so good</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>The good</h3><ul class="pc">
+      <li>Works with <strong>any</strong> model whose error can be measured and differentiated.</li>
+      <li>Scales to millions of data points and billions of knobs.</li>
+      <li>Only needs the local slope, not the whole map.</li>
+      <li>With batches, each step is dirt cheap.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>The not so good</h3><ul class="pc">
+      <li>You have to pick the step size: too small is slow, too big blows up.</li>
+      <li>It can get stuck in a false hole or crawl across flat areas.</li>
+      <li>It struggles with data on very different scales.</li>
+      <li>You never know for sure whether you reached the best possible valley.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Loss function</dt><dd>The model's error: the height of the mountain at each point.</dd>
+      <dt>Gradient</dt><dd>The direction in which the error goes up fastest. You walk against it.</dd>
+      <dt>Learning rate</dt><dd>The size of each step.</dd>
+      <dt>Iteration</dt><dd>One step.</dd>
+      <dt>Epoch</dt><dd>One full pass through all the data.</dd>
+      <dt>Batch (mini-batch)</dt><dd>The small group of data points used to estimate the slope on one step.</dd>
+      <dt>Local minimum</dt><dd>A hole you can't get out of by going downhill, even if there are deeper ones.</dd>
+      <dt>Momentum</dt><dd>Remembering the direction of previous steps so you don't zigzag.</dd>
+      <dt>Convergence</dt><dd>Reaching the bottom: the error doesn't go down anymore.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the formula behind it all</summary>
+    <p style="padding-top:10px">It's a single line, repeated thousands of times:</p>
+    <div class="formula">new_knobs = knobs − step_size × slope
+
+with momentum:
+velocity = 0.9 × velocity − step_size × slope
+new_knobs = knobs + velocity</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2 id="vid-title">All in one minute</h2>
+    <p>An animated recap: the mountain in the fog, the step size, the zigzag, the false holes, and the steps in a hurry. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkVUCQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQECQH/2Q==" aria-label="Animation: gradient descent">
+      <source src="gradient-descent-with-audio-en.mp4" type="video/mp4">
+      Your browser can't play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+const RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="dc"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b,rx:6},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||240;const sp=this.o.y1-this.o.y0;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n,y=Math.max(this.o.y0-3*sp,Math.min(this.o.y1+3*sp,f(x)));d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(y).toFixed(1);}return d;}
+  ppath(P){const sp=this.o.y1-this.o.y0,sx=this.o.x1-this.o.x0;return P.map((p,i)=>(i?"L":"M")+this.sx(Math.max(this.o.x0-3*sx,Math.min(this.o.x1+3*sx,p[0]))).toFixed(1)+" "+this.sy(Math.max(this.o.y0-3*sp,Math.min(this.o.y1+3*sp,p[1]))).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+/* topographic maps (theme-dependent) */
+const REDRAW=[];const onTheme=()=>REDRAW.forEach(f=>f());try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",onTheme);}catch(e){}
+new MutationObserver(onTheme).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+function hex(name){const v=getComputedStyle(document.documentElement).getPropertyValue(name).trim();const m=v.match(/^#?([0-9a-f]{6})$/i);const n=m?parseInt(m[1],16):0x888888;return [n>>16&255,n>>8&255,n&255];}
+function topo(pl,g,f,opts){opts=opts||{};const {x0,x1,y0,y1}=pl.o,nx=opts.nx||120,ny=Math.round(nx*(pl.sy(y0)-pl.sy(y1))/(pl.sx(x1)-pl.sx(x0)));
+  const V=[];let mn=1e9,mx=-1e9;for(let j=0;j<=ny;j++){const row=[];for(let i=0;i<=nx;i++){const v=f(x0+(x1-x0)*i/nx,y1-(y1-y0)*j/ny);row.push(v);mn=Math.min(mn,v);mx=Math.max(mx,v);}V.push(row);}
+  const tr=opts.tr||(v=>Math.sqrt(v-mn));const tmx=tr(mx);
+  const draw=()=>{g.textContent="";const C=hex("--mean"),cv=document.createElement("canvas");cv.width=nx;cv.height=ny;const cx=cv.getContext("2d"),im=cx.createImageData(nx,ny);
+    for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const t=1-tr(V[j][i])/tmx,k=(j*nx+i)*4;im.data[k]=C[0];im.data[k+1]=C[1];im.data[k+2]=C[2];im.data[k+3]=Math.round(255*(0.05+0.6*t*t));}
+    cx.putImageData(im,0,0);el("image",{href:cv.toDataURL(),x:pl.sx(x0),y:pl.sy(y1),width:pl.sx(x1)-pl.sx(x0),height:pl.sy(y0)-pl.sy(y1),preserveAspectRatio:"none"},g);
+    // contour lines
+    const L=opts.levels||12;let d="";for(let l=1;l<=L;l++){const lev=mn+Math.pow(l/(L+1),2)*(mx-mn)*(opts.cut||0.6);
+      for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const c=[[i,j],[i+1,j],[i+1,j+1],[i,j+1]],pts=[];for(let e=0;e<4;e++){const a=c[e],b=c[(e+1)%4],va=V[a[1]][a[0]]-lev,vb=V[b[1]][b[0]]-lev;if((va>0)!==(vb>0)){const t=va/(va-vb);pts.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);}}
+        for(let k=0;k+1<pts.length;k+=2){const P=q=>[pl.sx(x0+(x1-x0)*q[0]/nx),pl.sy(y1-(y1-y0)*q[1]/ny)];const A=P(pts[k]),B=P(pts[k+1]);d+=`M${A[0].toFixed(1)} ${A[1].toFixed(1)}L${B[0].toFixed(1)} ${B[1].toFixed(1)}`;}}}
+    el("path",{d,class:"p-cont"},g);};
+  draw();REDRAW.push(draw);}
+const grad=(f,x,y)=>{const h=1e-4;return [(f(x+h,y)-f(x-h,y))/(2*h),(f(x,y+h)-f(x,y-h))/(2*h)];};
+function descend(f,start,eta,n,mom){const P=[start.slice()];let v=[0,0],p=start.slice();for(let k=0;k<n;k++){const g=grad(f,p[0],p[1]);if(mom){v=[0.9*v[0]-eta*g[0],0.9*v[1]-eta*g[1]];p=[p[0]+v[0],p[1]+v[1]];}else p=[p[0]-eta*g[0],p[1]-eta*g[1]];P.push(p.slice());if(!isFinite(p[0])||Math.abs(p[0])>1e3)break;}return P;}
+
+/* terrains */
+const rot=(x,y,a)=>[x*Math.cos(a)+y*Math.sin(a),-x*Math.sin(a)+y*Math.cos(a)];
+const LAND={
+  round:{f:(x,y)=>0.5*(x*x+y*y),start:[-4,3.2]},
+  long:{f:(x,y)=>{const [u,v]=rot(x,y,0.5);return 0.5*(0.06*u*u+1.6*v*v);},start:[-4.2,2.2]},
+  holes:{f:(x,y)=>0.045*(x*x+y*y)-2.4*Math.exp(-((x-2.3)**2+(y-1.4)**2)/2.2)-1.6*Math.exp(-((x+2.6)**2+(y+1.3)**2)/1.6)-1.1*Math.exp(-((x+0.6)**2+(y-3.0)**2)/1.0)-0.9*Math.exp(-((x-1.5)**2+(y+3.0)**2)/1.1),start:[-0.2,-0.4]}
+};
+
+/* ---------- hero ---------- */
+(function(){
+  const svg=document.getElementById("hero"),pl=new Plot(svg,{W:900,H:460,pad:{l:10,r:10,t:10,b:10},x0:-5.4,x1:5.4,y0:-2.76,y1:2.76});
+  pl.o.y0=-5.4*(460-20)/(900-20);pl.o.y1=-pl.o.y0;
+  const gT=el("g",null,pl.gBack),path=el("path",{class:"p-path"},pl.g),gS=el("g",null,pl.g),ball=el("circle",{r:10,class:"p-ball"},pl.top);
+  svg.style.cursor="crosshair";
+  let key="long",L=LAND.long,pos=L.start.slice(),trail=[pos.slice()],vel=[0,0],mom=false,timer=null,steps=0;
+  const ie=document.getElementById("h-eta");const eta=()=>Math.pow(10,+ie.value);
+  function setLand(k){key=k;L=LAND[k];topo(pl,gT,L.f,{levels:14,cut:k==="holes"?1:0.55});reset();}
+  function reset(p){if(timer){clearInterval(timer);timer=null;}pos=(p||L.start).slice();trail=[pos.slice()];vel=[0,0];steps=0;draw();}
+  function step(){const g=grad(L.f,pos[0],pos[1]);if(mom){vel=[0.85*vel[0]-eta()*g[0],0.85*vel[1]-eta()*g[1]];pos=[pos[0]+vel[0],pos[1]+vel[1]];}else pos=[pos[0]-eta()*g[0],pos[1]-eta()*g[1]];trail.push(pos.slice());steps++;draw();
+    const gn=Math.hypot(...grad(L.f,pos[0],pos[1]));if(!isFinite(pos[0])||Math.abs(pos[0])>60||Math.abs(pos[1])>60||(gn<1e-3&&Math.hypot(vel[0],vel[1])<1e-3)||steps>=400){if(timer){clearInterval(timer);timer=null;}draw(true);}}
+  function draw(done){path.setAttribute("d",pl.ppath(trail));gS.textContent="";if(trail.length<70)trail.forEach((p,i)=>{if(i)el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:3.2,class:"p-step"},gS);});
+    const inside=isFinite(pos[0])&&Math.abs(pos[0])<5.4&&Math.abs(pos[1])<5.4*0.5;ball.setAttribute("cx",pl.sx(Math.max(-5.6,Math.min(5.6,pos[0]))));ball.setAttribute("cy",pl.sy(Math.max(pl.o.y0-0.2,Math.min(pl.o.y1+0.2,pos[1]))));
+    const h=L.f(pos[0],pos[1]),gn=Math.hypot(...grad(L.f,pos[0],pos[1]));
+    document.getElementById("h-eta-o").textContent=eta().toFixed(3);
+    document.getElementById("h-kpi").innerHTML=`<span>steps: <b>${steps}</b></span><span>height (error): <b>${isFinite(h)?h.toFixed(3):"∞"}</b></span><span>slope: <b>${isFinite(gn)?gn.toFixed(3):"∞"}</b></span>`;
+    const st=document.getElementById("h-status");
+    if(!isFinite(h)||Math.abs(pos[0])>60||Math.abs(pos[1])>60)st.innerHTML="<b>It flew off the map!</b> The step is so big that each jump lands higher than the last one. Make the step smaller.";
+    else if(done&&steps>=400)st.innerHTML=`<b>400 steps and still not there.</b> ${key==="long"&&!mom?"In a long valley the ball zigzags. Try momentum or slightly bigger steps.":"Try bigger steps."}`;
+    else if(done)st.innerHTML=`<b>Reached the bottom in ${steps} steps.</b> ${key==="holes"?"Is it the deepest hole? Tap another spot on the map to drop the ball from there.":"Tap another spot on the map to start from there, or change the step size."}`;
+    else if(!inside)st.innerHTML="<b>The ball is bouncing out of view.</b> It's jumping from slope to slope.";
+    else st.innerHTML="Tap the map to drop the ball wherever you like, then press <b>Go down</b>.";}
+  svg.addEventListener("click",e=>{const p=pl.toSvg(e);if(!p)return;reset([pl.ix(p.x),pl.iy(p.y)]);});
+  document.querySelectorAll("[data-l]").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll("[data-l]").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));setLand(b.dataset.l);}));
+  document.getElementById("h-run").onclick=()=>{if(timer)clearInterval(timer);if(RM){for(let i=0;i<400&&!timer;i++){step();if(trail.length>401)break;}return;}timer=setInterval(step,45);};
+  document.getElementById("h-step").onclick=()=>{if(timer){clearInterval(timer);timer=null;}step();};
+  const mb=document.getElementById("h-mom");mb.onclick=()=>{mom=!mom;mb.setAttribute("aria-pressed",String(mom));reset(trail[0]);};
+  document.getElementById("h-reset").onclick=()=>reset();ie.addEventListener("input",()=>draw());
+  setLand("long");
+})();
+
+/* ---------- mountain in the fog ---------- */
+(function(){const s=document.getElementById("fog");s.setAttribute("viewBox","0 0 900 300");
+  const prof=x=>70+170/(1+Math.exp(-(x-330)/70))+20*Math.sin(x/60)*Math.exp(-(((x-330)/200)**2));
+  let d="M0 300";for(let x=0;x<=900;x+=6)d+=`L${x} ${prof(x).toFixed(1)}`;d+="L900 300Z";
+  el("path",{d,fill:"var(--mean)","fill-opacity":.16,stroke:"var(--mean)","stroke-width":2.5},s);
+  const fog=el("defs",null,s);const lg=el("linearGradient",{id:"fogg",x1:"0",x2:"1",y1:"0",y2:"0"},fog);
+  el("stop",{offset:"0",  "stop-color":"var(--bg)","stop-opacity":"0"},lg);el("stop",{offset:"0.3","stop-color":"var(--bg)","stop-opacity":"0.15"},lg);el("stop",{offset:"0.55","stop-color":"var(--bg)","stop-opacity":"0.9"},lg);el("stop",{offset:"1","stop-color":"var(--bg)","stop-opacity":"0.97"},lg);
+  const xs=[60,110,160,205,245,282,315];xs.forEach((x,i)=>{el("circle",{cx:x,cy:prof(x)-8,r:i===xs.length-1?9:4,fill:"var(--point)","fill-opacity":i===xs.length-1?1:0.5},s);});
+  const X=xs[xs.length-1],Y=prof(X)-8,sl=(prof(X+4)-prof(X-4))/8;el("line",{x1:X-40,y1:Y-40*sl,x2:X+40,y2:Y+40*sl,class:"p-tan"},s);
+  el("path",{d:`M${X+14} ${Y-26} l34 ${34*sl} m-8 -9 l8 9 l-11 4`,fill:"none",stroke:"var(--ink)","stroke-width":2.2,"stroke-linecap":"round"},s);
+  el("rect",{x:0,y:0,width:900,height:300,fill:"url(#fogg)"},s);
+  txt(s,X-30,Y-50,"here it slopes down to the right",{"font-size":14,class:"t-ink"});
+  txt(s,880,40,"fog: you can't see the valley",{"text-anchor":"end","font-size":14});txt(s,40,40,"you, up top",{"font-size":14,class:"t-ink"});
+})();
+
+/* ---------- slope ---------- */
+(function(){const f=x=>0.12*(x-1.3)**2+0.03*(x-1.3)**3*0.15+0.4,df=x=>0.24*(x-1.3)+0.0135*(x-1.3)**2;
+  const pl=new Plot(document.getElementById("slope"),{W:900,H:320,pad:{l:20,r:20,t:20,b:20},x0:-4.5,x1:5.5,y0:0,y1:4.3});
+  el("path",{d:pl.fpath(f),class:"p-curve"},pl.g);const tan=el("line",{class:"p-tan"},pl.g),arr=el("path",{fill:"none",stroke:"var(--ink)","stroke-width":2.5,"stroke-linecap":"round","stroke-linejoin":"round"},pl.top),ball=el("circle",{r:10,class:"p-ball"},pl.top),lab=txt(pl.top,0,0,"",{"font-size":14,class:"t-ink"});
+  el("circle",{cx:pl.sx(1.3),cy:pl.sy(f(1.3)),r:5,fill:"var(--good)"},pl.top);txt(pl.top,pl.sx(1.3),pl.sy(f(1.3))+24,"bottom",{"text-anchor":"middle","font-size":12,style:"fill:var(--good)"});
+  const ix=document.getElementById("s-x");
+  function draw(){const x=+ix.value,y=f(x),m=df(x);tan.setAttribute("x1",pl.sx(x-1.4));tan.setAttribute("y1",pl.sy(y-1.4*m));tan.setAttribute("x2",pl.sx(x+1.4));tan.setAttribute("y2",pl.sy(y+1.4*m));
+    ball.setAttribute("cx",pl.sx(x));ball.setAttribute("cy",pl.sy(y));const L=Math.min(150,Math.abs(m)*160),dir=m>0?-1:1,X=pl.sx(x),Y=pl.sy(y)-34;
+    arr.setAttribute("d",Math.abs(m)<0.02?"":`M${X} ${Y} h${dir*L} m${-dir*9} -7 l${dir*9} 7 l${-dir*9} 7`);
+    lab.setAttribute("x",X+(dir>0?6:-6));lab.setAttribute("y",Y-12);lab.setAttribute("text-anchor",dir>0?"start":"end");
+    lab.textContent=Math.abs(m)<0.02?"almost flat: you're at the bottom!":`slope ${m.toFixed(2)} → step to the ${dir>0?"right":"left"}${Math.abs(m)<0.25?" (tiny)":""}`;
+    document.getElementById("s-x-o").textContent=x.toFixed(2);}
+  ix.addEventListener("input",draw);draw();})();
+
+/* ---------- learning rates ---------- */
+(function(){const f=x=>0.5*x*x;const cfg=[["lr0",0.08,"Step very small (0.08)"],["lr1",0.6,"Step just right (0.6)"],["lr2",2.15,"Step too big (2.15)"]];
+  for(const [id,eta,name] of cfg){const pl=new Plot(document.getElementById(id),{W:340,H:260,pad:{l:10,r:10,t:10,b:10},x0:-5,x1:5,y0:-0.3,y1:12});
+    el("path",{d:pl.fpath(f),class:"p-curve"},pl.g);let x=-3.6;const P=[[x,f(x)]];let n=0;for(;n<12;n++){x=x-eta*x;P.push([x,f(x)]);if(Math.abs(x)>6)break;}
+    el("path",{d:pl.ppath(P),class:"p-path","stroke-width":1.8},pl.g);P.forEach((p,i)=>el("circle",{cx:pl.sx(p[0]),cy:pl.sy(Math.min(p[1],13)),r:i?4.5:7,class:i?"p-step":"p-ball"},pl.g));
+    const end=P[P.length-1];document.getElementById(id+"-c").innerHTML=`<strong>${name}.</strong> `+(eta<0.2?`After ${P.length-1} steps it's still far from the bottom.`:eta<1?"Reaches the bottom in a few steps.":"Each jump lands farther away: the error keeps growing.");}
+})();
+
+/* ---------- zigzag ---------- */
+(function(){for(const [id,k,eta,start] of [["zzA","long",1.0,[-4.2,2.2]],["zzB","round",0.55,[-4.2,2.2]]]){
+  const pl=new Plot(document.getElementById(id),{W:440,H:300,pad:{l:8,r:8,t:8,b:8},x0:-5,x1:5,y0:-3.27,y1:3.27});const g=el("g",null,pl.gBack);topo(pl,g,LAND[k].f,{nx:90,levels:12,cut:0.5});
+  const P=descend(LAND[k].f,start,eta,60,false);let n=P.findIndex(p=>Math.hypot(p[0],p[1])<0.15);n=n<0?P.length-1:n;const Q=P.slice(0,n+1);
+  el("path",{d:pl.ppath(Q),class:"p-path"},pl.g);Q.forEach((p,i)=>el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:i?3:7,class:i?"p-step":"p-ball"},pl.g));
+  document.getElementById(id+"-c").innerHTML=k==="long"?`<strong>Long valley.</strong> It bounces from wall to wall: ${n>=59?"60 steps and still not there":n+" steps"}.`:`<strong>Same data, on the same scale.</strong> Round valley: gets there in ${n} steps.`;}})();
+
+/* ---------- holes ---------- */
+(function(){const pl=new Plot(document.getElementById("holes"),{W:900,H:420,pad:{l:8,r:8,t:8,b:8},x0:-5.4,x1:5.4,y0:-2.5,y1:2.5});pl.o.y0=-5.4*(420-16)/(900-16);pl.o.y1=-pl.o.y0;
+  const g=el("g",null,pl.gBack);topo(pl,g,LAND.holes.f,{levels:14,cut:1});
+  const starts=[[-4.6,1.8],[-1.6,-2.2],[0.4,0.9],[4.6,-1.6],[3.9,2.1],[-0.5,2.4]];
+  starts.forEach(s=>{const P=descend(LAND.holes.f,s,0.6,140,false);el("path",{d:pl.ppath(P),class:"p-path","stroke-width":2},pl.g);el("circle",{cx:pl.sx(s[0]),cy:pl.sy(s[1]),r:5,fill:"var(--surface)",stroke:"var(--point)","stroke-width":2.5},pl.top);const e=P[P.length-1];el("circle",{cx:pl.sx(e[0]),cy:pl.sy(e[1]),r:8,class:"p-ball"},pl.top);});
+  const best=[2.3,1.4];txt(pl.top,pl.sx(best[0])+14,pl.sy(best[1])-14,"the deepest hole",{"font-size":13,class:"t-ink"});})();
+
+/* ---------- SGD ---------- */
+(function(){const svg=document.getElementById("sgd");let seed=3;
+  function run(){svg.textContent="";const r=mulberry32(seed),N=200,X=[],Y=[];for(let i=0;i<N;i++){const x=gauss(r);X.push(x);Y.push(1.5+2.0*x+gauss(r)*1.2);}
+    const J=(a,b)=>{let s=0;for(let i=0;i<N;i++)s+=(a+b*X[i]-Y[i])**2;return s/N;};
+    const pl=new Plot(svg,{W:900,H:420,pad:{l:46,r:12,t:12,b:40},x0:-4.5,x1:5,y0:-3,y1:4.2,xt:[-4,-2,0,2,4],yt:[-2,0,2,4],xl:"knob 1 (starting point)",yl:"knob 2 (slope)"});
+    const g=el("g",null,pl.gBack);topo(pl,g,J,{nx:110,levels:12,cut:0.5});
+    const start=[-3.8,-2.4];const G=(idx,a,b)=>{let ga=0,gb=0;for(const i of idx){const e=a+b*X[i]-Y[i];ga+=2*e;gb+=2*e*X[i];}return [ga/idx.length,gb/idx.length];};
+    const all=[...Array(N).keys()];
+    const paths=[[N,0.15,"var(--mean)",3],[10,0.15,"var(--point)",2.4],[1,0.15,"var(--sample)",1.8]].map(([bs,eta,col,w])=>{let p=start.slice();const P=[p.slice()];let cost=0;const rr=mulberry32(seed*7+bs);
+      for(let k=0;k<40;k++){const idx=bs===N?all:[...Array(bs)].map(()=>Math.floor(rr()*N));const gg=G(idx,p[0],p[1]);p=[p[0]-eta*gg[0],p[1]-eta*gg[1]];P.push(p.slice());cost+=bs;}
+      el("path",{d:pl.ppath(P),fill:"none",stroke:col,"stroke-width":w,"stroke-linejoin":"round"},pl.g);el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:6,fill:col,stroke:"var(--point-ring)","stroke-width":2},pl.top);return {bs,cost,end:p};});
+    el("circle",{cx:pl.sx(start[0]),cy:pl.sy(start[1]),r:8,class:"p-ball"},pl.top);
+    const fmt=n=>n.toLocaleString("en-US");
+    document.getElementById("sgd-c").innerHTML=`40 steps each, on 200 data points. <strong>All the data:</strong> a smooth path, but it has looked at ${fmt(paths[0].cost)} data points. <strong>Batches of 10:</strong> almost as good, looking at ${fmt(paths[1].cost)}. <strong>One data point per step:</strong> it wobbles a lot, but it only looked at ${fmt(paths[2].cost)}.`;}
+  document.getElementById("sgd-again").onclick=()=>{seed++;REDRAW.length=REDRAW.length;run();};run();})();
+})();
+</script>
+</body>
+</html>

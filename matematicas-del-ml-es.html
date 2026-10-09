@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Las matemáticas debajo del ML</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: índice de la serie. Cabecera con el progreso y una ruta numerada de temas (el orden es la ruta de aprendizaje). Misma paleta que las páginas */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9; --soft:#E8EDF5;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --point:#DD6A26; --point-ring:#FFFFFF; --good:#1C8A5A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545; --soft:#1C2533;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --point:#FF9A55; --point-ring:#0E131B; --good:#4CC38A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545; --soft:#1C2533;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --point:#FF9A55; --point-ring:#0E131B; --good:#4CC38A;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.55;padding-inline:20px;padding-block:0 72px}
+.wrap{max-width:1060px;margin:0 auto}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;margin:0;text-wrap:balance}
+p{margin:0}
+.eyebrow{font-family:var(--f-mono);font-size:.76rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+header.top{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:28px;align-items:center;padding-block:56px 36px}
+header.top>*{min-width:0}
+h1{font-size:clamp(2.6rem,7vw,4.8rem);font-weight:800;letter-spacing:-.025em}
+.lede{font-size:1.18rem;color:var(--muted);max-width:44ch;margin-top:14px}
+.heroart{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:10px}
+.heroart svg{display:block;width:100%;height:auto}
+@media (max-width:760px){header.top{grid-template-columns:1fr;padding-top:40px}}
+
+.stats{display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:22px}
+.stat{display:grid}
+.stat b{font-family:var(--f-display);font-size:1.9rem;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.stat span{font-size:.85rem;color:var(--muted)}
+.progress{margin-top:18px;height:8px;border-radius:4px;background:var(--soft);overflow:hidden;max-width:420px}
+.progress i{display:block;height:100%;background:var(--mean);border-radius:4px}
+
+.bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding-block:8px 18px;border-top:1px solid var(--line);padding-top:22px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:inherit;font-size:.9rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 14px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.chip:hover{border-color:var(--mean)}
+.search{font:inherit;font-size:.95rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 16px;min-width:0;width:240px;max-width:100%}
+:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:grid;grid-template-rows:auto 1fr;transition:transform .15s,border-color .15s,box-shadow .15s}
+.card.ready:hover{transform:translateY(-2px);border-color:var(--band-edge);box-shadow:0 10px 30px -18px rgba(20,40,80,.45)}
+.card .art{background:var(--soft);border-bottom:1px solid var(--line);aspect-ratio:16/8;position:relative}
+.card .art svg{position:absolute;inset:0;width:100%;height:100%}
+.card .num{position:absolute;top:10px;left:12px;font-family:var(--f-mono);font-size:.78rem;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:2px 9px}
+.card .tag{position:absolute;top:10px;right:12px;font-family:var(--f-mono);font-size:.72rem;letter-spacing:.04em;border-radius:999px;padding:3px 9px}
+.tag.ok{background:var(--good);color:var(--surface)}
+.tag.soon{background:var(--surface);color:var(--muted);border:1px dashed var(--line)}
+.card .body{padding:16px 18px 18px;display:grid;gap:10px;align-content:start}
+.card h3{font-size:1.25rem;font-weight:700}
+.card .fam{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mean)}
+.card p.d{font-size:.95rem;color:var(--muted)}
+.links{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.links a{display:inline-flex;align-items:center;gap:7px;font-size:.9rem;text-decoration:none;border-radius:999px;padding:6px 13px;border:1px solid var(--line);color:var(--ink);background:var(--surface)}
+.links a.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+.links a:hover{border-color:var(--mean)}
+.links svg{width:15px;height:15px;flex:none}
+.meta{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.8rem;color:var(--muted);font-family:var(--f-mono)}
+.meta span{display:inline-flex;align-items:center;gap:5px}
+.card.soon .art svg{opacity:.45;filter:grayscale(.6)}
+.card.soon h3{color:var(--muted)}
+.empty{color:var(--muted);padding:30px 0}
+footer{margin-top:44px;padding-top:22px;border-top:1px solid var(--line);color:var(--muted);font-size:.9rem;display:grid;gap:6px}
+@media (prefers-reduced-motion: reduce){.card{transition:none}.card.ready:hover{transform:none}}
+</style>
+</head>
+<body>
+
+<main class="wrap">
+  <header class="top">
+    <div>
+      <p class="eyebrow">Colección · los cimientos · <a href="serie-ml-visual-es.html" id="mlhub" target="_blank" rel="noopener" style="color:inherit">ver la Serie ML visual</a> · <a href="math-under-ml-en.html" id="enhub" target="_blank" rel="noopener" style="color:inherit">in English</a></p>
+      <h1>Las matemáticas debajo del ML</h1>
+      <p class="lede">El álgebra lineal, la estadística y el poco cálculo que hay dentro de todos los modelos: vectores, distancias, productos punto, matrices, distribuciones, incertidumbre y gradientes. Cada idea con dibujos que se mueven y ejemplos de telemetría de flota, y la misma estructura: versión sencilla con video y versión técnica con código verificado.</p>
+      <div class="stats" id="stats"></div>
+      <div class="progress" aria-hidden="true"><i id="prog"></i></div>
+    </div>
+    <div class="heroart"><svg id="heroart" viewBox="0 0 480 300" role="img" aria-label="Ilustración: dos flechas sobre una cuadrícula y una campana de Gauss"></svg></div>
+  </header>
+
+  <div class="bar">
+    <div class="chips" role="group" aria-label="Filtrar temas">
+      <button class="chip" type="button" data-f="all" aria-pressed="true">Todos</button>
+      <button class="chip" type="button" data-f="ready" aria-pressed="false">Disponibles</button>
+      <button class="chip" type="button" data-f="soon" aria-pressed="false">Próximamente</button>
+    </div>
+    <input class="search" id="q" type="search" placeholder="Buscar un tema…" aria-label="Buscar un tema">
+  </div>
+
+  <p class="eyebrow" style="margin-bottom:14px">Ruta sugerida: cada tema se apoya en los anteriores</p>
+  <div class="grid" id="grid"></div>
+  <p class="empty" id="empty" hidden>Ningún tema coincide con la búsqueda.</p>
+
+  <footer>
+    <p>Cada tema incluye: página sencilla con gráficos interactivos y un video corto con música, y página técnica con ecuaciones, widgets, código en Python verificado y un ejemplo resuelto paso a paso. Cada tema enlaza con los modelos de la Serie ML visual donde aparece.</p>
+    <p>Orden sugerido: primero el álgebra lineal (los datos como flechas), después la estadística (la incertidumbre) y al final el cálculo, que es el puente hacia las redes neuronales.</p>
+    <p id="mode"></p>
+  </footer>
+</main>
+
+<script>
+(function(){
+"use strict";
+/* Catálogo. Para añadir un tema: rellenar simple/tech (archivo local y artifact) y poner ready:true. */
+const TOPICS=[
+  {"n": 1, "id": "vect", "title": "Vectores y distancias", "fam": "Álgebra lineal", "ready": true, "video": true, "d": "Un dato como una flecha: sumar, escalar, medir su longitud y la distancia entre dos camiones en línea recta, por cuadras o por el lado más largo; por qué hay que escalar y qué pasa con muchas dimensiones.", "kw": "vector norma distancia euclidea manhattan chebyshev minkowski lp escalar estandarizar mahalanobis dimension maldicion knn", "simple": {"file": "vectores-y-distancias-es.html", "url": "vectores-y-distancias-es.html"}, "tech": {"file": "vectores-y-distancias-tecnico-es.html", "url": "vectores-y-distancias-tecnico-es.html"}, "example": "Cuatro camiones, tres distancias y un vecino que cambia"},
+  {"n": 2, "id": "dot", "title": "Producto punto y similitud coseno", "fam": "Álgebra lineal", "ready": true, "video": true, "d": "Multiplicar por parejas y sumar: el coste de un viaje, si dos flechas apuntan hacia el mismo lado, la sombra de un vector sobre otro, comparar patrones con el coseno y por qué un modelo lineal es un producto punto.", "kw": "producto punto escalar coseno similitud angulo proyeccion ortogonal cauchy schwarz pearson embedding hiperplano modelo lineal", "simple": {"file": "producto-punto-y-coseno-es.html", "url": "producto-punto-y-coseno-es.html"}, "tech": {"file": "producto-punto-y-coseno-tecnico-es.html", "url": "producto-punto-y-coseno-tecnico-es.html"}, "example": "Un viaje de 172 €, un ángulo y una frontera"},
+  {"n": 3, "id": "mat", "title": "Matrices como transformaciones", "fam": "Álgebra lineal", "ready": false, "video": false, "d": "Girar, estirar y aplastar el plano: qué significa multiplicar una matriz por un vector y por qué una capa de una red es una matriz.", "kw": "matriz transformacion lineal rotacion escala composicion determinante inversa"},
+  {"n": 4, "id": "lsq", "title": "Mínimos cuadrados como proyección", "fam": "Álgebra lineal", "ready": false, "video": false, "d": "Por qué la regresión lineal tiene una fórmula cerrada: proyectar los datos sobre lo que el modelo puede explicar.", "kw": "minimos cuadrados proyeccion ecuaciones normales qr regresion"},
+  {"n": 5, "id": "eig", "title": "Autovectores y autovalores", "fam": "Álgebra lineal", "ready": false, "video": false, "d": "Las direcciones que una matriz no gira: la base de PCA y del estado estable de una cadena de Markov.", "kw": "autovector autovalor eigen diagonalizar pca markov potencia"},
+  {"n": 6, "id": "svd", "title": "Descomposición SVD", "fam": "Álgebra lineal", "ready": false, "video": false, "d": "Partir cualquier matriz en giro, estiramiento y giro: comprimir datos y quedarse con lo importante.", "kw": "svd valores singulares compresion rango bajo"},
+  {"n": 7, "id": "desc", "title": "Media, varianza y desviación típica", "fam": "Estadística", "ready": false, "video": false, "d": "Resumir una columna de datos: el centro y lo que se alejan los valores de él.", "kw": "media mediana varianza desviacion tipica dispersion"},
+  {"n": 8, "id": "dist", "title": "Distribuciones", "fam": "Estadística", "ready": false, "video": false, "d": "Normal, binomial y Poisson: qué forma tienen los datos y cuándo aparece cada una.", "kw": "distribucion normal gaussiana binomial poisson"},
+  {"n": 9, "id": "cond", "title": "Probabilidad condicional e independencia", "fam": "Probabilidad", "ready": false, "video": false, "d": "Qué cambia cuando ya sabes algo: el paso previo al teorema de Bayes.", "kw": "probabilidad condicional independencia bayes"},
+  {"n": 10, "id": "cov", "title": "Covarianza y correlación", "fam": "Estadística", "ready": false, "video": false, "d": "Cuándo dos números se mueven juntos, y por qué correlación no es causalidad.", "kw": "covarianza correlacion causalidad"},
+  {"n": 11, "id": "clt", "title": "Muestreo y teorema central del límite", "fam": "Estadística", "ready": false, "video": false, "d": "Por qué los promedios se vuelven normales y cuánto se mueven con el tamaño de la muestra.", "kw": "muestreo teorema central del limite error estandar"},
+  {"n": 12, "id": "ci", "title": "Intervalos de confianza y bootstrap", "fam": "Estadística", "ready": false, "video": false, "d": "Cuánto fiarse de una cifra: márgenes de error con fórmula y remuestreando.", "kw": "intervalo de confianza bootstrap remuestreo"},
+  {"n": 13, "id": "test", "title": "Pruebas de hipótesis y p-valor", "fam": "Estadística", "ready": false, "video": false, "d": "¿La diferencia es real o es suerte? Explicado con un test A/B.", "kw": "hipotesis p valor test ab significacion"},
+  {"n": 14, "id": "mle", "title": "Máxima verosimilitud", "fam": "Estadística", "ready": false, "video": false, "d": "Elegir los parámetros que hacen más probables los datos: de dónde salen las funciones de pérdida.", "kw": "maxima verosimilitud likelihood perdida"},
+  {"n": 15, "id": "ent", "title": "Entropía y entropía cruzada", "fam": "Información", "ready": false, "video": false, "d": "Medir la sorpresa: la pérdida de la clasificación y de las redes neuronales.", "kw": "entropia entropia cruzada kl informacion log loss"},
+  {"n": 16, "id": "calc", "title": "Derivadas, gradiente y regla de la cadena", "fam": "Cálculo", "ready": false, "video": false, "d": "Lo mínimo de cálculo para entender cómo aprende un modelo y cómo funciona backpropagation.", "kw": "derivada gradiente regla de la cadena backpropagation"}
+];
+const LOCAL=location.protocol==="file:";
+const href=o=>o?(LOCAL?o.file:o.url):"#";
+const NS="http://www.w3.org/2000/svg";
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a||{})e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const path=(pts)=>pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join("");
+
+/* mini ilustraciones (viewBox 320x160) */
+const ART={
+  vect(s){el("circle",{cx:60,cy:130,r:4,fill:"var(--muted)"},s);[[220,40,"var(--mean)"],[260,110,"var(--point)"]].forEach(([x,y,c])=>{el("path",{d:`M60 130L${x} ${y}`,stroke:c,"stroke-width":4},s);el("circle",{cx:x,cy:y,r:7,fill:c},s);});el("path",{d:"M220 40L260 110",stroke:"var(--good)","stroke-width":3,"stroke-dasharray":"6 4"},s);},
+  dot(s){el("path",{d:"M60 130L270 60",stroke:"var(--mean)","stroke-width":4},s);el("path",{d:"M60 130L180 30",stroke:"var(--point)","stroke-width":4},s);el("path",{d:"M180 30L210 80",stroke:"var(--muted)","stroke-width":2,"stroke-dasharray":"4 3"},s);el("path",{d:"M60 130L210 80",stroke:"var(--good)","stroke-width":8,"stroke-opacity":.6},s);},
+  mat(s){for(let i=0;i<5;i++){el("path",{d:`M${40+i*25} 30V130M40 ${30+i*25}H140`,stroke:"var(--line)","stroke-width":2},s);el("path",{d:`M${190+i*20} ${130-i*5}L${230+i*20} ${30-i*5}`,stroke:"var(--mean)","stroke-width":2,"stroke-opacity":.6},s);}el("path",{d:"M150 80H180",stroke:"var(--muted)","stroke-width":3},s);},
+  lsq(s){const r=mulberry32(2);for(let i=0;i<14;i++){const x=30+i*19,y=130-x*0.3+(r()-.5)*40;el("path",{d:`M${x} ${y}V${130-x*0.3}`,stroke:"var(--sample)","stroke-width":2},s);el("circle",{cx:x,cy:y,r:4,fill:"var(--point)"},s);}el("path",{d:"M20 124L300 40",stroke:"var(--mean)","stroke-width":3},s);},
+  eig(s){const r=mulberry32(4);for(let i=0;i<40;i++){const t=gaussR(r)*60,u=gaussR(r)*15;el("circle",{cx:160+t*0.9-u*0.45,cy:80-t*0.45-u*0.9,r:3,fill:"var(--sample)","fill-opacity":.6},s);}el("path",{d:"M80 120L240 40",stroke:"var(--point)","stroke-width":4},s);el("path",{d:"M145 50L175 110",stroke:"var(--mean)","stroke-width":4},s);},
+  svd(s){[[40,"var(--mean)"],[120,"var(--sample)"],[200,"var(--point)"]].forEach(([x,c],k)=>{for(let i=0;i<5;i++)el("rect",{x,y:30+i*20,width:k===1?60:70,height:14,rx:3,fill:c,"fill-opacity":k===1?(i===0?1:i===1?.6:.15):.55},s);});},
+  desc(s){const r=mulberry32(6);for(let i=0;i<30;i++)el("circle",{cx:160+gaussR(r)*45,cy:60+(i%5)*12,r:4,fill:"var(--sample)","fill-opacity":.7},s);el("path",{d:"M160 30V130",stroke:"var(--mean)","stroke-width":3},s);el("path",{d:"M115 125H205",stroke:"var(--point)","stroke-width":3},s);},
+  dist(s){let d="";for(let i=0;i<=100;i++){const x=20+i*2.8,z=(i-50)/15;d+=(i?"L":"M")+x+" "+(135-100*Math.exp(-z*z/2));}el("path",{d,stroke:"var(--mean)","stroke-width":3,fill:"var(--band)"},s);},
+  cond(s){el("rect",{x:40,y:25,width:240,height:110,rx:6,fill:"var(--line)"},s);el("rect",{x:40,y:25,width:90,height:110,rx:6,fill:"var(--mean)","fill-opacity":.45},s);el("rect",{x:40,y:25,width:90,height:40,rx:6,fill:"var(--point)"},s);},
+  cov(s){const r=mulberry32(8);for(let i=0;i<40;i++){const x=gaussR(r),y=0.8*x+0.6*gaussR(r);el("circle",{cx:160+x*55,cy:80-y*35,r:4,fill:"var(--point)","fill-opacity":.7},s);}},
+  clt(s){[0,1,2,3,4,5,6,7,8].forEach(i=>{const h=[10,22,45,70,85,70,45,22,10][i];el("rect",{x:60+i*24,y:135-h,width:20,height:h,rx:3,fill:"var(--mean)","fill-opacity":.7},s);});},
+  ci(s){for(let i=0;i<7;i++){const c=150+(i*37%40)-20,y=25+i*17;el("path",{d:`M${c-50} ${y}H${c+50}`,stroke:i===4?"var(--point)":"var(--sample)","stroke-width":3},s);el("circle",{cx:c,cy:y,r:4,fill:"var(--ink)"},s);}el("path",{d:"M160 15V140",stroke:"var(--mean)","stroke-width":2,"stroke-dasharray":"5 4"},s);},
+  test(s){el("rect",{x:70,y:60,width:60,height:75,rx:5,fill:"var(--mean)","fill-opacity":.6},s);el("rect",{x:190,y:40,width:60,height:95,rx:5,fill:"var(--point)","fill-opacity":.8},s);el("path",{d:"M100 30H220",stroke:"var(--muted)","stroke-width":2,"stroke-dasharray":"4 3"},s);},
+  mle(s){let d="";for(let i=0;i<=100;i++){const x=20+i*2.8,z=(i-60)/18;d+=(i?"L":"M")+x+" "+(135-100*Math.exp(-z*z/2));}el("path",{d,stroke:"var(--mean)","stroke-width":3,fill:"none"},s);el("circle",{cx:188,cy:35,r:7,fill:"var(--point)"},s);},
+  ent(s){[0.1,0.3,0.6,0.9,0.6,0.3,0.1].forEach((p,i)=>el("rect",{x:50+i*32,y:135-100*p,width:24,height:100*p,rx:3,fill:"var(--sample)","fill-opacity":.4+p*.5},s));},
+  calc(s){let d="";for(let i=0;i<=100;i++){const x=20+i*2.8,u=(i-50)/30;d+=(i?"L":"M")+x+" "+(130-90*u*u);}el("path",{d,stroke:"var(--mean)","stroke-width":3,fill:"none"},s);el("path",{d:"M74 47L134 133",stroke:"var(--point)","stroke-width":3},s);el("circle",{cx:104,cy:90,r:6,fill:"var(--point)"},s);}
+};
+function gaussR(r){let u=0;while(u===0)u=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*r());}
+const ICON={
+  play:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>',
+  sigma:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.5 3H3.5l5 5-5 5h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>'
+};
+
+/* cabecera */
+const ready=TOPICS.filter(t=>t.ready).length;
+document.getElementById("stats").innerHTML=`<div class="stat"><b>${ready}</b><span>temas listos</span></div><div class="stat"><b>${ready*2}</b><span>páginas</span></div><div class="stat"><b>${TOPICS.filter(t=>t.video).length}</b><span>videos</span></div><div class="stat"><b>${TOPICS.length-ready}</b><span>en camino</span></div>`;
+document.getElementById("prog").style.width=(ready/TOPICS.length*100)+"%";
+if(LOCAL){const m=document.getElementById("mlhub");m.href="serie-ml-visual-es.html";m.target="_self";const e=document.getElementById("enhub");e.href="math-under-ml-en.html";e.target="_self";}
+document.getElementById("mode").textContent=LOCAL?"Abierto desde tu carpeta: los enlaces llevan a los archivos HTML locales (los videos deben estar en la misma carpeta).":"Abierto en línea: los enlaces llevan a las páginas publicadas.";
+(function(){const s=document.getElementById("heroart");
+  for(let i=0;i<=8;i++){el("path",{d:`M${40+i*50} 20V280`,stroke:"var(--line)","stroke-width":1.5},s);}for(let i=0;i<=5;i++){el("path",{d:`M40 ${30+i*50}H440`,stroke:"var(--line)","stroke-width":1.5},s);}
+  let d="";for(let i=0;i<=200;i++){const x=40+i*2,z=(i-100)/32;d+=(i?"L":"M")+x+" "+(270-190*Math.exp(-z*z/2));}el("path",{d,stroke:"var(--sample)","stroke-width":3,fill:"var(--band)"},s);
+  el("path",{d:"M90 250L300 90",stroke:"var(--mean)","stroke-width":5},s);el("circle",{cx:300,cy:90,r:8,fill:"var(--mean)"},s);
+  el("path",{d:"M90 250L380 190",stroke:"var(--point)","stroke-width":5},s);el("circle",{cx:380,cy:190,r:8,fill:"var(--point)"},s);
+  el("path",{d:"M300 90L380 190",stroke:"var(--good)","stroke-width":3,"stroke-dasharray":"7 5"},s);
+})();
+
+/* tarjetas */
+const grid=document.getElementById("grid");
+for(const t of TOPICS){
+  const c=document.createElement("article");c.className="card "+(t.ready?"ready":"soon");c.dataset.state=t.ready?"ready":"soon";
+  c.dataset.text=(t.title+" "+t.fam+" "+t.d+" "+(t.kw||"")).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+  c.innerHTML=`<div class="art"><svg viewBox="0 0 320 160" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg><span class="num">${String(t.n).padStart(2,"0")}</span><span class="tag ${t.ready?"ok":"soon"}">${t.ready?"Disponible":"Próximamente"}</span></div>
+  <div class="body"><p class="fam">${t.fam}</p><h3>${t.title}</h3><p class="d">${t.d}</p>
+  ${t.ready?`<div class="meta">${t.video?"<span>▶ video incluido</span>":""}${t.example?`<span>ejemplo: ${t.example}</span>`:""}</div>
+  <div class="links"><a class="primary" href="${href(t.simple)}" target="${LOCAL?"_self":"_blank"}" rel="noopener">${ICON.play}Versión sencilla</a><a href="${href(t.tech)}" target="${LOCAL?"_self":"_blank"}" rel="noopener">${ICON.sigma}Versión técnica</a></div>`:""}</div>`;
+  grid.appendChild(c);ART[t.id](c.querySelector("svg"));
+}
+/* filtros */
+let F="all";const q=document.getElementById("q");
+function apply(){const s=q.value.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim();let n=0;
+  grid.querySelectorAll(".card").forEach(c=>{const ok=(F==="all"||c.dataset.state===F)&&(!s||c.dataset.text.includes(s));c.hidden=!ok;if(ok)n++;});
+  document.getElementById("empty").hidden=n>0;}
+document.querySelectorAll(".chip").forEach(b=>b.addEventListener("click",()=>{F=b.dataset.f;document.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));apply();}));
+q.addEventListener("input",apply);
+})();
+</script>
+</body>
+</html>

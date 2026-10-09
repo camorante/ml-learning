@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Procesos Gaussianos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: una columna de lectura (~68ch) con figuras más anchas; cada idea = texto corto + gráfico vivo */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.6rem,7vw,4.6rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:40ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+.stack{display:grid;gap:14px}
+strong{font-weight:700}
+.k-mean{color:var(--mean);font-weight:700}
+.k-point{color:var(--point);font-weight:700}
+.k-sample{color:var(--sample);font-weight:700}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+
+/* figuras */
+figure{margin:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+svg .t-display{font-family:var(--f-display);font-weight:700}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none}
+.p-band{fill:var(--band);stroke:var(--band-edge);stroke-width:1;stroke-dasharray:3 3}
+.p-mean{fill:none;stroke:var(--mean);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.p-sample{fill:none;stroke:var(--sample);stroke-width:1.5;opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-slice{stroke:var(--muted);stroke-dasharray:4 4;stroke-width:1.2;fill:none}
+.p-bell{fill:var(--point);fill-opacity:.22;stroke:var(--point);stroke-width:1.6}
+.hit{fill:transparent;cursor:crosshair}
+
+/* playground */
+.play{display:grid;gap:14px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.lab{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.7fr);gap:14px}
+@media (max-width:760px){.grid3,.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700}
+dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Machine learning, explicado sin fórmulas · <a href="procesos-gaussianos-tecnico-es.html" target="_self" style="color:var(--mean)">ver la versión técnica</a> · <a href="serie-ml-visual-es.html" target="_self" style="color:var(--mean)">todos los temas</a> · <a href="gaussian-processes-en.html" target="_self">in English</a></p>
+  <h1>Procesos Gaussianos</h1>
+  <p class="lede">Una forma de adivinar una curva completa a partir de unos pocos puntos, y de decir con honestidad cuánto duda en cada lugar.</p>
+</header>
+
+<section class="first play" aria-label="Juguete interactivo">
+  <div class="fig">
+    <svg id="hero" role="img" aria-label="Gráfico interactivo de un proceso gaussiano: puntos medidos, la mejor suposición, la zona de duda y varias curvas posibles"></svg>
+  </div>
+  <div class="legend" aria-hidden="false">
+    <span><svg viewBox="0 0 28 14"><circle cx="14" cy="7" r="5" fill="var(--point)"/></svg>Lo que medimos (datos)</span>
+    <span><svg viewBox="0 0 28 14"><path d="M2 7H26" stroke="var(--mean)" stroke-width="3"/></svg>La mejor suposición</span>
+    <span><svg viewBox="0 0 28 14"><rect x="1" y="1" width="26" height="12" rx="2" fill="var(--band)" stroke="var(--band-edge)"/></svg>Zona de duda</span>
+    <span><svg viewBox="0 0 28 14"><path d="M2 10C8 2 14 12 20 4S26 6 26 6" stroke="var(--sample)" stroke-width="1.6" fill="none"/></svg>Otras curvas posibles</span>
+  </div>
+  <p class="status" id="h-status"></p>
+  <div class="controls">
+    <div class="slider">
+      <label for="h-l">Suavidad de la curva <output id="h-l-out"></output></label>
+      <input type="range" id="h-l" min="0.3" max="3" step="0.05" value="1">
+      <div class="ends"><span>nerviosa</span><span>tranquila</span></div>
+    </div>
+    <div class="slider">
+      <label for="h-n">Error en las medidas <output id="h-n-out"></output></label>
+      <input type="range" id="h-n" min="0.02" max="0.9" step="0.02" value="0.1">
+      <div class="ends"><span>medidas exactas</span><span>medidas imprecisas</span></div>
+    </div>
+    <div class="btns">
+      <button id="h-undo" type="button">Quitar el último</button>
+      <button id="h-clear" type="button">Borrar todo</button>
+      <button id="h-ex" type="button">Volver al ejemplo</button>
+      <button id="h-anim" type="button" aria-pressed="false">Pausar movimiento</button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Antes de empezar</p>
+    <h2>Algo que tú ya sabes hacer</h2>
+    <p>Imagina que mediste la temperatura de tu ciudad tres veces en un día: a las 6:00 hacía <strong>12°</strong>, a las 13:00 hacía <strong>24°</strong> y a las 19:00 hacía <strong>18°</strong>.</p>
+    <p>Si alguien te pregunta qué temperatura hacía a las <strong>9:00</strong>, no lo mediste, pero puedes adivinar: <em>"algo entre 15° y 21°"</em>. Estás bastante seguro, porque tienes medidas cerca.</p>
+    <p>Y si te preguntan por las <strong>3:00 de la madrugada</strong>, también puedes adivinar, pero con más dudas: <em>"quizá entre 4° y 16°"</em>. No tienes ninguna medida cerca.</p>
+  </div>
+  <figure class="fig">
+    <svg id="temp" viewBox="0 0 800 300" role="img" aria-label="Temperatura medida a las 6, 13 y 19 horas, con dos preguntas: a las 9 el rango es pequeño, a las 3 el rango es grande"></svg>
+    <figcaption>Cerca de las medidas, tu duda es pequeña. Lejos de ellas, tu duda crece.</figcaption>
+  </figure>
+  <p class="col note">Eso que acabas de hacer en tu cabeza (adivinar el valor <strong>y además</strong> decir cuánto dudas) es exactamente lo que hace un Proceso Gaussiano. La diferencia es que lo hace con números y siguiendo reglas claras.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 4</p>
+    <h2>Antes de ver datos, muchas curvas son posibles</h2>
+    <p>Un Proceso Gaussiano empieza sin saber nada. Piensa en él como una <strong>bolsa gigante llena de curvas</strong>. Todas son suaves, todas son posibles y ninguna es "la buena" todavía.</p>
+    <p>Abajo ves algunas sacadas de la bolsa al azar. Se mueven para recordarte que hay infinitas más.</p>
+  </div>
+  <figure class="fig">
+    <svg id="prior" role="img" aria-label="Varias curvas suaves al azar, sin datos todavía, con una campana dibujada en una línea vertical"></svg>
+    <figcaption>¿Por qué se llama <em>Gaussiano</em>? Si miras una sola línea vertical (la punteada) y anotas dónde la cruza cada curva, los valores forman una <strong>campana</strong>: muchos en el centro y pocos en los extremos. A esa campana los matemáticos la llaman "campana de Gauss".</figcaption>
+  </figure>
+  <div class="btns"><button id="prior-new" type="button">Sacar otras curvas de la bolsa</button></div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 4</p>
+    <h2>Cada dato descarta curvas</h2>
+    <p>Cuando medimos algo, nos quedamos solo con las curvas que pasan <strong>por ese punto o muy cerca</strong>. Todas las demás se tiran. Es como un detective: cada pista nueva elimina sospechosos.</p>
+  </div>
+  <div class="grid3">
+    <figure class="fig"><svg id="pan0" role="img" aria-label="Sin datos: curvas por todas partes"></svg><figcaption><strong>Sin datos.</strong> Todo vale.</figcaption></figure>
+    <figure class="fig"><svg id="pan1" role="img" aria-label="Un dato: todas las curvas pasan por el punto"></svg><figcaption><strong>1 dato.</strong> Todas las curvas pasan por ahí.</figcaption></figure>
+    <figure class="fig"><svg id="pan2" role="img" aria-label="Tres datos: quedan pocas curvas parecidas"></svg><figcaption><strong>3 datos.</strong> Quedan pocas formas posibles.</figcaption></figure>
+  </div>
+  <p class="col">Si promedias todas las curvas que sobreviven, obtienes la <span class="k-mean">línea azul</span>: la mejor suposición. En la jerga se llama <strong>media</strong>.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 4</p>
+    <h2>La zona de duda: saber cuándo no sabes</h2>
+    <p>Lo más valioso de un Proceso Gaussiano es que no solo da una respuesta. También dibuja una <strong>zona sombreada</strong> que dice: "el valor real casi seguro está aquí dentro".</p>
+    <ul class="pc">
+      <li><strong>Cerca de los datos</strong> la zona es estrecha: el modelo está seguro.</li>
+      <li><strong>Lejos de los datos</strong> la zona se ensancha: el modelo admite que está adivinando.</li>
+    </ul>
+  </div>
+  <figure class="fig">
+    <svg id="duda" role="img" aria-label="Curva con datos a la izquierda: la campana cerca de los datos es estrecha y la campana lejos de los datos es ancha"></svg>
+    <figcaption>Las campanas naranjas muestran lo mismo de otra forma. Estrecha significa "poca duda". Ancha significa "mucha duda".</figcaption>
+  </figure>
+  <p class="col note">Muchos modelos de machine learning responden siempre con la misma seguridad, aunque estén inventando. Un Proceso Gaussiano te avisa. Eso es oro cuando un error sale caro: medicina, finanzas, máquinas costosas.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 de 4</p>
+    <h2>El kernel: la regla de "los vecinos se parecen"</h2>
+    <p>¿Cómo decide el modelo qué curvas son razonables? Con una regla muy simple que se llama <strong>kernel</strong>: <em>dos puntos cercanos tienen valores parecidos; dos puntos lejanos, no necesariamente.</em></p>
+    <p>La temperatura a las 9:00 y a las 9:05 es casi igual. La de las 9:00 y la de las 21:00 puede ser muy distinta. El kernel solo decide <strong>qué tan lejos llega ese parecido</strong>. Muévelo y mira qué pasa.</p>
+  </div>
+  <div class="lab">
+    <figure class="fig">
+      <svg id="kern" viewBox="0 0 360 240" role="img" aria-label="Curva de parecido según la distancia entre dos puntos"></svg>
+      <figcaption id="kern-cap"></figcaption>
+    </figure>
+    <figure class="fig">
+      <svg id="kfit" role="img" aria-label="Ajuste del proceso gaussiano con el alcance elegido"></svg>
+      <figcaption id="kfit-cap"></figcaption>
+    </figure>
+  </div>
+  <div class="slider col">
+    <label for="k-l">Alcance del parecido <output id="k-l-out"></output></label>
+    <input type="range" id="k-l" min="0.25" max="3" step="0.05" value="1">
+    <div class="ends"><span>corto: curvas nerviosas</span><span>largo: curvas tranquilas</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Un detalle importante</p>
+    <h2>¿Y si las medidas tienen errores?</h2>
+    <p>En la vida real los sensores fallan un poco: un termómetro barato, un GPS con mala señal. Si el modelo cree ciegamente en cada medida, hace curvas locas para pasar por todos los puntos.</p>
+    <p>Por eso se le dice cuánto <strong>ruido</strong> esperar. Con ruido, la curva pasa <em>cerca</em> de los puntos en lugar de pasar <em>por</em> ellos, y queda más tranquila.</p>
+  </div>
+  <figure class="fig">
+    <svg id="noise" role="img" aria-label="Datos con error y la curva que se ajusta según el ruido elegido"></svg>
+    <figcaption id="noise-cap"></figcaption>
+  </figure>
+  <div class="slider col">
+    <label for="n-n">Error que esperamos en las medidas <output id="n-n-out"></output></label>
+    <input type="range" id="n-n" min="0.02" max="1" step="0.02" value="0.02">
+    <div class="ends"><span>creo en cada medida</span><span>desconfío bastante</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta completa</h2>
+    <ol class="steps">
+      <li><div><strong>Elige la regla de parecido (kernel).</strong> ¿Qué tan suave crees que es lo que vas a medir? ¿Cuánto error tienen tus medidas?</div></li>
+      <li><div><strong>Mide unos pocos puntos.</strong> No necesitas miles; con un puñado ya funciona.</div></li>
+      <li><div><strong>Quédate con las curvas que encajan.</strong> El modelo descarta las que no pasan cerca de tus datos.</div></li>
+      <li><div><strong>Lee el resultado.</strong> La media te da la mejor suposición en cualquier lugar, y la zona de duda te dice cuánto confiar en ella.</div></li>
+    </ol>
+    <p class="status">Vuelve al gráfico de arriba del todo: ahora ya sabes qué es cada cosa.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>¿Para qué se usa?</h2>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M4 34L15 14l7 10 5-7 9 17Z"/><circle cx="29" cy="9" r="3"/></svg>
+      <h3>Buscar oro y mapear terrenos</h3>
+      <p>La idea nació en las minas de Sudáfrica en los años 50 (se llama <em>kriging</em>, por el ingeniero Danie Krige). Con unas pocas perforaciones se estima cuánto mineral hay en todo el terreno, y dónde conviene perforar de nuevo porque la duda es mayor.</p>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="14"/><circle cx="20" cy="20" r="8"/><circle cx="20" cy="20" r="2"/></svg>
+      <h3>Encontrar la mejor configuración probando poco</h3>
+      <p>Cuando cada prueba es cara (entrenar un modelo de IA durante horas, hornear una receta, un experimento de laboratorio), el modelo sugiere qué probar después: donde la media es prometedora o donde la duda es grande. Esto se llama <em>optimización bayesiana</em>.</p>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M4 30c6-2 8-12 14-12s8 8 18-6"/><path d="M15 21h10" stroke-dasharray="2 3"/><rect x="2" y="25" width="9" height="6" rx="1"/></svg>
+      <h3>Rellenar huecos en señales de sensores</h3>
+      <p>Un vehículo entra en un túnel y el GPS deja de enviar posiciones. Un Proceso Gaussiano estima la ruta en ese hueco y además dice cuánto confía en cada tramo estimado.</p>
+    </div>
+    <div class="card">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M3 22h8l3-9 5 18 4-12 3 3h11"/></svg>
+      <h3>Detectar cosas raras</h3>
+      <p>Si llega una medida nueva que cae <strong>muy fuera</strong> de la zona de duda, probablemente algo anda mal: un sensor dañado, una máquina que se recalienta, un paciente que empeora.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo bueno y lo no tan bueno</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good">
+      <h3>Lo bueno</h3>
+      <ul class="pc">
+        <li>Funciona muy bien con <strong>pocos datos</strong>.</li>
+        <li>Dice <strong>cuánto duda</strong>, no solo la respuesta.</li>
+        <li>Es flexible: no le obligas a que la curva sea una recta o una parábola.</li>
+        <li>Se puede entender y explicar, como acabas de ver.</li>
+      </ul>
+    </div>
+    <div class="card pc-bad">
+      <h3>Lo no tan bueno</h3>
+      <ul class="pc">
+        <li>Se vuelve <strong>lento con muchos datos</strong>: si duplicas los datos, el trabajo se multiplica por unas 8 veces. Con cientos de miles de puntos hay que usar trucos o aproximaciones.</li>
+        <li>Elegir bien el kernel requiere algo de criterio.</li>
+        <li>Pierde fuerza cuando cada dato tiene muchísimas variables de entrada (por ejemplo, los píxeles de una foto).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Proceso Gaussiano</dt><dd>Una bolsa de curvas posibles, de la que nos quedamos con las que encajan con los datos.</dd>
+      <dt>Prior (a priori)</dt><dd>Lo que crees antes de ver datos: la bolsa completa.</dd>
+      <dt>Posterior</dt><dd>Lo que crees después de ver datos: las curvas que sobrevivieron.</dd>
+      <dt>Media</dt><dd>La mejor suposición: el promedio de las curvas que sobreviven.</dd>
+      <dt>Varianza</dt><dd>Cuánta duda hay en cada lugar. Es el ancho de la zona sombreada.</dd>
+      <dt>Kernel</dt><dd>La regla que dice cuánto se parecen dos puntos según su distancia.</dd>
+      <dt>Ruido</dt><dd>El error que esperamos en cada medida.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: las dos fórmulas detrás de todo</summary>
+    <p style="padding-top:10px">No hacen falta para entender la idea. La línea azul y la zona de duda salen de estas dos cuentas:</p>
+    <div class="formula">media(x)    = k(x)ᵀ · (K + σ²·I)⁻¹ · y
+varianza(x) = k(x,x) − k(x)ᵀ · (K + σ²·I)⁻¹ · k(x)
+
+kernel RBF: k(a,b) = exp( −(a−b)² / (2·ℓ²) )</div>
+    <p style="font-size:.95rem;color:var(--muted)">K compara los datos entre sí con el kernel, k(x) compara el punto nuevo con cada dato, y son los valores medidos, σ² es el ruido y ℓ es el "alcance del parecido" del deslizador.</p>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2>Todo en 40 segundos</h2>
+    <p>Un repaso animado de las ideas de esta página: la bolsa de curvas, cómo cada dato descarta las que no encajan y la zona de duda. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABYqqFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgKFgP//Z" aria-label="Animación: Procesos Gaussianos, cómo predecir una curva y saber cuándo no sabes">
+      <source src="procesos-gaussianos-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+const NS="http://www.w3.org/2000/svg";
+const RM=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+let clipId=0;
+
+function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);if(attrs)for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+function randn(r,m){const a=new Float64Array(m);for(let i=0;i<m;i++)a[i]=gauss(r);return a;}
+const kern=(a,b,l)=>Math.exp(-((a-b)*(a-b))/(2*l*l));
+
+function chol(A,n){
+  const L=new Float64Array(n*n);
+  for(let i=0;i<n;i++){
+    for(let j=0;j<=i;j++){
+      let s=A[i*n+j];
+      for(let p=0;p<j;p++)s-=L[i*n+p]*L[j*n+p];
+      if(i===j)L[i*n+i]=Math.sqrt(Math.max(s,1e-10));
+      else L[i*n+j]=s/L[j*n+j];
+    }
+  }
+  return L;
+}
+function fwd(L,n,b){const x=new Float64Array(n);for(let i=0;i<n;i++){let s=b[i];for(let p=0;p<i;p++)s-=L[i*n+p]*x[p];x[i]=s/L[i*n+i];}return x;}
+function bwd(L,n,b){const x=new Float64Array(n);for(let i=n-1;i>=0;i--){let s=b[i];for(let p=i+1;p<n;p++)s-=L[p*n+i]*x[p];x[i]=s/L[i*n+i];}return x;}
+function dot(a,b){let s=0;for(let i=0;i<a.length;i++)s+=a[i]*b[i];return s;}
+
+function posterior(X,Y,G,l,noise,wantCov){
+  const n=X.length,m=G.length;
+  const mean=new Float64Array(m),sd=new Float64Array(m);
+  let cov=null;
+  if(n===0){
+    sd.fill(1);
+    if(wantCov){cov=new Float64Array(m*m);for(let i=0;i<m;i++)for(let j=0;j<m;j++)cov[i*m+j]=kern(G[i],G[j],l);}
+    return {mean,sd,cov};
+  }
+  const K=new Float64Array(n*n);
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++)K[i*n+j]=kern(X[i],X[j],l)+(i===j?noise*noise+1e-6:0);
+  const L=chol(K,n);
+  const alpha=bwd(L,n,fwd(L,n,Y));
+  const V=new Array(m);
+  for(let j=0;j<m;j++){
+    const ks=new Float64Array(n);for(let i=0;i<n;i++)ks[i]=kern(X[i],G[j],l);
+    mean[j]=dot(ks,alpha);
+    const v=fwd(L,n,ks);V[j]=v;
+    sd[j]=Math.sqrt(Math.max(1-dot(v,v),0));
+  }
+  if(wantCov){
+    cov=new Float64Array(m*m);
+    for(let i=0;i<m;i++)for(let j=i;j<m;j++){const c=kern(G[i],G[j],l)-dot(V[i],V[j]);cov[i*m+j]=c;cov[j*m+i]=c;}
+  }
+  return {mean,sd,cov};
+}
+
+const charts=[];
+let paused=RM;
+
+class GPChart{
+  constructor(svg,o){
+    this.svg=svg;
+    this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:-3,y1:3,l:1,noise:0.08,points:[],nSamples:5,band:true,mean:true,seed:1,m:90,slices:[],interactive:false,onChange:null},o);
+    const {W,H,m}=this.o;
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+    this.G=Array.from({length:m},(_,i)=>this.o.x0+(this.o.x1-this.o.x0)*i/(m-1));
+    this.reseed(this.o.seed);
+    this.t=0;this.visible=true;
+    this.build();
+    this.update();
+    charts.push(this);
+  }
+  reseed(seed){
+    const r=mulberry32(seed),m=this.o.m;
+    this.z=[];this.ph=[];
+    for(let s=0;s<this.o.nSamples;s++){this.z.push([randn(r,m),randn(r,m)]);this.ph.push(r()*6.28);}
+  }
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  build(){
+    const s=this.svg,o=this.o;
+    const id="clip"+(++clipId);
+    const defs=el("defs",null,s);
+    const cp=el("clipPath",{id},defs);
+    el("rect",{x:o.pad.l,y:o.pad.t,width:o.W-o.pad.l-o.pad.r,height:o.H-o.pad.t-o.pad.b},cp);
+    const grid=el("g",null,s);
+    for(let y=Math.ceil(o.y0);y<=o.y1;y++){
+      el("line",{x1:o.pad.l,x2:o.W-o.pad.r,y1:this.sy(y),y2:this.sy(y),class:y===0?"g-axis":"g-line","stroke-opacity":y===0?.35:1},grid);
+    }
+    const plot=el("g",{"clip-path":`url(#${id})`},s);
+    this.gBand=el("path",{class:"p-band"},plot);
+    this.gSamples=el("g",null,plot);
+    this.sPaths=[];
+    for(let i=0;i<o.nSamples;i++)this.sPaths.push(el("path",{class:"p-sample"},this.gSamples));
+    this.gMean=el("path",{class:"p-mean"},plot);
+    this.gSlices=el("g",null,plot);
+    if(o.interactive){
+      this.hit=el("rect",{class:"hit",x:o.pad.l,y:o.pad.t,width:o.W-o.pad.l-o.pad.r,height:o.H-o.pad.t-o.pad.b},s);
+      s.addEventListener("click",e=>this.onClick(e));
+      s.style.cursor="crosshair";
+    }
+    this.gPoints=el("g",null,s);
+    if(!o.band)this.gBand.style.display="none";
+    if(!o.mean)this.gMean.style.display="none";
+  }
+  onClick(e){
+    const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;
+    const ctm=this.svg.getScreenCTM();if(!ctm)return;
+    const p=pt.matrixTransform(ctm.inverse());
+    const o=this.o;
+    if(p.x<o.pad.l||p.x>o.W-o.pad.r||p.y<o.pad.t||p.y>o.H-o.pad.b)return;
+    for(let i=0;i<o.points.length;i++){
+      const q=o.points[i];
+      if(Math.hypot(this.sx(q[0])-p.x,this.sy(q[1])-p.y)<16){o.points.splice(i,1);this.update();return;}
+    }
+    o.points.push([this.ix(p.x),this.iy(p.y)]);
+    this.update();
+  }
+  line(ys){
+    const G=this.G,lo=this.o.y0-3,hi=this.o.y1+3;let d="";
+    for(let i=0;i<G.length;i++){const y=Math.min(hi,Math.max(lo,ys[i]));d+=(i?"L":"M")+this.sx(G[i]).toFixed(1)+" "+this.sy(y).toFixed(1);}
+    return d;
+  }
+  update(){
+    const o=this.o,m=o.m;
+    const X=o.points.map(p=>p[0]),Y=o.points.map(p=>p[1]);
+    const post=posterior(X,Y,this.G,o.l,o.noise,o.nSamples>0);
+    this.post=post;
+    if(o.nSamples>0){
+      const C=post.cov;for(let i=0;i<m;i++)C[i*m+i]+=1e-4;
+      this.Lc=chol(C,m);
+    }
+    // band
+    const up=new Float64Array(m),dn=new Float64Array(m);
+    for(let i=0;i<m;i++){up[i]=post.mean[i]+2*post.sd[i];dn[i]=post.mean[i]-2*post.sd[i];}
+    let d=this.line(up);
+    const lo=o.y0-3,hi=o.y1+3;
+    for(let i=m-1;i>=0;i--){const y=Math.min(hi,Math.max(lo,dn[i]));d+="L"+this.sx(this.G[i]).toFixed(1)+" "+this.sy(y).toFixed(1);}
+    this.gBand.setAttribute("d",d+"Z");
+    this.gMean.setAttribute("d",this.line(post.mean));
+    // points
+    this.gPoints.textContent="";
+    for(const p of o.points)el("circle",{cx:this.sx(p[0]),cy:this.sy(p[1]),r:o.pr||7,class:"p-point"},this.gPoints);
+    this.drawSlices();
+    this.drawSamples();
+    if(o.onChange)o.onChange(this);
+  }
+  drawSlices(){
+    const o=this.o,g=this.gSlices;g.textContent="";
+    for(const s of o.slices){
+      let idx=0,best=1e9;this.G.forEach((x,i)=>{const d=Math.abs(x-s.x);if(d<best){best=d;idx=i;}});
+      const mu=this.post.mean[idx],sd=Math.max(this.post.sd[idx],0.03);
+      const X=this.sx(this.G[idx]);
+      el("line",{x1:X,x2:X,y1:o.pad.t,y2:o.H-o.pad.b,class:"p-slice"},g);
+      const w=s.w||56;let d="M"+X+" "+this.sy(mu+4*sd);
+      for(let k=0;k<=80;k++){const y=mu+4*sd-8*sd*k/80;const off=w*Math.exp(-((y-mu)*(y-mu))/(2*sd*sd));d+="L"+(X+off).toFixed(1)+" "+this.sy(y).toFixed(1);}
+      el("path",{d:d+"Z",class:"p-bell"},g);
+      if(s.label){
+        const t=el("text",{x:X+8,y:o.pad.t+18,"font-size":s.fs||15,class:"t-ink"},g);t.textContent=s.label;
+        if(s.sub){const t2=el("text",{x:X+8,y:o.pad.t+38,"font-size":(s.fs||15)-2},g);t2.textContent=s.sub;}
+      }
+    }
+  }
+  drawSamples(){
+    const o=this.o,m=o.m;if(!o.nSamples)return;
+    const L=this.Lc,mean=this.post.mean;
+    const z=new Float64Array(m),y=new Float64Array(m);
+    for(let s=0;s<o.nSamples;s++){
+      const a=this.t+this.ph[s],c=Math.cos(a),sn=Math.sin(a),z1=this.z[s][0],z2=this.z[s][1];
+      for(let i=0;i<m;i++)z[i]=z1[i]*c+z2[i]*sn;
+      for(let i=0;i<m;i++){let v=mean[i];const row=i*m;for(let p=0;p<=i;p++)v+=L[row+p]*z[p];y[i]=v;}
+      this.sPaths[s].setAttribute("d",this.line(y));
+    }
+  }
+}
+
+// animación compartida
+if("IntersectionObserver" in window){
+  const io=new IntersectionObserver(es=>{for(const e of es){const c=charts.find(c=>c.svg===e.target);if(c)c.visible=e.isIntersecting;}});
+  setTimeout(()=>charts.forEach(c=>io.observe(c.svg)),0);
+}
+function loop(){
+  if(!paused)for(const c of charts)if(c.visible&&c.o.nSamples){c.t+=c.o.speed||0.012;c.drawSamples();}
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ---------- héroe ----------
+const EX=[[1,-0.8],[2.4,0.5],[3.6,1.4],[6.6,-0.3],[7.3,-1.1]];
+const hero=new GPChart(document.getElementById("hero"),{
+  W:900,H:400,points:EX.map(p=>p.slice()),nSamples:5,interactive:true,l:1,noise:0.1,seed:7,
+  onChange:c=>{
+    const n=c.o.points.length;
+    document.getElementById("h-status").innerHTML=n===0
+      ?"<b>Sin puntos.</b> Sin datos, el modelo no sabe nada y la zona de duda ocupa todo. Toca el gráfico para añadir un dato."
+      :`<b>${n} ${n===1?"punto":"puntos"}.</b> Toca el gráfico para añadir otro, o toca un punto para quitarlo. Fíjate cómo la zona de duda se estrecha cerca de cada punto.`;
+  }
+});
+const hl=document.getElementById("h-l"),hn=document.getElementById("h-n");
+function heroSliders(){
+  hero.o.l=+hl.value;hero.o.noise=+hn.value;
+  document.getElementById("h-l-out").textContent=(+hl.value).toFixed(2);
+  document.getElementById("h-n-out").textContent=(+hn.value).toFixed(2);
+  hero.update();
+}
+hl.addEventListener("input",heroSliders);hn.addEventListener("input",heroSliders);heroSliders();
+document.getElementById("h-undo").onclick=()=>{hero.o.points.pop();hero.update();};
+document.getElementById("h-clear").onclick=()=>{hero.o.points.length=0;hero.update();};
+document.getElementById("h-ex").onclick=()=>{hero.o.points=EX.map(p=>p.slice());hl.value=1;hn.value=0.1;heroSliders();};
+const animBtn=document.getElementById("h-anim");
+function syncAnim(){animBtn.textContent=paused?"Mover las curvas":"Pausar movimiento";animBtn.setAttribute("aria-pressed",String(paused));}
+animBtn.onclick=()=>{paused=!paused;syncAnim();};syncAnim();
+
+// ---------- temperatura (estático) ----------
+(function(){
+  const s=document.getElementById("temp");
+  const X=h=>70+h/24*690,Y=t=>250-t/30*215;
+  for(const t of [10,20,30]){el("line",{x1:70,x2:760,y1:Y(t),y2:Y(t),class:"g-line"},s);const tx=el("text",{x:60,y:Y(t)+5,"text-anchor":"end","font-size":14},s);tx.textContent=t+"°";}
+  el("line",{x1:70,x2:760,y1:250,y2:250,class:"g-axis"},s);
+  for(const h of [0,6,12,18,24]){const tx=el("text",{x:X(h),y:276,"text-anchor":"middle","font-size":14},s);tx.textContent=h+":00";}
+  // rangos
+  const Q=[[9,15,21,"9:00","entre 15° y 21°"],[3,4,16,"3:00","entre 4° y 16°"]];
+  for(const [h,a,b,lab,txt] of Q){
+    el("rect",{x:X(h)-14,y:Y(b),width:28,height:Y(a)-Y(b),rx:7,fill:"var(--band)",stroke:"var(--band-edge)","stroke-dasharray":"3 3"},s);
+    const q=el("text",{x:X(h),y:Y((a+b)/2)+7,"text-anchor":"middle","font-size":20,class:"t-ink t-display"},s);q.textContent="?";
+    const t1=el("text",{x:X(h),y:Y(b)-24,"text-anchor":"middle","font-size":14,class:"t-ink"},s);t1.textContent="¿A las "+lab+"?";
+    const t2=el("text",{x:X(h),y:Y(b)-8,"text-anchor":"middle","font-size":13},s);t2.textContent=txt;
+  }
+  for(const [h,t] of [[6,12],[13,24],[19,18]]){
+    el("circle",{cx:X(h),cy:Y(t),r:8,class:"p-point"},s);
+    const tx=el("text",{x:X(h)+14,y:Y(t)+5,"font-size":15,class:"t-ink"},s);tx.textContent=t+"°";
+  }
+})();
+
+// ---------- prior ----------
+const prior=new GPChart(document.getElementById("prior"),{W:900,H:340,nSamples:8,l:1,seed:3,band:true,mean:false,slices:[{x:7.2,label:"Una línea vertical",sub:"los valores forman una campana",w:70}]});
+let pseed=3;
+document.getElementById("prior-new").onclick=()=>{pseed+=11;prior.reseed(pseed);prior.drawSamples();};
+
+// ---------- paneles ----------
+const P=[[2,1.1],[5,-0.9],[8,0.7]];
+const small={W:340,H:240,pr:8,nSamples:7,l:1,noise:0.05,speed:0.009};
+new GPChart(document.getElementById("pan0"),Object.assign({},small,{points:[],seed:21}));
+new GPChart(document.getElementById("pan1"),Object.assign({},small,{points:[P[1]],seed:22}));
+new GPChart(document.getElementById("pan2"),Object.assign({},small,{points:P.slice(),seed:23}));
+
+// ---------- duda ----------
+new GPChart(document.getElementById("duda"),{W:900,H:340,nSamples:0,l:1.1,noise:0.06,
+  points:[[0.8,-0.6],[1.7,0.3],[2.6,0.9],[3.5,0.5]],
+  slices:[{x:2.15,label:"Aquí: casi seguro",sub:"campana estrecha",w:60},{x:7.6,label:"Aquí: ni idea",sub:"campana ancha",w:60}]});
+
+// ---------- kernel ----------
+const KP=[[1,0.2],[2.2,1.2],[3.6,0.1],[5,-1.2],[6.4,-0.3],[8.3,1]];
+const kfit=new GPChart(document.getElementById("kfit"),{W:600,H:300,pr:8,nSamples:3,l:1,noise:0.05,points:KP,seed:41});
+const ks=document.getElementById("kern");
+(function(){
+  for(const v of [0,0.5,1]){const y=200-v*170;el("line",{x1:50,x2:345,y1:y,y2:y,class:v===0?"g-axis":"g-line"},ks);}
+  [["total",1],["mitad",0.5],["nada",0]].forEach(([t,v])=>{const tx=el("text",{x:44,y:200-v*170+5,"text-anchor":"end","font-size":12},ks);tx.textContent=t;});
+  for(let d=0;d<=4;d++){const tx=el("text",{x:50+d/4*295,y:220,"text-anchor":"middle","font-size":12},ks);tx.textContent=d;}
+  const lab=el("text",{x:197,y:237,"text-anchor":"middle","font-size":12},ks);lab.textContent="distancia entre dos puntos";
+  const tt=el("text",{x:50,y:16,"font-size":12,class:"t-ink"},ks);tt.textContent="¿Cuánto se parecen?";
+})();
+const kArea=el("path",{fill:"var(--band)",stroke:"none"},ks);
+const kLine=el("path",{class:"p-mean"},ks);
+const kDot=el("circle",{r:6,class:"p-point"},ks);
+const kl=document.getElementById("k-l");
+function kUpdate(){
+  const l=+kl.value;
+  let d="",a="M50 200";
+  for(let i=0;i<=100;i++){const x=i/100*4,v=kern(0,x,l);const px=50+x/4*295,py=200-v*170;d+=(i?"L":"M")+px.toFixed(1)+" "+py.toFixed(1);a+="L"+px.toFixed(1)+" "+py.toFixed(1);}
+  kLine.setAttribute("d",d);kArea.setAttribute("d",a+"L345 200Z");
+  const v1=kern(0,1,l);kDot.setAttribute("cx",50+295/4);kDot.setAttribute("cy",200-v1*170);
+  document.getElementById("k-l-out").textContent=l.toFixed(2);
+  document.getElementById("kern-cap").textContent=`Dos puntos separados por 1 unidad se parecen un ${Math.round(v1*100)}%.`;
+  document.getElementById("kfit-cap").textContent=l<0.6?"Alcance corto: cada punto solo influye a sus vecinos inmediatos. Entre datos, la curva vuelve rápido al centro y la duda crece.":l>1.8?"Alcance largo: cada punto influye muy lejos. La curva es tranquila y puede ignorar detalles finos.":"Alcance medio: un equilibrio entre seguir los datos y mantener la curva suave.";
+  kfit.o.l=l;kfit.update();
+}
+kl.addEventListener("input",kUpdate);kUpdate();
+
+// ---------- ruido ----------
+const nr=mulberry32(99);const NP=[];
+for(let i=0;i<16;i++){const x=0.4+i*0.6+nr()*0.25;NP.push([x,1.3*Math.sin(x*0.75)+gauss(nr)*0.35]);}
+const nfit=new GPChart(document.getElementById("noise"),{W:900,H:340,nSamples:0,l:0.6,noise:0.02,points:NP,seed:5});
+const nn=document.getElementById("n-n");
+function nUpdate(){
+  const v=+nn.value;nfit.o.noise=v;nfit.update();
+  document.getElementById("n-n-out").textContent=v.toFixed(2);
+  document.getElementById("noise-cap").textContent=v<0.15?"El modelo cree que cada medida es perfecta, así que la curva zigzaguea para tocar todos los puntos. Eso se llama sobreajuste.":v<0.6?"El modelo acepta que las medidas tienen algo de error. La curva pasa entre los puntos y muestra la tendencia real.":"El modelo desconfía tanto que casi ignora los datos: la curva se aplana. Demasiado ruido también es un error.";
+}
+nn.addEventListener("input",nUpdate);nUpdate();
+})();
+</script>
+</body>
+</html>

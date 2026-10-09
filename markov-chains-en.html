@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Markov chains</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: same identity as the Visual ML series. One reading column + live figures. Blue = the model, orange = the data, violet = the errors */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:120px minmax(0,1fr) 120px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{position:relative;height:14px;border-radius:7px;background:var(--line);overflow:visible}
+.meter2 .bar i{display:block;height:100%;border-radius:7px}
+.meter2 .bar s{position:absolute;top:-4px;bottom:-4px;width:3px;margin-left:-1.5px;background:var(--ink);border-radius:2px}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums;font-size:.86rem}
+@media (max-width:520px){.meter2 .row{grid-template-columns:78px minmax(0,1fr) 92px;font-size:.84rem}.meter2 .num{font-size:.78rem}}
+.mtx{border-collapse:separate;border-spacing:4px;font-family:var(--f-mono);font-size:.9rem;margin:0 auto}
+.mtx th{font-weight:500;color:var(--muted);font-size:.8rem;padding:2px 6px;text-align:center}
+.mtx td{width:76px;height:42px;text-align:center;border-radius:8px;font-variant-numeric:tabular-nums}
+.mtx th.r{text-align:right}
+@media (max-width:520px){.mtx td{width:58px;height:36px;font-size:.8rem}.mtx th{font-size:.7rem;padding:2px}}
+</style>
+
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Visual ML series · explained without formulas · <a href="markov-chains-technical-en.html" target="_self">see the technical version</a> · <a href="visual-ml-series-en.html" target="_self">all topics</a> · <a href="cadenas-de-markov-es.html" target="_self">en español</a></p>
+  <h1>Markov chains</h1>
+  <p class="lede">A system that jumps from one state to another with certain probabilities, where the only thing that matters for the next jump is <strong>where it is right now</strong>. That alone is enough to make long-term predictions and, with one trick, to guess what you can't see.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <figure class="fig"><svg id="hero" role="img" aria-label="State diagram of a truck: on the road, stopped and loading, with the probabilities of moving from one to another"></svg></figure>
+  <div class="meter2 col" id="h-bars"></div>
+  <div class="controls">
+    <div class="btns"><button type="button" class="primary" id="h-play">Pause</button><button type="button" id="h-fast">Skip ahead 1,000 hours</button><button type="button" id="h-reset">Start over</button></div>
+  </div>
+  <p class="qcard col" id="h-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Before we start</p>
+    <h2>All that matters is the square you're on</h2>
+    <p>In a board game with dice, your next move depends on the square you're on and on the dice. It doesn't depend on how you got there: it makes no difference whether you crept forward slowly or just fell into a trap. That "lack of memory" is what defines a Markov chain.</p>
+    <p>Something similar happens with a truck if we look at it every hour: it's <strong>on the road</strong>, <strong>stopped</strong> (traffic, a break) or <strong>loading</strong>. By counting in the history how many times it went from each state to each other state, we get the probabilities of the jumps. With them alone, and no other data, we can predict where it will be and how much time it spends doing each thing.</p>
+  </div>
+  <figure class="fig"><svg id="memo" role="img" aria-label="Two different histories that end in the same state have the same future"></svg></figure>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 5</p>
+    <h2>The whole chain fits in one table</h2>
+    <p>Each row says: if it's in this state now, how likely it is to be in each state one hour from now. Each row adds up to 100%. That table is the entire model.</p>
+    <p>Try changing a single cell: the probability of going from "on the road" to "loading". The bars below show how time is split in the long run (the small tick marks the split for the original table). More loading means less road time, but also more stops, because from "loading" the truck sometimes goes to "stopped".</p>
+  </div>
+  <div class="col"><table class="mtx" id="mtx" aria-label="Transition table"></table></div>
+  <div class="slider col"><label for="m-c">From "on the road" to "loading" <output id="m-c-o"></output></label><input type="range" id="m-c" min="2" max="28" step="1" value="10"><div class="ends"><span>2%</span><span>28%</span></div></div>
+  <div class="meter2 col" id="m-bars"></div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 5</p>
+    <h2>Predicting hours ahead, and forgetting the start</h2>
+    <p>If we know it's in a given state now, the table tells us how the probability is split one hour from now. Applying it again gives the split two hours from now, and so on. Pick the starting state: in the first few hours it makes a big difference, but after about 6 hours all the columns end up the same. In the long run, the chain <strong>forgets</strong> where it started.</p>
+  </div>
+  <figure class="fig"><svg id="evo" role="img" aria-label="Probability split among the three states, hour by hour"></svg></figure>
+  <div class="seg" role="group" aria-label="Starting state"><button type="button" data-s="0" aria-pressed="true">Start on the road</button><button type="button" data-s="1" aria-pressed="false">Stopped</button><button type="button" data-s="2" aria-pressed="false">Loading</button></div>
+  <p class="qcard col" id="e-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 5</p>
+    <h2>How long until the next load?</h2>
+    <p>The same table answers questions about time. For example: on average, how many hours go by from the moment a truck is on the road until it loads again? Simulate lots of trucks and look at the spread. The average comes out at <strong>about 8 hours</strong>, and there's an exact calculation that gives it without simulating, which you'll find in the technical version. But notice how variable it is: some load the very next hour and others take more than a day.</p>
+  </div>
+  <figure class="fig"><svg id="hit" role="img" aria-label="Histogram of hours until the next load"></svg></figure>
+  <div class="btns"><button type="button" class="primary" id="t-go">Simulate 1,000 trucks</button><button type="button" id="t-reset">Clear</button></div>
+  <div class="kpis col" id="t-k"></div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 5</p>
+    <h2>Guessing what you can't see: the hidden model</h2>
+    <p>In reality, nobody sends us a "loading" label. What we get is the GPS speed every 15 minutes (still, slow or fast), and it isn't reliable: a truck on the road can crawl in a traffic jam, and a stopped one can show a bit of speed. The true state is <strong>hidden</strong>.</p>
+    <p>The naive rule looks at each reading on its own. The <strong>hidden Markov model</strong> combines two things: what the GPS usually shows in each state, and how long the states usually last. A single "slow" reading in the middle of a fast trip is most likely still road time. The Viterbi algorithm finds the most likely complete history.</p>
+  </div>
+  <figure class="fig"><svg id="hmm" role="img" aria-label="GPS readings, true state, and the states reconstructed by the naive rule and by the hidden model"></svg></figure>
+  <div class="btns"><button type="button" class="primary" id="o-new">Another day</button><button type="button" id="o-truth" aria-pressed="false">Show the true state</button></div>
+  <div class="kpis col" id="o-k"></div>
+  <div class="legend">
+    <span><svg viewBox="0 0 28 14"><rect x="4" y="2" width="20" height="10" rx="2" fill="var(--mean)"/></svg>On the road</span>
+    <span><svg viewBox="0 0 28 14"><rect x="4" y="2" width="20" height="10" rx="2" fill="var(--sample)"/></svg>Stopped</span>
+    <span><svg viewBox="0 0 28 14"><rect x="4" y="2" width="20" height="10" rx="2" fill="var(--point)"/></svg>Loading</span>
+    <span><svg viewBox="0 0 28 14"><path d="M4 11L14 3L24 11" fill="none" stroke="var(--warn)" stroke-width="2.4"/></svg>Error</span>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 5</p>
+    <h2>Its weak spot: it has no memory</h2>
+    <p>Having no memory is also a problem. The chain doesn't know how long the truck has been loading, so every quarter hour it rolls the dice as if loading had just begun. The result is that it predicts lots of very short loads. In reality, a load almost always lasts between 1.5 and 3.5 hours.</p>
+    <p>The fix is to give it some memory by splitting the state into stages: "loading, just started", "halfway" and "finishing". The truck has to go through all three, and the total duration looks much more like the real one.</p>
+  </div>
+  <figure class="fig"><svg id="dur" role="img" aria-label="Load durations: real versus what the chain predicts"></svg></figure>
+  <div class="seg" role="group" aria-label="Loading model"><button type="button" id="d-1" aria-pressed="true">One "loading" state</button><button type="button" id="d-3" aria-pressed="false">Three stages</button></div>
+  <p class="qcard col" id="d-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The full recipe</h2>
+    <ol class="steps">
+      <li><div><strong>Define the states</strong> and a fixed time step (every hour, every 15 minutes).</div></li>
+      <li><div><strong>Count the transitions</strong> in the history: how many times it went from each state to each other state.</div></li>
+      <li><div><strong>Divide each row by its total</strong>: that's the probability table.</div></li>
+      <li><div><strong>Predict</strong> by applying the table step by step, or go straight to the long-run split.</div></li>
+      <li><div><strong>If you can't see the state</strong>, add what you observe in each state and use the hidden model (Viterbi).</div></li>
+      <li><div><strong>Check the durations</strong>: if they don't look like the real ones, split the states into stages.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>What is it used for?</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="10" cy="20" r="6"/><circle cx="30" cy="10" r="6"/><circle cx="30" cy="30" r="6"/><path d="M16 18L24 12M16 22L24 28"/></svg><h3>Fleet utilization</h3><p>What fraction of the time vehicles spend on the road, stopped or in the maintenance shop, and how that would change with a different maintenance policy.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 30h28M10 30V18M18 30V10M26 30V22"/></svg><h3>Hidden states in sensors</h3><p>Recognizing activities (driving, idling, loading) from speed and engine data, or detecting the type of road from the GPS.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 8h28v24H6z"/><path d="M12 16h16M12 22h10"/></svg><h3>Text and speech</h3><p>For decades, speech recognition and autocomplete were built on Markov models. They're still the foundation of many alignment algorithms.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13"/><path d="M20 11v9l6 4"/></svg><h3>Timing and reliability</h3><p>Average time until a breakdown, machine availability, queues at a loading dock.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>The good and the not-so-good</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>The good</h3><ul class="pc">
+      <li>Simple: a table you estimate by counting.</li>
+      <li>Answers lots of questions with exact calculations: the future, the long run, waiting times.</li>
+      <li>Easy to explain to anyone with a diagram of arrows.</li>
+      <li>The hidden version cleans up noisy sensor sequences.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>The not-so-good</h3><ul class="pc">
+      <li>No memory: durations come out unrealistic unless you split states into stages.</li>
+      <li>It assumes the probabilities don't change (not with the hour, not with the day).</li>
+      <li>With many states you need a huge amount of history to estimate the table.</li>
+      <li>A hidden model learned without labels can produce states that are hard to interpret.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>State</dt><dd>Each possible situation of the system (on the road, stopped, loading).</dd>
+      <dt>Transition</dt><dd>The jump from one state to another (or to the same one) in one time step.</dd>
+      <dt>Transition matrix</dt><dd>The table with all the jump probabilities. Each row adds up to 100%.</dd>
+      <dt>Markov property</dt><dd>The future depends only on the current state, not on the path taken to get there.</dd>
+      <dt>Stationary distribution</dt><dd>The long-run split of time, which you reach no matter where you start.</dd>
+      <dt>Hidden Markov model</dt><dd>A chain whose state you can't see. You only see signals that depend on it.</dd>
+      <dt>Viterbi</dt><dd>The algorithm that finds the most likely sequence of hidden states.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the formulas behind it</summary>
+    <p style="padding-top:10px">You don't need them to understand the idea:</p>
+    <div class="formula">probability of going from A to B = (times it went from A to B) / (times it was in A)
+
+split 1 hour from now = split now × table
+split n hours from now = split now × table × table × … (n times)
+
+long-run split π: the one that doesn't change when multiplied by the table (π × table = π)
+average time between two visits to a state = 1 / (its share of the long-run split)</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in one minute</h2>
+    <p>An animated recap: the truck jumping between states, the table, the split that forgets its starting point, and the hidden state rebuilt from the GPS. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsVVCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwFCwH//2Q==" aria-label="Animation: Markov chains">
+      <source src="markov-chains-with-audio-en.mp4" type="video/mp4">
+      Your browser can't play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- shared library: 2D CART trees + drawing ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,class],...]; returns root node with children and box */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* tree diagram */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"yes",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} leaves`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"too big to draw well",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"orange":"violet"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} of ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+
+/* ---- Markov: sampling, evolution, stationary, Viterbi ---- */
+const MK_P=[[.7,.2,.1],[.4,.4,.2],[.2,.2,.6]];                       /* per hour: road, stopped, loading */
+const HMM_A=[[.9,.07,.03],[.15,.75,.1],[.05,.05,.9]],HMM_B=[[.1,.25,.65],[.3,.6,.1],[.75,.25,0]],HMM_PI=[.5,.25,.25];
+function mkStep(P,s,r){let u=r(),k=0;while(k<P[s].length-1&&u>=P[s][k]){u-=P[s][k];k++;}return k;}
+function mkEvolve(p,P){return P[0].map((_,j)=>p.reduce((a,pi,i)=>a+pi*P[i][j],0));}
+function mkStationary(P){let p=P.map(()=>1/P.length);for(let k=0;k<5000;k++)p=mkEvolve(p,P);return p;}
+function mkViterbi(obs,pi0,A,B){const n=A.length,L=x=>x>0?Math.log(x):-1e9;let d=pi0.map((p,i)=>L(p)+L(B[i][obs[0]]));const back=[];
+  for(let t=1;t<obs.length;t++){const nd=[],bk=[];for(let j=0;j<n;j++){let b=-Infinity,bi=0;for(let i=0;i<n;i++){const v=d[i]+L(A[i][j]);if(v>b){b=v;bi=i;}}nd.push(b+L(B[j][obs[t]]));bk.push(bi);}d=nd;back.push(bk);}
+  let s=d.indexOf(Math.max(...d));const path=[s];for(let t=back.length-1;t>=0;t--){s=back[t][s];path.push(s);}return path.reverse();}
+function mkForward(obs,pi0,A,B){const n=A.length;let a=pi0.map((p,i)=>p*B[i][obs[0]]);let s=a.reduce((x,y)=>x+y,0);a=a.map(v=>v/s);const F=[a];let ll=Math.log(s);
+  for(let t=1;t<obs.length;t++){a=A[0].map((_,j)=>a.reduce((acc,ai,i)=>acc+ai*A[i][j],0)*B[j][obs[t]]);s=a.reduce((x,y)=>x+y,0);a=a.map(v=>v/s);F.push(a);ll+=Math.log(s);}return {F,ll};}
+
+const NAMES=["On the road","Stopped","Loading"],COLS=["var(--mean)","var(--sample)","var(--point)"],pct=v=>Math.round(v*100)+"%";
+const PI=mkStationary(MK_P);
+
+/* ---------- hero: state diagram ---------- */
+(function(){const s=document.getElementById("hero"),W=900,H=460;s.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const C=[[230,240],[620,120],[620,360]],R=64,LOOP=[[-1,0],[0.8,-0.6],[0.8,0.6]];
+  const defs=el("defs",null,s);const mk=el("marker",{id:"mk-ar",viewBox:"0 0 10 10",refX:8,refY:5,markerWidth:13,markerHeight:13,markerUnits:"userSpaceOnUse",orient:"auto-start-reverse"},defs);el("path",{d:"M0 0L10 5L0 10z",fill:"var(--muted)"},mk);
+  const paths=[];const gA=el("g",null,s),gN=el("g",null,s),gT=el("g",null,s);
+  const add=(a,b)=>[a[0]+b[0],a[1]+b[1]],mul=(a,k)=>[a[0]*k,a[1]*k],unit=a=>{const l=Math.hypot(a[0],a[1]);return [a[0]/l,a[1]/l];},rot=(a,deg)=>{const t=deg*Math.PI/180;return [a[0]*Math.cos(t)-a[1]*Math.sin(t),a[0]*Math.sin(t)+a[1]*Math.cos(t)];};
+  for(let i=0;i<3;i++){paths.push([]);for(let j=0;j<3;j++){let d,lp;
+    if(i===j){const u=LOOP[i],p1=add(C[i],mul(rot(u,28),R)),p2=add(C[i],mul(rot(u,-28),R)),c1=add(C[i],mul(rot(u,40),R+92)),c2=add(C[i],mul(rot(u,-40),R+92));d=`M${p1[0]} ${p1[1]}C${c1[0]} ${c1[1]} ${c2[0]} ${c2[1]} ${p2[0]} ${p2[1]}`;lp=add(C[i],mul(u,R+78));}
+    else{const v=unit([C[j][0]-C[i][0],C[j][1]-C[i][1]]),n=[-v[1],v[0]],mid=mul(add(C[i],C[j]),0.5),ctrl=add(mid,mul(n,46)),a=add(C[i],mul(unit([ctrl[0]-C[i][0],ctrl[1]-C[i][1]]),R)),b=add(C[j],mul(unit([ctrl[0]-C[j][0],ctrl[1]-C[j][1]]),R+4));d=`M${a[0]} ${a[1]}Q${ctrl[0]} ${ctrl[1]} ${b[0]} ${b[1]}`;lp=add(mid,mul(n,40));}
+    const p=el("path",{d,fill:"none",stroke:"var(--muted)","stroke-width":1.2+MK_P[i][j]*6,"marker-end":"url(#mk-ar)","stroke-opacity":.75},gA);paths[i].push(p);
+    const t=txt(gA,lp[0],lp[1]+5,Math.round(MK_P[i][j]*100)+"%",{"text-anchor":"middle","font-size":15,"font-weight":600,class:"t-ink"});}}
+  const nodes=C.map((c,i)=>{const g=el("g",null,gN);el("circle",{cx:c[0],cy:c[1],r:R,fill:"var(--surface)",stroke:COLS[i],"stroke-width":4},g);txt(g,c[0],c[1]+6,NAMES[i],{"text-anchor":"middle","font-size":i===0?15:17,"font-weight":700,class:"t-ink"});return g.firstChild;});
+  const tok=el("g",null,gT);el("rect",{x:-17,y:-10,width:26,height:16,rx:3,fill:"var(--ink)"},tok);el("rect",{x:9,y:-5,width:9,height:11,rx:2,fill:"var(--ink)"},tok);el("circle",{cx:-9,cy:8,r:4,fill:"var(--ink)"},tok);el("circle",{cx:12,cy:8,r:4,fill:"var(--ink)"},tok);
+  let st=0,cnt=[0,0,0],hrs=0,playing=true,timer=null,r=mulberry32(11),anim=null;
+  const place=(x,y)=>tok.setAttribute("transform",`translate(${x} ${y-R-14})`);
+  function bars(){const tot=Math.max(1,hrs);document.getElementById("h-bars").innerHTML=NAMES.map((n,i)=>`<div class="row"><span>${n}</span><span class="bar"><i style="width:${(cnt[i]/tot*100).toFixed(1)}%;background:${COLS[i]}"></i><s style="left:${(PI[i]*100).toFixed(1)}%"></s></span><span class="num">${hrs?pct(cnt[i]/tot):"—"} · ${pct(PI[i])}</span></div>`).join("");
+    nodes.forEach((n,i)=>n.setAttribute("fill",i===st?"var(--hl)":"var(--surface)"));
+    document.getElementById("h-msg").innerHTML=hrs<30?`Each second is <b>one hour</b>: the truck jumps along the arrows, with the probabilities written on them. The bars count what fraction of the hours it has spent in each state. The small black tick marks the long-run split.`:`<b>${hrs.toLocaleString("en-US")} hours</b> so far. The bars are closing in on the ticks: <b>50%</b> on the road, <b>25%</b> stopped and <b>25%</b> loading. That split can be calculated from the table, without simulating anything.`;}
+  function hop(){const nx=mkStep(MK_P,st,r),p=paths[st][nx],L=p.getTotalLength(),t0=performance.now();cancelAnimationFrame(anim);
+    const go=t=>{const k=Math.min(1,(t-t0)/650),q=p.getPointAtLength(L*k);place(q.x,q.y+R+14-(k<1?0:0));if(k<1)anim=requestAnimationFrame(go);else{st=nx;place(C[st][0],C[st][1]);bars();}};anim=requestAnimationFrame(go);
+    hrs++;cnt[nx]++;}
+  function loop(){clearInterval(timer);if(playing)timer=setInterval(hop,1000);}
+  document.getElementById("h-play").onclick=e=>{playing=!playing;e.target.textContent=playing?"Pause":"Resume";loop();};
+  document.getElementById("h-fast").onclick=()=>{for(let k=0;k<1000;k++){st=mkStep(MK_P,st,r);cnt[st]++;hrs++;}place(C[st][0],C[st][1]);bars();};
+  document.getElementById("h-reset").onclick=()=>{st=0;cnt=[0,0,0];hrs=0;r=mulberry32(11);place(C[0][0],C[0][1]);bars();};
+  place(C[0][0],C[0][1]);bars();loop();
+  if(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches){playing=false;document.getElementById("h-play").textContent="Resume";loop();}})();
+
+/* ---------- no memory ---------- */
+(function(){const s=document.getElementById("memo"),W=900,H=250;s.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const box=(x,y,i,w)=>{el("rect",{x:x-(w||46),y:y-17,width:2*(w||46),height:34,rx:17,fill:"var(--surface)",stroke:COLS[i],"stroke-width":2.5},s);txt(s,x,y+5,NAMES[i],{"text-anchor":"middle","font-size":i===0&&!w?11:13,"font-weight":600,class:"t-ink"});};
+  const arr=(x1,y1,x2,y2)=>el("path",{d:`M${x1} ${y1}L${x2} ${y2}`,stroke:"var(--muted)","stroke-width":2,fill:"none"},s);
+  txt(s,20,30,"history 1",{"font-size":13});txt(s,20,140,"history 2",{"font-size":13});
+  const h1=[0,0,0,1],h2=[2,1,2,1];h1.forEach((i,k)=>{box(80+k*120,60,i);if(k)arr(80+k*120-74,60,80+k*120-46,60);});h2.forEach((i,k)=>{box(80+k*120,170,i);if(k)arr(80+k*120-74,170,80+k*120-46,170);});
+  el("path",{d:"M486 60C540 60 540 115 580 115M486 170C540 170 540 115 580 115",stroke:"var(--muted)","stroke-width":2,fill:"none"},s);
+  box(640,115,1,60);
+  el("rect",{x:720,y:70,width:166,height:92,rx:10,fill:"var(--hl)"},s);
+  ["next hour:","on the road 40%","stopped 40%","loading 20%"].forEach((t,k)=>txt(s,734,93+k*20,t,{"font-size":13,class:k?"t-ink":""}));
+  el("path",{d:"M702 115L718 115",stroke:"var(--muted)","stroke-width":2},s);
+  txt(s,450,232,"what happens next is the same: only the current state counts",{"text-anchor":"middle","font-size":14,class:"t-ink"});})();
+
+/* ---------- idea 1: editable table ---------- */
+(function(){const ic=document.getElementById("m-c"),tb=document.getElementById("mtx");
+  function draw(){const c=+ic.value/100,P=MK_P.map(r=>r.slice());const rest=1-c,base=MK_P[0][0]+MK_P[0][1];P[0]=[MK_P[0][0]/base*rest,MK_P[0][1]/base*rest,c];
+    const pi=mkStationary(P);document.getElementById("m-c-o").textContent=Math.round(c*100)+"%";
+    let h=`<thead><tr><th class="r">now ↓ · in 1 h →</th>${NAMES.map(n=>`<th>${n}</th>`).join("")}</tr></thead><tbody>`;
+    P.forEach((r,i)=>{h+=`<tr><th class="r" style="color:${COLS[i]}">${NAMES[i]}</th>`+r.map((v,j)=>`<td style="background:color-mix(in srgb, ${COLS[j]} ${Math.round(8+v*70)}%, transparent);${i===0&&j===2?"outline:2.5px solid var(--ink);":""}">${Math.round(v*100)}%</td>`).join("")+"</tr>";});
+    tb.innerHTML=h+"</tbody>";
+    document.getElementById("m-bars").innerHTML=NAMES.map((n,i)=>`<div class="row"><span>${n}</span><span class="bar"><i style="width:${(pi[i]*100).toFixed(1)}%;background:${COLS[i]}"></i><s style="left:${(PI[i]*100).toFixed(1)}%"></s></span><span class="num">${pct(pi[i])}</span></div>`).join("");}
+  ic.addEventListener("input",draw);draw();})();
+
+/* ---------- idea 2: evolution ---------- */
+(function(){const svg=document.getElementById("evo"),W=900,H=330,pad={l:46,r:16,t:16,b:40};svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const N=12,bw=(W-pad.l-pad.r)/(N+1);let s0=0;
+  const btns=[...document.querySelectorAll("[data-s]")];
+  function draw(){svg.textContent="";let p=[0,0,0];p[s0]=1;const D=[p];for(let k=0;k<N;k++){p=mkEvolve(p,MK_P);D.push(p);}
+    [0,0.25,0.5,0.75,1].forEach(v=>{const y=pad.t+(1-v)*(H-pad.t-pad.b);el("line",{x1:pad.l,x2:W-pad.r,y1:y,y2:y,class:"g-line"},svg);txt(svg,pad.l-8,y+4,Math.round(v*100)+"%",{"text-anchor":"end","font-size":12});});
+    D.forEach((d,k)=>{let y0=H-pad.b;d.forEach((v,i)=>{const h=v*(H-pad.t-pad.b);el("rect",{x:pad.l+k*bw+4,y:y0-h,width:bw-8,height:Math.max(0,h),fill:COLS[i],"fill-opacity":.85},svg);y0-=h;});txt(svg,pad.l+k*bw+bw/2,H-pad.b+20,k===0?"now":k+"h",{"text-anchor":"middle","font-size":12});});
+    let lim=pad.t;[0,1].forEach(i=>{lim+=PI[2-i]*(H-pad.t-pad.b);});
+    [PI[2],PI[2]+PI[1]].forEach(v=>{const y=pad.t+v*(H-pad.t-pad.b);el("line",{x1:pad.l,x2:W-pad.r,y1:y,y2:y,stroke:"var(--ink)","stroke-dasharray":"5 5","stroke-width":1.3},svg);});
+    const k6=D.findIndex(d=>d.every((v,i)=>Math.abs(v-PI[i])<0.01));
+    document.getElementById("e-msg").innerHTML=`Starting ${["on the road","stopped","loading"][s0]}: 1 hour later, ${D[1].map((v,i)=>`${NAMES[i].toLowerCase()} ${pct(v)}`).join(", ")}. 2 hours later, ${D[2].map((v,i)=>`${NAMES[i].toLowerCase()} ${pct(v)}`).join(", ")}. From hour <b>${k6}</b> on, the split is already less than 1 point away from the long-run one (dashed lines): 50 / 25 / 25.`;}
+  btns.forEach(b=>b.onclick=()=>{s0=+b.dataset.s;btns.forEach(x=>x.setAttribute("aria-pressed",String(x===b)));draw();});draw();})();
+
+/* ---------- idea 3: time until loading ---------- */
+(function(){const svg=document.getElementById("hit"),pl=new Plot(svg,{W:900,H:320,pad:{l:46,r:16,t:16,b:42},x0:0,x1:41,y0:0,y1:0.13,xt:[1,5,10,15,20,25,30,35,40],yt:[0,0.05,0.1],fy:v=>Math.round(v*100)+"%",xl:"hours until the next load"});
+  const g=el("g",null,pl.g);let T=[];const r=mulberry32(5);
+  /* exact distribution: probability of arriving exactly at hour k */
+  const ex=[];{let p=[1,0];for(let k=1;k<=40;k++){const Q=[[.7,.2],[.4,.4]],hit=p[0]*.1+p[1]*.2;ex.push(hit);p=[p[0]*Q[0][0]+p[1]*Q[1][0],p[0]*Q[0][1]+p[1]*Q[1][1]];}}
+  el("path",{d:pl.ppath(ex.map((v,k)=>[k+1,v])),fill:"none",stroke:"var(--ink)","stroke-width":2,"stroke-dasharray":"5 4"},pl.top);
+  function draw(){g.textContent="";const h=Array(41).fill(0);T.forEach(t=>{if(t<=40)h[t]++;});const n=Math.max(1,T.length);
+    h.forEach((c,k)=>{if(!k)return;el("rect",{x:pl.sx(k-0.42),y:pl.sy(c/n),width:pl.sx(0.84)-pl.sx(0),height:pl.sy(0)-pl.sy(c/n),rx:2,fill:"var(--point)","fill-opacity":.8},g);});
+    const m=T.length?T.reduce((a,b)=>a+b,0)/T.length:0,sorted=T.slice().sort((a,b)=>a-b),q=f=>sorted[Math.floor(f*(sorted.length-1))];
+    document.getElementById("t-k").innerHTML=T.length?`<span>trucks simulated <b>${T.length.toLocaleString("en-US")}</b></span><span>average <b>${m.toFixed(2)} h</b> (exact: 8)</span><span>half load within <b>${q(0.5)} h</b></span><span>1 in 10 takes more than <b>${q(0.9)} h</b></span>`:"<span>Press the button. The dashed line is the exact distribution the table gives.</span>";}
+  document.getElementById("t-go").onclick=()=>{for(let k=0;k<1000;k++){let s=0,t=0;while(s!==2){s=mkStep(MK_P,s,r);t++;}T.push(t);}draw();};
+  document.getElementById("t-reset").onclick=()=>{T=[];draw();};draw();})();
+
+/* ---------- idea 4: hidden model ---------- */
+(function(){const svg=document.getElementById("hmm"),W=900,H=300,N=48,x0=168,cw=(W-x0-10)/N;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  let seed=3,show=false,Z,X;const bt=document.getElementById("o-truth");
+  function gen1(){const r=mulberry32(seed);Z=[];X=[];let s=0;for(let t=0;t<N;t++){if(t)s=mkStep(HMM_A,s,r);Z.push(s);X.push(mkStep(HMM_B,s,r));}}
+  function gen(){for(let k=0;k<500;k++){gen1();const c=[0,1,2].map(i=>Z.filter(z=>z===i).length),nv=X.map(o=>[2,1,0][o]),vt=mkViterbi(X,HMM_PI,HMM_A,HMM_B),acc=q=>q.filter((v,t)=>v===Z[t]).length/N;
+    if(c.every(v=>v>=5)&&acc(vt)>=acc(nv)+0.12)return;seed++;}}
+  const SYM=["still","slow","fast"];
+  function draw(){svg.textContent="";const naive=X.map(o=>[2,1,0][o]),vit=mkViterbi(X,HMM_PI,HMM_A,HMM_B);
+    const rows=[["GPS (what you see)",null,30],["True state",Z,90],["Naive rule",naive,165],["Hidden model",vit,240]];
+    rows.forEach(([lab,seq,y])=>{txt(svg,x0-10,y+(seq?18:20),lab,{"text-anchor":"end","font-size":13,class:"t-ink"});});
+    X.forEach((o,t)=>{const x=x0+t*cw,hh=[10,24,40][o];el("rect",{x:x+1.5,y:60-hh,width:cw-3,height:hh,rx:2,fill:"var(--muted)","fill-opacity":.75},svg);});
+    txt(svg,x0,72,"bar height = speed (still, slow, fast) · each bar is 15 min",{"font-size":11});
+    rows.slice(1).forEach(([lab,seq,y],ri)=>{seq.forEach((s,t)=>{const x=x0+t*cw,hide=ri===0&&!show;el("rect",{x:x+0.5,y,width:cw-1,height:30,fill:hide?"var(--line)":COLS[s],"fill-opacity":hide?.6:.85},svg);
+      if(ri>0&&s!==Z[t]&&show)el("path",{d:`M${x+2} ${y+44}L${x+cw/2} ${y+36}L${x+cw-2} ${y+44}`,fill:"none",stroke:"var(--warn)","stroke-width":2.2},svg);});
+      if(ri===0&&!show)txt(svg,x0+N*cw/2,y+20,"hidden: press “Show the true state”",{"text-anchor":"middle","font-size":13,class:"t-ink"});});
+    const a1=naive.filter((s,t)=>s===Z[t]).length/N,a2=vit.filter((s,t)=>s===Z[t]).length/N;
+    document.getElementById("o-k").innerHTML=show?`<span>naive rule <b>${pct(a1)}</b> accuracy</span><span>hidden model <b>${pct(a2)}</b></span><span>(on average, over many days: 68% vs. 83%)</span>`:"<span>Press “Show the true state” to see which one gets it right more often. The orange marks flag the errors.</span>";}
+  document.getElementById("o-new").onclick=()=>{seed++;gen();draw();};
+  bt.onclick=()=>{show=!show;bt.setAttribute("aria-pressed",String(show));bt.textContent=show?"Hide the true state":"Show the true state";draw();};gen();draw();})();
+
+/* ---------- idea 5: durations ---------- */
+(function(){const svg=document.getElementById("dur"),pl=new Plot(svg,{W:900,H:320,pad:{l:46,r:16,t:16,b:42},x0:0,x1:8.25,y0:0,y1:0.2,xt:[1,2,3,4,5,6,7,8],fx:v=>v+" h",yt:[0,0.05,0.1,0.15,0.2],fy:v=>Math.round(v*100)+"%",xl:"load duration"});
+  const g=el("g",null,pl.g);let stages=1;
+  /* real: durations clustered around 2.5 h (simulated, in 15-min steps) */
+  const real=[];for(let k=1;k<=32;k++){const t=k*0.25,m=2.5,sd=0.6;real.push(Math.exp(-0.5*((t-m)/sd)**2));}const sr=real.reduce((a,b)=>a+b,0);
+  function model(k){const p=1-k/10;const out=[];for(let n=1;n<=32;n++){/* sum of k geometrics: negative binomial */let c=1;for(let j=1;j<=k-1;j++)c*=(n-1-j+1)/j;out.push(n>=k?c*Math.pow(1-p,k)*Math.pow(p,n-k):0);}return out;}
+  function draw(){g.textContent="";const m=model(stages),bw=pl.sx(0.25)-pl.sx(0);
+    real.forEach((v,i)=>el("rect",{x:pl.sx((i+1)*0.25)-bw*0.45,y:pl.sy(v/sr),width:bw*0.9,height:pl.sy(0)-pl.sy(v/sr),rx:2,fill:"var(--muted)","fill-opacity":.45},g));
+    el("path",{d:pl.ppath(m.map((v,i)=>[(i+1)*0.25,v])),fill:"none",stroke:"var(--point)","stroke-width":3.2},g);m.forEach((v,i)=>el("circle",{cx:pl.sx((i+1)*0.25),cy:pl.sy(v),r:3.5,fill:"var(--point)"},g));
+    const short=m.slice(0,4).reduce((a,b)=>a+b,0),shortR=real.slice(0,4).reduce((a,b)=>a+b,0)/sr;
+    document.getElementById("d-msg").innerHTML=stages===1?`Gray: real durations (average 2.5 h). Orange: what the chain predicts with a single "loading" state, <b>with the same average</b>. Its shape is very different: the most likely outcome is a load lasting just one quarter hour, and according to it <b>${pct(short)}</b> of loads would be done in 1 hour or less (in reality, ${pct(shortR)}).`:`With <b>three stages</b> (same 2.5 h average), the chain no longer thinks loads end right away: only <b>${pct(short)}</b> in 1 hour or less, and the shape looks much more like the real one. It's the same Markov idea, just with a more detailed state.`;}
+  const b1=document.getElementById("d-1"),b3=document.getElementById("d-3");
+  b1.onclick=()=>{stages=1;b1.setAttribute("aria-pressed","true");b3.setAttribute("aria-pressed","false");draw();};
+  b3.onclick=()=>{stages=3;b3.setAttribute("aria-pressed","true");b1.setAttribute("aria-pressed","false");draw();};draw();})();
+})();
+</script>
+
+</body>
+</html>

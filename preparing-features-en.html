@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Preparing features</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.segs{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.segs .lab{font-size:.9rem;color:var(--muted)}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:210px minmax(0,1fr) 72px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden}
+.meter2 .bar i{display:block;height:100%;border-radius:7px;transition:width .35s}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.meter2 .row{grid-template-columns:118px minmax(0,1fr) 58px;font-size:.84rem}}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.verdict{display:inline-block;border-radius:999px;padding:2px 10px;font-size:.85rem;font-weight:600}
+.verdict.ok{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.verdict.no{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.verdict.mid{background:color-mix(in srgb,var(--sample) 18%,transparent);color:var(--sample)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.situ h3{font-size:1.1rem}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec ul{margin:0;padding-left:18px;font-size:.93rem;color:var(--muted);display:grid;gap:4px}
+.dec ul b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+</style>
+<style>
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.case{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:8px;align-content:start}
+.case h3{font-size:1rem}
+.case dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0;font-size:.9rem}
+.case dt{color:var(--muted)}.case dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.case .ans{font-size:.9rem;color:var(--muted);min-height:1.2em}
+.case .ans b.ok{color:var(--good)}.case .ans b.no{color:var(--warn)}
+.case .btns button{padding:6px 12px;font-size:.88rem}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:230px minmax(0,1fr) 92px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden;position:relative}
+.meter2 .bar i{display:block;height:100%;border-radius:7px;transition:width .35s}
+.meter2 .bar u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.meter2 .row{grid-template-columns:120px minmax(0,1fr) 70px;font-size:.84rem}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Preparing the data · topic 7 · explained without formulas · <a href="preparing-features-technical-en.html" target="_self">see the technical version</a> · <a href="preparing-the-data-en.html" target="_self">all topics</a> · <a href="preparar-variables-es.html" target="_self">en español</a></p>
+  <h1>Preparing features</h1>
+  <p class="lede">A model knows nothing about kilometers, truck types or the time on the clock: all it sees is columns of numbers. How you turn each piece of data into numbers decides what it can learn. Here you'll see five conversions that change the result, and the rule that ties them together: everything is learned from the training data only.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="situ col">
+    <p class="eyebrow">The setup</p>
+    <p>We want to estimate how much diesel a trip will burn (in liters per 100 km) before it leaves. The simplest idea: find the <strong>5 most similar past trips</strong> and average what they burned. This method is called "nearest neighbors".</p>
+    <p>We measure "similar" with two facts about each trip: the <strong>distance</strong>, in kilometers (short trips burn more per 100 km, because of starts and a cold engine), and the <strong>load</strong>, in kilograms (more weight, more fuel). The dots below are 150 past trips by identical trucks; the model has to estimate one of them as if it were new.</p>
+  </div>
+  <figure class="fig"><svg id="hero" role="img" aria-label="Trips by distance and load, with the five most similar to the chosen trip"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each dot is a trip: horizontally, its distance (the scale is stretched for short trips so you can see them); vertically, its load. The color says how much it burned: the more <b style="color:var(--point)">orange</b>, the more fuel. The <b>star</b> is the trip to estimate, and the lines connect it to the 5 trips the model considers most similar.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>How do we compare kilometers with kilograms?</h3>
+      <div class="seg" role="group" aria-label="Scale"><button type="button" id="h-raw" aria-pressed="true">As is</button><button type="button" id="h-sc" aria-pressed="false">Each on its own scale</button></div>
+      <ul>
+        <li><b>As is</b>: the difference between two trips is computed with the raw numbers. A 100 km difference counts the same as a 100 kg difference.</li>
+        <li><b>Each on its own scale</b>: first, each column is expressed as "how far it is from normal for that column". That way 1 extra tonne and 50 extra km count about the same.</li>
+      </ul>
+    </div>
+    <div class="dec">
+      <h3>Which trip do we estimate?</h3>
+      <div class="seg" role="group" aria-label="Trip"><button type="button" id="h-v0" aria-pressed="true">Short and empty</button><button type="button" id="h-v1" aria-pressed="false">Short and full</button><button type="button" id="h-v2" aria-pressed="false">Long and half full</button></div>
+      <p>Three example trips. Try all three with each way of comparing.</p>
+    </div>
+  </div>
+  <div class="big3 col" id="h-big"></div>
+  <div class="col stack">
+    <p><strong>Try this, in order:</strong></p>
+    <ol class="try">
+      <li>With "As is" and the short, empty trip: notice that the 5 neighbors are at the same height (same load) but spread across every distance.</li>
+      <li>Switch to "Each on its own scale": now the neighbors are close on both things, and the estimate improves.</li>
+      <li>Look at the average error over the 150 trips (the last number) with each option.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="h-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">What you just saw</p>
+    <h2>Units decide what matters</h2>
+    <p>Kilograms go from 0 to 24,000 and kilometers from 5 to 600. If you subtract them as they are, any load difference is huge compared with any distance difference, and the model ends up looking for trips with the same load without looking at the distance. Nobody decided that: the units did. If the load were in tonnes, exactly the opposite would happen.</p>
+    <p><strong>Scaling</strong> means putting each column on a comparable measure before training. It matters for models that measure distances or add up columns with equal weight (<a href="k-nearest-neighbors-en.html" target="_self">nearest neighbors</a>, <a href="support-vector-machines-en.html" target="_self">support vector machines</a>, <a href="k-means-en.html" target="_self">k-means</a>, models with a penalty). <a href="decision-trees-en.html" target="_self">Trees</a> and <a href="random-forest-and-boosting-en.html" target="_self">forests and boosting</a> don't need it: they only ask "is it bigger than some value?" about one column at a time.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 5</p>
+    <h2>Three ways to scale, and one crazy value</h2>
+    <p>There are three common recipes for putting a column on its own scale:</p>
+    <ul>
+      <li><strong>Standardize</strong>: subtract the average and divide by the typical spread. Normal values end up near 0; values far from normal, at 2, 3 or more.</li>
+      <li><strong>Min-max</strong>: the smallest value becomes 0 and the largest, 1.</li>
+      <li><strong>Robust</strong>: subtract the median and divide by the width of the middle half of the data. An extreme value barely affects it.</li>
+    </ul>
+    <p>Below are 40 distances from real trips plus one more that comes from a GPS error (a 300 km trip that was recorded as a very long one). Move that value and watch what happens to each recipe.</p>
+  </div>
+  <figure class="fig"><svg id="sc" role="img" aria-label="The same distances scaled with three recipes"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each row is a recipe. The <b style="color:var(--mean)">blue</b> dots are the 40 normal trips, already scaled; the <b style="color:var(--warn)">red</b> one is the bad value. The gray area marks the range from −1 to 1 (or 0 to 1 for min-max). If the blue dots all end up bunched together, the model can no longer tell a 50 km trip from a 200 km one.</p>
+  <div class="slider col"><label for="sc-o">Recorded distance of the bad trip <output id="sc-o-o"></output></label><input type="range" id="sc-o" min="300" max="20000" step="100" value="300"><div class="ends"><span>300 km (no error)</span><span>20,000 km</span></div></div>
+  <p class="qcard col" id="sc-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 5</p>
+    <h2>Categories are not numbers</h2>
+    <p>The fleet has four truck types: refrigerated truck, van, rigid truck and semi-trailer. A model needs numbers, and the temptation is to number them 1, 2, 3 and 4 (in alphabetical order of their Spanish names, say). But then the model believes there is an order and distances: that a van sits "between" a refrigerated truck and a rigid truck, and that a semi-trailer is "four times" something. The alternative is to give <strong>each type its own column</strong>, which is 1 if the truck is of that type and 0 if not (in the jargon, <em>one-hot</em>).</p>
+  </div>
+  <figure class="fig"><svg id="cat" role="img" aria-label="Average fuel use by truck type and what the model learns"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The <b style="color:var(--point)">orange</b> dots are the real average fuel use of each truck type (with the same load). The <b style="color:var(--mean)">blue</b> bars are what a simple linear model estimates, trained on the load and the truck type written in one of the two ways.</p>
+  <div class="seg" role="group" aria-label="Encoding"><button type="button" id="cat-0" aria-pressed="true">Types numbered 1, 2, 3, 4</button><button type="button" id="cat-1" aria-pressed="false">One column per type</button></div>
+  <p class="qcard col" id="cat-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 5</p>
+    <h2>When there are a thousand categories: the customer's average, carefully</h2>
+    <p>The customer matters too: some are downtown, others up in the mountains. But there are almost 1,300 customers, and half of them have 3 trips or fewer. One column per customer means 1,300 almost-empty columns. A very common trick is to replace each customer with <strong>the average fuel use of their trips</strong>. It has two traps:</p>
+    <ul>
+      <li><strong>With few trips, the average is luck</strong>: a customer with a single trip, made by an empty van, seems to "burn 8 liters". The fix is to pull the average toward the overall average when there are few trips, as if we had a few extra "normal" trips.</li>
+      <li><strong>The average includes the answer</strong>: if you give a trip its customer's average computed with that same trip, you're leaking part of what it has to guess. The fix is to compute each trip's average without that trip (using chunks of the data).</li>
+    </ul>
+  </div>
+  <figure class="fig"><svg id="cli" role="img" aria-label="Average fuel use of eight customers, without and with adjustment toward the overall average"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each row is a customer, with their number of trips. The hollow circle is the plain average of their trips; the filled dot, the adjusted average; the vertical line, the average fuel use of the whole fleet.</p>
+  <div class="slider col"><label for="cli-m">"Normal" trips we add to each customer <output id="cli-m-o"></output></label><input type="range" id="cli-m" min="0" max="50" step="1" value="0"><div class="ends"><span>0 (plain average)</span><span>50</span></div></div>
+  <p class="qcard col" id="cli-msg"></p>
+  <div class="col stack"><p>And what happens to the full model? We compare four ways of using the customer in the same model, with the error on the trips it learned from and on the trips from the last 80 days, which it never saw.</p></div>
+  <div class="chips col" id="clo-chips" role="group" aria-label="Way of using the customer"></div>
+  <div class="meter2 col" id="clo-bars"></div>
+  <p class="howto col"><b>How to read the bars.</b> Average error in liters per 100 km: the shorter, the better. The first bar is on the trips it learned from (the "studying"); the second, on new trips (the "exam"). If studying goes much better than the exam, the model has memorized instead of learning.</p>
+  <p class="qcard col" id="clo-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 5</p>
+    <h2>Time of day is a circle</h2>
+    <p>In the late afternoon there's more traffic and more fuel is burned; in the early morning hours, less. If you give the model the hour as a number from 0 to 24, it thinks 11 PM (23:00) and 1 AM (01:00) are very far apart (22 apart), when they are two hours apart. And a simple model can only draw a straight line: "the later, the more fuel" or "the less fuel". The fix is to place the hour on a circle, like on a clock, and give the model the two coordinates of the point on the clock.</p>
+  </div>
+  <figure class="fig"><svg id="hr" role="img" aria-label="Extra fuel use by departure time and what the model learns"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Horizontally, the departure time. The <b style="color:var(--point)">orange</b> dots are the extra (or reduced) fuel use of trips leaving at that hour, once everything else is taken out (truck type, load, distance); the more trips, the bigger the dot. The <b style="color:var(--mean)">blue</b> line is what the model learns.</p>
+  <div class="seg" role="group" aria-label="Hour"><button type="button" id="hr-0" aria-pressed="true">Hour as a number</button><button type="button" id="hr-1" aria-pressed="false">Hour on a clock</button></div>
+  <p class="qcard col" id="hr-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 5</p>
+    <h2>The truck's past, without peeking at the future</h2>
+    <p>Each truck has its own way of burning fuel: some are better tuned, others wear out over time. A very useful feature is "how much has this truck burned on its trips over the last 30 days". It's a <strong>time window</strong>: an average that keeps moving along with the days.</p>
+    <p>The trap: it's very easy to compute the window with trips from before <em>and after</em>, because the table has everything. In the report the model will look better than it is, and on the day it's really used it won't have that data from the future.</p>
+  </div>
+  <figure class="fig"><svg id="win" role="img" aria-label="Fuel use of one truck on each trip and its moving average"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each <b style="color:var(--sample)">violet</b> dot is a trip by the same truck (horizontally, the day). The <b style="color:var(--mean)">blue</b> line is the feature we'd give the model on each day. The vertical line is "today": to its right, the exam trips. The shaded band is the days used by the average for the last trip before today.</p>
+  <div class="decs">
+    <div class="dec"><h3>Which trips go into the average?</h3><div class="seg" role="group" aria-label="Window"><button type="button" id="w-0" aria-pressed="true">Only earlier ones</button><button type="button" id="w-1" aria-pressed="false">Before and after</button></div></div>
+    <div class="dec"><h3>How many days?</h3><div class="slider"><label for="w-d">Window of <output id="w-d-o"></output></label><input type="range" id="w-d" min="7" max="60" step="1" value="30"><div class="ends"><span>7 days</span><span>60 days</span></div></div></div>
+  </div>
+  <p class="qcard col" id="w-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The full recipe, in a single pipeline</h2>
+    <p>All these conversions <strong>learn something from the data</strong>: the average and spread for scaling, the list of truck types, each customer's average. Just like in <a href="split-before-you-look-en.html" target="_self">topic 1</a>, that learning is done with the training data only and then applied as is to the exam and to new trips. The safe way not to get it wrong is to put the conversions and the model into a single "pipeline" that is trained in one go.</p>
+    <ol class="steps">
+      <li><div><strong>Look at what kind of data each column is</strong>: quantity, category, time or date, text.</div></li>
+      <li><div><strong>Quantities</strong>: scale them if the model measures distances; with extreme values, the robust recipe.</div></li>
+      <li><div><strong>Few categories</strong>: one column per category, never a made-up number.</div></li>
+      <li><div><strong>Many categories</strong>: the average of each one, adjusted toward the overall average and computed without the row itself.</div></li>
+      <li><div><strong>Hours, days of the week, months</strong>: on a circle.</div></li>
+      <li><div><strong>History</strong>: windows that only look back.</div></li>
+      <li><div><strong>Everything inside the pipeline</strong>, fitted with the training data only.</div></li>
+    </ol>
+    <div class="big3" id="all-big"></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where it shows up in fleet telemetry</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 30h24M12 30V18M20 30V10M28 30V22"/></svg><h3>Mixed units</h3><p>Speed in km/h, RPM in the thousands, temperature in degrees, odometer in the hundreds of thousands: without scaling, the odometer rules.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="8" y="10" width="24" height="20" rx="3"/><path d="M14 18h12M14 24h8"/></svg><h3>Codes with many values</h3><p>Driver, customer, route, engine fault code: hundreds or thousands of values, many with only a few cases.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13"/><path d="M20 12v8l6 4"/></svg><h3>Cycles</h3><p>Hour, day of the week, month of the year, heading (359° and 1° are next to each other).</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 28l8-8 6 5 12-13"/></svg><h3>Signal aggregates</h3><p>From thousands of pings a day to "hard brakes per 100 km over the last week" or "idling hours this month".</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Connections</p>
+    <h2>With the models of the ML series</h2>
+    <p><a href="k-nearest-neighbors-en.html" target="_self">Nearest neighbors</a> and <a href="k-means-en.html" target="_self">k-means</a> measure distances: without scaling, the units rule. <a href="gradient-descent-en.html" target="_self">Gradient descent</a> moves much faster with scaled columns. <a href="logistic-regression-en.html" target="_self">Logistic regression</a> with a penalty punishes every column equally, so it needs them on the same scale. <a href="xgboost-en.html" target="_self">XGBoost</a> doesn't need scaling, but it does need categories and windows done right.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>What it costs and what you gain</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>What you gain</h3><ul class="pc">
+      <li>Models that use all the information, not just the column with the biggest numbers.</li>
+      <li>Categories and cycles the model can learn.</li>
+      <li>History features, which are often the most useful of all.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>What it costs</h3><ul class="pc">
+      <li>Every conversion is one more piece that has to be saved with the model and applied the same way in production.</li>
+      <li>Per-category averages and windows are easy to get wrong, with leaks that don't show up in the report.</li>
+      <li>More columns isn't always better: each one has to be checked.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Feature (or variable)</dt><dd>Each column you give the model.</dd>
+      <dt>Scale</dt><dd>Put the columns on comparable measures.</dd>
+      <dt>Standardize</dt><dd>Subtract the average and divide by the typical spread.</dd>
+      <dt>One-hot</dt><dd>One column of zeros and ones for each category.</dd>
+      <dt>Target encoding</dt><dd>Replacing each category with the average of what you want to predict in that category.</dd>
+      <dt>Time window</dt><dd>A summary (average, sum, maximum) of the last few days.</dd>
+      <dt>Leakage</dt><dd>When the model sees, while learning, information it won't have when it's really used.</dd>
+      <dt>Pipeline</dt><dd>The conversions and the model chained together, fitted together with the training data only.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the math behind it</summary>
+    <p style="padding-top:10px">You don't need it to understand the idea:</p>
+    <div class="formula">standardize:  (value − average) / typical spread
+min-max:      (value − minimum) / (maximum − minimum)
+robust:       (value − median) / (quartile 3 − quartile 1)
+
+adjusted average of a customer with n trips, adding m "normal" trips:
+   (n × customer average + m × overall average) / (n + m)
+
+hour on a clock:   sine(2π × hour / 24)  and  cosine(2π × hour / 24)</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in one minute</h2>
+    <p>An animated recap: kilograms against kilometers, categories that aren't numbers, the customer's average done carefully, the hour on a clock, and windows that don't peek at the future. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xACXAAEAAgMBAQEAAAAAAAAAAAAAAQUGBwgEAwIBAQEBAQAAAAAAAAAAAAAAAAABAgMQAAICAQMCAwUCCgcEBQ0BAAABAgMEBRIRIQYHMRNRImEUQXEykXRCs7SBFTYjdWJyc1I1oTQIM7IWorHBguFlFzfE0UOD0lVTlERjkxEBAQEAAwEBAAAAAAAAAAAAABEBoSGxUdH/wAARCAIcA8ADASIAAhEAAxEA/9oADAMBAAIRAxEAPwDSIAOjmAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkFVAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAf//Z" aria-label="Animation: preparing features">
+      <source src="preparing-features-with-audio-en.mp4" type="video/mp4">
+      Your browser can't play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"R": {"media": {"test": 9.248}, "knn sin escalar": {"train": 3.208, "test": 3.465}, "knn escalado": {"train": 2.915, "test": 3.161}, "lineal, tipo como número": {"train": 6.159, "test": 6.166}, "lineal, tipo one-hot": {"train": 3.29, "test": 3.433}, "cliente: sin usarlo": {"train": 2.726, "test": 3.372}, "cliente: one-hot (una columna por cliente)": {"train": 2.65, "test": 3.291}, "cliente: media sin ajuste cruzado (m=0)": {"train": 2.17, "test": 3.32}, "cliente: media con ajuste cruzado (m=10)": {"train": 2.598, "test": 3.145}, "lineal, sin la hora": {"train": 3.146, "test": 3.263}, "lineal, hora como número": {"train": 3.012, "test": 3.107}, "lineal, hora en círculo": {"train": 2.835, "test": 2.897}, "todo, sin historial": {"train": 2.072, "test": 2.778}, "todo + media de los 30 días anteriores": {"train": 1.806, "test": 2.43}, "todo + ventana centrada (fuga)": {"train": 1.712, "test": 2.263}}, "toy": {"km": [62.1, 233.7, 204.2, 36.0, 44.5, 35.4, 106.1, 56.7, 126.6, 9.5, 287.4, 54.5, 118.5, 52.3, 41.1, 95.3, 136.8, 49.0, 51.5, 119.1, 25.1, 13.2, 89.1, 30.7, 8.8, 26.6, 37.6, 18.2, 13.5, 62.2, 147.2, 47.5, 28.5, 88.2, 122.9, 44.4, 103.4, 170.2, 48.8, 26.6, 84.9, 76.9, 180.0, 16.6, 31.0, 26.0, 10.6, 68.1, 101.7, 28.7, 239.8, 136.5, 112.4, 89.7, 156.0, 15.8, 110.9, 109.6, 10.2, 84.9, 46.7, 131.1, 38.7, 58.9, 84.5, 25.0, 109.2, 54.0, 98.2, 35.6, 177.8, 109.9, 50.2, 112.9, 211.5, 359.8, 12.4, 145.1, 95.5, 54.6, 21.9, 210.9, 17.0, 105.8, 220.6, 12.1, 44.3, 16.2, 76.6, 272.8, 453.9, 10.1, 33.8, 121.3, 291.1, 91.4, 28.5, 80.8, 59.0, 48.9, 28.8, 88.4, 81.6, 54.7, 48.1, 16.6, 36.9, 200.5, 49.6, 14.2, 227.9, 102.0, 493.9, 63.9, 37.8, 14.1, 225.5, 600.0, 26.4, 31.4, 108.9, 26.2, 45.8, 42.3, 72.7, 179.3, 61.3, 150.4, 39.4, 83.3, 7.1, 14.1, 133.0, 33.3, 107.2, 103.2, 225.1, 135.1, 165.9, 53.7, 29.8, 28.9, 36.8, 19.4, 34.7, 54.7, 77.2, 42.8, 8.8, 55.8], "carga_kg": [9369.0, 11948.0, 6860.0, 14539.0, 14460.0, 5756.0, 14942.0, 8574.0, 17633.0, 6970.0, 19171.0, 9963.0, 13278.0, 16160.0, 12441.0, 6183.0, 23505.0, 2305.0, 7798.0, 13179.0, 689.0, 3718.0, 19182.0, 18812.0, 15287.0, 21643.0, 18133.0, 7171.0, 15477.0, 8162.0, 17996.0, 9235.0, 3678.0, 21035.0, 16570.0, 17872.0, 13430.0, 18791.0, 10749.0, 13579.0, 1502.0, 13322.0, 19550.0, 16933.0, 19276.0, 11906.0, 21152.0, 2599.0, 21017.0, 8911.0, 2183.0, 14864.0, 10917.0, 10281.0, 20449.0, 3307.0, 14806.0, 9930.0, 12678.0, 11986.0, 3219.0, 12288.0, 20691.0, 4110.0, 275.0, 1622.0, 11035.0, 23387.0, 1062.0, 23782.0, 12865.0, 2883.0, 10045.0, 4977.0, 17140.0, 12996.0, 6911.0, 6130.0, 20807.0, 18390.0, 10468.0, 9732.0, 17699.0, 23298.0, 1910.0, 3818.0, 8696.0, 12185.0, 1714.0, 1284.0, 5267.0, 9263.0, 17743.0, 14638.0, 701.0, 1080.0, 10849.0, 20996.0, 21960.0, 8763.0, 21297.0, 22299.0, 9759.0, 17906.0, 8768.0, 3686.0, 13805.0, 2074.0, 15920.0, 19421.0, 21970.0, 10753.0, 2817.0, 21660.0, 20889.0, 23223.0, 14255.0, 16162.0, 8959.0, 4395.0, 7001.0, 17296.0, 7800.0, 16598.0, 12052.0, 10776.0, 23223.0, 3986.0, 11692.0, 3833.0, 22499.0, 11727.0, 7967.0, 4040.0, 14258.0, 9575.0, 3052.0, 777.0, 9391.0, 13996.0, 12452.0, 21601.0, 21879.0, 22471.0, 19193.0, 11463.0, 12571.0, 9536.0, 9589.0, 998.0], "consumo": [27.13, 25.32, 24.47, 29.05, 30.65, 27.15, 26.15, 26.74, 27.73, 31.46, 27.23, 27.81, 29.61, 28.58, 29.47, 24.56, 29.97, 23.93, 26.06, 27.04, 26.99, 30.97, 28.55, 32.34, 36.45, 32.94, 30.6, 29.98, 33.34, 27.19, 28.09, 27.09, 27.76, 31.83, 28.74, 28.46, 26.86, 27.44, 28.6, 30.84, 25.1, 28.33, 29.07, 33.51, 32.29, 30.79, 36.71, 24.9, 29.15, 30.27, 22.87, 26.99, 25.4, 25.79, 28.22, 26.88, 28.11, 26.21, 32.85, 27.75, 26.18, 26.57, 30.06, 25.19, 23.6, 28.63, 27.59, 32.96, 22.18, 31.55, 26.68, 23.52, 28.55, 24.03, 27.71, 24.96, 31.16, 23.84, 29.76, 30.55, 30.46, 25.41, 33.54, 30.7, 23.05, 29.43, 27.28, 33.3, 23.79, 23.21, 24.0, 31.5, 30.95, 27.21, 22.44, 23.75, 28.88, 29.44, 31.01, 28.73, 31.31, 30.47, 25.86, 30.37, 27.12, 29.41, 31.25, 23.01, 30.05, 34.82, 28.46, 26.58, 22.73, 30.1, 32.15, 35.57, 27.2, 27.14, 29.09, 28.67, 25.62, 33.23, 27.85, 30.35, 26.98, 25.33, 32.13, 23.57, 27.91, 24.32, 35.61, 32.22, 23.91, 26.2, 27.28, 25.68, 21.68, 23.15, 26.88, 27.65, 31.71, 32.74, 32.19, 34.59, 30.76, 29.0, 27.72, 27.54, 32.08, 23.34]}, "kmcol": [57.1, 19.5, 49.0, 49.4, 529.6, 33.0, 388.2, 27.4, 454.3, 429.1, 199.5, 51.1, 51.0, 37.3, 24.8, 52.2, 40.5, 54.1, 178.5, 496.1, 81.3, 390.1, 97.6, 247.3, 126.5, 37.2, 147.7, 158.7, 65.7, 139.0, 162.9, 134.6, 65.6, 170.8, 55.1, 65.9, 104.6, 51.4, 42.9, 163.0], "tipos": {"nombres": ["frigorífico", "furgoneta", "rígido", "tráiler"], "real": [37.01, 15.23, 26.69, 33.18], "num": [23.04, 24.27, 25.51, 26.74], "oh": [37.0, 15.25, 26.68, 33.17], "n": [608, 1909, 1688, 1052]}, "clientes": {"global_": 25.02, "lista": [{"id": "K000", "n": 185, "media": 22.68}, {"id": "K005", "n": 60, "media": 27.25}, {"id": "K029", "n": 18, "media": 20.14}, {"id": "K108", "n": 7, "media": 21.31}, {"id": "K117", "n": 4, "media": 24.3}, {"id": "K758", "n": 3, "media": 26.81}, {"id": "K764", "n": 2, "media": 26.17}, {"id": "K850", "n": 1, "media": 8.12}]}, "hora": {"media": [-2.313, -2.627, -1.958, -1.984, -2.069, -1.177, -1.187, -0.38, 0.32, 1.016, 1.416, 2.024, 2.265, 2.236, 2.475, 2.52, 2.025, 1.341, 0.233, 0.608, -0.903, -1.835, -0.941, -2.066], "n": [101, 129, 168, 233, 275, 350, 405, 364, 441, 439, 420, 330, 321, 266, 248, 171, 133, 108, 69, 65, 42, 47, 64, 68], "sin": -1.1894, "cos": -2.0992, "pend": 0.203, "hmean": 9.799, "hmed_ef": 0.2658}, "camion": {"dia": [1.27, 3.59, 3.76, 10.54, 14.7, 14.84, 15.26, 16.1, 17.15, 18.26, 19.24, 21.96, 24.14, 25.76, 26.4, 26.67, 26.85, 28.21, 29.1, 33.19, 33.33, 35.01, 39.58, 41.69, 42.24, 42.31, 44.66, 45.07, 47.43, 52.36, 54.3, 55.69, 57.01, 62.26, 63.23, 67.63, 68.19, 68.38, 69.51, 71.54, 72.66, 73.38, 73.8, 75.29, 76.88, 78.33, 78.54, 78.77, 78.9, 80.56, 83.54, 85.04, 86.26, 89.11, 89.42, 91.44, 95.61, 95.79, 95.97, 96.71, 96.77, 100.13, 100.33, 101.1, 104.08, 105.12, 105.32, 108.7, 108.89, 109.99, 113.7, 116.69, 117.79, 118.4, 119.91, 120.18, 123.99, 124.17, 127.19, 129.39, 136.89, 137.35, 137.61, 141.03, 141.76, 144.89, 144.93, 147.32, 148.31, 148.77, 149.56, 154.71, 155.05, 155.21, 156.52, 156.77, 157.12, 158.22, 160.92, 166.78, 166.83, 173.31, 173.93, 174.65, 174.84, 175.1, 178.82, 181.09, 181.35, 181.84, 184.1, 185.57, 188.28, 188.58, 191.12, 192.28, 192.57, 198.89, 201.39, 202.25, 203.68, 203.77, 205.07, 205.79, 206.13, 206.63, 207.21, 210.85, 214.3, 214.97, 215.5, 217.39, 219.09, 219.55, 219.99, 221.48, 222.14, 223.05, 225.05, 227.49, 229.22, 231.94, 232.58, 234.55, 235.05, 235.12, 235.69, 237.05, 237.26, 237.28], "consumo": [23.16, 26.88, 30.51, 34.77, 26.95, 26.66, 23.74, 23.12, 34.61, 26.45, 17.85, 22.24, 26.39, 26.53, 29.9, 32.99, 31.08, 25.08, 31.18, 26.84, 21.81, 30.17, 30.38, 22.42, 23.07, 24.41, 20.63, 20.51, 20.95, 28.56, 33.9, 21.49, 22.18, 21.17, 27.25, 24.63, 25.15, 26.43, 28.2, 29.54, 26.6, 30.77, 27.78, 27.2, 28.24, 25.36, 30.4, 29.58, 32.27, 29.01, 18.36, 26.01, 27.45, 23.47, 36.83, 38.23, 24.94, 29.66, 22.51, 27.06, 25.17, 24.38, 23.07, 20.44, 23.3, 24.01, 23.22, 29.67, 30.64, 24.83, 22.79, 26.03, 25.21, 28.1, 25.17, 22.01, 31.64, 34.08, 29.99, 29.49, 24.22, 28.35, 17.34, 31.71, 25.27, 30.0, 26.79, 22.48, 22.05, 26.59, 28.97, 25.99, 28.66, 29.77, 22.34, 17.24, 31.43, 35.87, 32.44, 28.52, 25.32, 26.2, 29.31, 25.59, 23.62, 25.65, 29.73, 28.19, 28.36, 28.46, 25.53, 23.32, 32.24, 29.76, 29.7, 30.39, 29.08, 25.49, 23.51, 20.41, 19.58, 27.74, 31.82, 29.31, 24.43, 18.58, 27.1, 29.94, 28.04, 26.12, 18.63, 31.26, 29.01, 19.93, 25.37, 27.8, 20.22, 27.73, 30.12, 26.97, 28.75, 28.28, 25.51, 27.4, 25.11, 32.26, 23.17, 27.95, 28.66, 29.67], "corte": 160}};
+const f1=(v,d)=>v.toFixed(d??1).replace("-","−");
+const seg=(ids,cb)=>{const b=ids.map(i=>document.getElementById(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});};
+const mean=a=>a.reduce((s,v)=>s+v,0)/a.length,sd=a=>{const m=mean(a);return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/a.length);};
+const quant=(a,q)=>{const s=a.slice().sort((x,y)=>x-y),p=(s.length-1)*q,i=Math.floor(p);return s[i]+(s[Math.min(i+1,s.length-1)]-s[i])*(p-i);};
+const R=D.R;
+const EN={"frigorífico":"refrigerated","furgoneta":"van","rígido":"rigid","tráiler":"semi-trailer"};
+const tr=s=>EN[s]??s;
+
+/* ---------- hero: neighbors with and without scaling ---------- */
+(function(){const T=D.toy,n=T.km.length,svg=document.getElementById("hero");
+  const VS=[{km:12,kg:2500},{km:14,kg:21000},{km:260,kg:12000}];
+  const mk=mean(T.km),sk=sd(T.km),mg=mean(T.carga_kg),sg=sd(T.carga_kg);
+  const dist=(a,b,sc)=>sc?((a.km-b.km)/sk)**2+((a.kg-b.kg)/sg)**2:(a.km-b.km)**2+(a.kg-b.kg)**2;
+  const P=T.km.map((k,i)=>({km:k,kg:T.carga_kg[i],y:T.consumo[i]}));
+  const nn=(q,sc,skip)=>P.map((p,i)=>[dist(q,p,sc),i]).filter(([,i])=>i!==skip).sort((a,b)=>a[0]-b[0]).slice(0,5).map(x=>x[1]);
+  const loo=sc=>mean(P.map((p,i)=>Math.abs(mean(nn(p,sc,i).map(j=>P[j].y))-p.y)));const L=[loo(false),loo(true)];
+  const truth=q=>22+0.32*q.kg/1000+9*Math.exp(-q.km/40);
+  const ymin=Math.min(...T.consumo),ymax=Math.max(...T.consumo),col=v=>{const t=(v-ymin)/(ymax-ymin);return `color-mix(in srgb, var(--point) ${Math.round(15+85*t)}%, var(--mean))`;};
+  let sc=0,vi=0;
+  function draw(){svg.textContent="";const lx=v=>Math.log(v);
+    const pl=new Plot(svg,{W:900,H:400,pad:{l:64,r:16,t:16,b:44},x0:lx(4),x1:lx(700),y0:0,y1:25000,xt:[5,10,20,50,100,200,500].map(lx),fx:v=>Math.round(Math.exp(v))+" km",yt:[0,5000,10000,15000,20000,25000],fy:v=>(v/1000)+" t",xl:"trip distance",yl:"load"});
+    const q=VS[vi],ids=nn(q,sc,-1),est=mean(ids.map(j=>P[j].y));
+    ids.forEach(j=>el("line",{x1:pl.sx(lx(q.km)),y1:pl.sy(q.kg),x2:pl.sx(lx(P[j].km)),y2:pl.sy(P[j].kg),stroke:"var(--ink)","stroke-width":1.6,"stroke-opacity":.6},pl.g));
+    P.forEach((p,i)=>el("circle",{cx:pl.sx(lx(p.km)),cy:pl.sy(p.kg),r:ids.includes(i)?8:5.5,fill:col(p.y),stroke:ids.includes(i)?"var(--ink)":"none","stroke-width":2},pl.g));
+    const sx=pl.sx(lx(q.km)),sy=pl.sy(q.kg),st=[];for(let k=0;k<10;k++){const r=k%2?6:14,a=-Math.PI/2+k*Math.PI/5;st.push(`${(sx+r*Math.cos(a)).toFixed(1)},${(sy+r*Math.sin(a)).toFixed(1)}`);}
+    el("polygon",{points:st.join(" "),fill:"var(--ink)",stroke:"var(--bg)","stroke-width":2},pl.g);
+    const real=truth(q);
+    document.getElementById("h-big").innerHTML=`<div><b>${f1(real)} L</b><span>expected fuel use of this trip (per 100 km)</span></div><div><b>${f1(est)} L</b><span>what it estimates from its 5 neighbors (error ${f1(Math.abs(est-real))})</span></div><div><b>${f1(L[sc],2)} L</b><span>average error when estimating the 150 trips this way</span></div>`;
+    const kms=ids.map(j=>Math.round(P[j].km)),kgs=ids.map(j=>P[j].kg);
+    const m=sc===0?`The 5 neighbors have loads almost identical to the trip's (between ${f1(Math.min(...kgs)/1000)} and ${f1(Math.max(...kgs)/1000)} t), but distances from ${Math.min(...kms)} to ${Math.max(...kms)} km. Compared as is, a 100 kg difference counts the same as a 100 km difference, and load always has much bigger differences: the model ignores distance without anyone deciding so.${q.km<30?" For a short trip, which burns more, that's costly.":""}`
+      :`With each on its own scale, the neighbors are similar on both things: loads from ${f1(Math.min(...kgs)/1000)} to ${f1(Math.max(...kgs)/1000)} t and distances from ${Math.min(...kms)} to ${Math.max(...kms)} km. Over the 150 trips, the average error drops from ${f1(L[0],2)} to <b>${f1(L[1],2)} liters</b> per 100 km. Same model, same data: we only changed how they are compared.`;
+    document.getElementById("h-msg").innerHTML=m;}
+  seg(["h-raw","h-sc"],i=>{sc=i;draw();});seg(["h-v0","h-v1","h-v2"],i=>{vi=i;draw();});draw();})();
+
+/* ---------- idea 1: three recipes ---------- */
+(function(){const K=D.kmcol,svg=document.getElementById("sc"),io=document.getElementById("sc-o");
+  const rows=[["Standardize",a=>{const m=mean(a),s=sd(a);return a.map(v=>(v-m)/s);},[-1,1]],["Min-max",a=>{const lo=Math.min(...a),hi=Math.max(...a);return a.map(v=>(v-lo)/(hi-lo));},[0,1]],["Robust",a=>{const m=quant(a,.5),iqr=quant(a,.75)-quant(a,.25);return a.map(v=>(v-m)/iqr);},[-1,1]]];
+  function draw(){const o=+io.value,A=K.concat([o]);svg.textContent="";const W=900,H=300;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+    const L=150,Rr=W-20,x0=-2,x1=5,sx=v=>L+(Math.max(x0,Math.min(x1,v))-x0)/(x1-x0)*(Rr-L);
+    [-2,-1,0,1,2,3,4,5].forEach(v=>{el("line",{x1:sx(v),x2:sx(v),y1:14,y2:H-34,class:"g-line"},svg);txt(svg,sx(v),H-14,f1(v,0),{"text-anchor":"middle","font-size":12});});
+    txt(svg,Rr,H-1,"scaled value (anything above 5 is drawn at the edge)",{"text-anchor":"end","font-size":11});
+    const spreads=[];
+    rows.forEach(([nm,fn,band],r)=>{const y=50+r*80,Z=fn(A);el("rect",{x:sx(band[0]),y:y-22,width:sx(band[1])-sx(band[0]),height:44,fill:"var(--muted)","fill-opacity":.12},svg);
+      txt(svg,10,y+5,nm,{"font-size":14,"font-weight":700,class:"t-ink"});
+      Z.slice(0,-1).forEach((z,i)=>el("circle",{cx:sx(z),cy:y+((i*7)%5-2)*4,r:5,fill:"var(--mean)","fill-opacity":.75},svg));
+      const zo=Z[Z.length-1];el("circle",{cx:sx(zo),cy:y,r:8,fill:"var(--warn)"},svg);if(zo>x1)txt(svg,sx(x1)-12,y-14,"→ "+f1(zo,1),{"text-anchor":"end","font-size":12,style:"fill:var(--warn)"});
+      const zs=Z.slice(0,-1);spreads.push([quant(zs,.1),quant(zs,.9)]);});
+    document.getElementById("sc-o-o").textContent=o.toLocaleString("en-US")+" km";
+    const w=spreads.map(([a,b])=>b-a);
+    document.getElementById("sc-msg").innerHTML=o<=600?`With no odd values, the three recipes spread the trips out in a similar way. The difference is the scale: standardizing and the robust recipe center them on 0; min-max puts them between 0 and 1.`:
+      `With the bad value at ${o.toLocaleString("en-US")} km, the middle 80% of the normal trips takes up a band of ${f1(w[0],2)} with standardizing, ${f1(w[1],3)} with min-max and <b>${f1(w[2],2)}</b> with the robust recipe. ${w[1]<0.1?"With min-max, all the normal trips get squashed near 0: to the model they'd be almost identical. ":""}The robust recipe doesn't flinch, because the median and the middle half don't depend on one extreme value. Even so, the best move is to fix the value first (<a href="outliers-en.html" target="_self">topic 4</a>).`;}
+  io.addEventListener("input",draw);draw();})();
+
+/* ---------- idea 2: categories ---------- */
+(function(){const T=D.tipos,svg=document.getElementById("cat");let mode=0;
+  function draw(){svg.textContent="";const pl=new Plot(svg,{W:900,H:320,pad:{l:60,r:16,t:16,b:44},x0:-0.5,x1:3.5,y0:0,y1:42,xt:[0,1,2,3],fx:k=>`${k+1} · ${tr(T.nombres[k])}`,yt:[0,10,20,30,40],fy:v=>v+" L",xl:"",yl:"liters per 100 km"});
+    const pr=mode?T.oh:T.num;
+    T.nombres.forEach((nm,k)=>{el("rect",{x:pl.sx(k-0.3),y:pl.sy(pr[k]),width:pl.sx(k+0.3)-pl.sx(k-0.3),height:pl.sy(0)-pl.sy(pr[k]),fill:"var(--mean)","fill-opacity":.8,rx:4},pl.g);
+      el("circle",{cx:pl.sx(k),cy:pl.sy(T.real[k]),r:10,fill:"var(--point)",stroke:"var(--bg)","stroke-width":2},pl.g);});
+    if(!mode)el("line",{x1:pl.sx(-0.3),y1:pl.sy(T.num[0]),x2:pl.sx(3.3),y2:pl.sy(T.num[3]),stroke:"var(--ink)","stroke-width":2,"stroke-dasharray":"6 4"},pl.g);
+    const a=R["lineal, tipo como número"].test,b=R["lineal, tipo one-hot"].test;
+    document.getElementById("cat-msg").innerHTML=mode?`With one column per type, the model learns its own fuel use for each one, with no made-up order or distances: the bars match the dots. The average error on the exam drops from ${f1(a,2)} to <b>${f1(b,2)} liters</b> per 100 km.`:
+      `With the types numbered, the model can only raise or lower fuel use in a straight line from "1" to "4" (the dashed line). Since alphabetical order has nothing to do with fuel use, the line comes out almost flat: the refrigerated truck (37 L) and the van (15 L) get almost the same. Average error on the exam: <b>${f1(a,2)} liters</b>.`;}
+  seg(["cat-0","cat-1"],i=>{mode=i;draw();});draw();})();
+
+/* ---------- idea 3: customer averages ---------- */
+(function(){const C=D.clientes,G=C.global_,svg=document.getElementById("cli"),im=document.getElementById("cli-m");
+  function draw(){const m=+im.value;svg.textContent="";const n=C.lista.length,H=50+n*36;
+    const pl=new Plot(svg,{W:900,H,pad:{l:150,r:16,t:16,b:40},x0:5,x1:35,y0:0,y1:n,xt:[5,10,15,20,25,30,35],fx:v=>v+" L",yt:[],xl:"customer's average fuel use (L/100 km)"});
+    el("line",{x1:pl.sx(G),x2:pl.sx(G),y1:pl.sy(n),y2:pl.sy(0),stroke:"var(--muted)","stroke-width":2,"stroke-dasharray":"6 4"},pl.g);
+    C.lista.forEach((c,k)=>{const y=pl.sy(n-k-0.5),adj=(c.n*c.media+m*G)/(c.n+m);txt(pl.top,140,y+4,`${c.n} trip${c.n>1?"s":""}`,{"text-anchor":"end","font-size":13});
+      el("line",{x1:pl.sx(c.media),x2:pl.sx(adj),y1:y,y2:y,stroke:"var(--mean)","stroke-width":2.5},pl.g);
+      el("circle",{cx:pl.sx(c.media),cy:y,r:8,fill:"none",stroke:"var(--point)","stroke-width":2.5},pl.g);el("circle",{cx:pl.sx(adj),cy:y,r:7,fill:"var(--mean)"},pl.g);});
+    document.getElementById("cli-m-o").textContent=m;
+    const one=C.lista[C.lista.length-1],big=C.lista[0],adj1=(one.n*one.media+m*G)/(one.n+m),adjB=(big.n*big.media+m*G)/(big.n+m);
+    document.getElementById("cli-msg").innerHTML=m===0?`As is, the one-trip customer "burns" ${f1(one.media)} L, far from the fleet (${f1(G)} L). It was probably an empty van: that's luck, not the customer. Move the slider up.`:
+      `Adding ${m} "normal" trips, the 1-trip customer goes from ${f1(one.media)} to <b>${f1(adj1)} L</b>: almost the overall average, because one trip proves nothing. The ${big.n}-trip customer barely moves (${f1(big.media)} → ${f1(adjB)} L): with that many trips, their average really is reliable. Each customer is adjusted according to what we know about them.`;}
+  im.addEventListener("input",draw);draw();})();
+(function(){const O=[["Don't use the customer","cliente: sin usarlo"],["One column per customer","cliente: one-hot (una columna por cliente)"],["Plain average, including the trip itself","cliente: media sin ajuste cruzado (m=0)"],["Adjusted average, without the trip itself","cliente: media con ajuste cruzado (m=10)"]];
+  let cur=0;const box=document.getElementById("clo-chips"),bs=[];
+  O.forEach(([lab],i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=lab;b.setAttribute("aria-pressed",String(i===0));b.onclick=()=>{cur=i;bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));draw();};box.appendChild(b);bs.push(b);});
+  const msgs=[r=>`Without the customer, the model makes an average error of ${f1(r.test,2)} L on the exam. This is the baseline.`,
+    r=>`One column per customer helps a little (${f1(r.test,2)} L on the exam). But that's ~1,300 columns, and new customers in the exam don't have any.`,
+    r=>`On studying, the error falls to <b>${f1(r.train,2)} L</b>: it looks like the best. On the exam it rises to <b>${f1(r.test,2)} L</b>, almost the same as not using the customer. The model has learned to trust a column that, while studying, contained part of the answer.`,
+    r=>`With the average adjusted and computed without the trip itself, studying and the exam look more alike, and the exam is the best of the four: <b>${f1(r.test,2)} L</b>.`];
+  function draw(){const r=R[O[cur][1]],mx=4;
+    const row=(lab,v,col)=>`<div class="row"><span>${lab}</span><span class="bar"><i style="width:${(v/mx*100).toFixed(1)}%;background:${col}"></i></span><span class="num">${f1(v,2)} L</span></div>`;
+    document.getElementById("clo-bars").innerHTML=row("studying (training)",r.train,"var(--sample)")+row("exam (last 80 days)",r.test,"var(--mean)");
+    document.getElementById("clo-msg").innerHTML=msgs[cur](r);}
+  draw();})();
+
+/* ---------- idea 4: hour ---------- */
+(function(){const H=D.hora,svg=document.getElementById("hr");let mode=0;
+  const circ=h=>H.sin*Math.sin(2*Math.PI*h/24)+H.cos*Math.cos(2*Math.PI*h/24)-H.hmed_ef;
+  const lin=h=>H.pend*(h-H.hmean);
+  function draw(){svg.textContent="";const pl=new Plot(svg,{W:900,H:320,pad:{l:60,r:16,t:16,b:44},x0:0,x1:24,y0:-4,y1:4,xt:[0,3,6,9,12,15,18,21,24],fx:v=>v+":00",yt:[-4,-2,0,2,4],fy:v=>(v>0?"+":"")+v+" L",xl:"departure time",yl:"extra fuel use"});
+    el("line",{x1:pl.sx(0),x2:pl.sx(24),y1:pl.sy(0),y2:pl.sy(0),stroke:"var(--muted)","stroke-width":1.5},pl.g);
+    H.media.forEach((v,b)=>{if(v==null)return;el("circle",{cx:pl.sx(b+0.5),cy:pl.sy(v-H.hmed_ef),r:3+Math.sqrt(H.n[b])/4,fill:"var(--point)","fill-opacity":.75},pl.g);});
+    el("path",{d:pl.fpath(mode?circ:lin,0,24),fill:"none",stroke:"var(--mean)","stroke-width":3.5},pl.g);
+    [[23,"23:00"],[1,"01:00"]].forEach(([h,l])=>{el("line",{x1:pl.sx(h),x2:pl.sx(h),y1:pl.sy(4),y2:pl.sy(-4),stroke:"var(--ink)","stroke-width":1,"stroke-dasharray":"3 4"},pl.g);});
+    const a=R["lineal, hora como número"].test,b=R["lineal, hora en círculo"].test,z=R["lineal, sin la hora"].test;
+    document.getElementById("hr-msg").innerHTML=mode?`On a clock, 23:00 and 01:00 sit side by side (the dotted lines), and the model can learn a wave: more fuel in the late afternoon, less in the early morning, and no jump at midnight. The average error on the exam drops to <b>${f1(b,2)} L</b> (without the hour: ${f1(z,2)} L).`:
+      `With the hour as a number, the model can only draw a straight line: "the later, the ${H.pend>0?"more":"less"} fuel". It gets the early morning and the night wrong, and gives very different values at 23:00 and 01:00 (the dotted lines), which are alike. Average error on the exam: <b>${f1(a,2)} L</b>.`;}
+  seg(["hr-0","hr-1"],i=>{mode=i;draw();});draw();})();
+
+/* ---------- idea 5: windows ---------- */
+(function(){const C=D.camion,svg=document.getElementById("win"),iw=document.getElementById("w-d");let mode=0;
+  const dd=C.dia,yy=C.consumo,n=dd.length;
+  function draw(){const w=+iw.value;svg.textContent="";const ymin=Math.floor(Math.min(...yy)/5)*5,ymax=Math.ceil(Math.max(...yy)/5)*5;
+    const pl=new Plot(svg,{W:900,H:340,pad:{l:60,r:16,t:16,b:44},x0:0,x1:240,y0:ymin,y1:ymax,xt:[0,30,60,90,120,150,180,210,240],fx:v=>"day "+v,yt:[ymin,(ymin+ymax)/2,ymax],fy:v=>v+" L",xl:"",yl:"liters per 100 km"});
+    el("line",{x1:pl.sx(C.corte),x2:pl.sx(C.corte),y1:pl.sy(ymax),y2:pl.sy(ymin),stroke:"var(--ink)","stroke-width":2},pl.g);txt(pl.top,pl.sx(C.corte)+6,pl.sy(ymax)+14,"today",{"font-size":13,"font-weight":700,class:"t-ink"});
+    const last=dd.filter(t=>t<C.corte).pop(),lo=mode?last-w/2:last-w,hi=mode?last+w/2:last;
+    el("rect",{x:pl.sx(Math.max(0,lo)),y:pl.sy(ymax),width:pl.sx(hi)-pl.sx(Math.max(0,lo)),height:pl.sy(ymin)-pl.sy(ymax),fill:"var(--mean)","fill-opacity":.12},pl.g);
+    dd.forEach((t,i)=>el("circle",{cx:pl.sx(t),cy:pl.sy(yy[i]),r:4,fill:"var(--sample)","fill-opacity":.7},pl.g));
+    const pts=[];dd.forEach((t,i)=>{const sel=yy.filter((_,j)=>mode?Math.abs(dd[j]-t)<=w/2:(dd[j]<t&&dd[j]>t-w));if(sel.length)pts.push([t,mean(sel)]);});
+    el("path",{d:pl.ppath(pts),fill:"none",stroke:"var(--mean)","stroke-width":3},pl.g);
+    document.getElementById("w-d-o").textContent=w+" days";
+    const z=R["todo, sin historial"].test,a=R["todo + media de los 30 días anteriores"].test,b=R["todo + ventana centrada (fuga)"].test;
+    document.getElementById("w-msg").innerHTML=mode?`The "before and after" average follows the dots better because it already knows what's coming. Look at the band for the last trip before today: it reaches into the exam. With a window like that (±15 days), the report says <b>${f1(b,2)} L</b> of error: it looks ${Math.round((1-b/a)*100)}% better than the honest window. It's a mirage: on the day it's used, nobody knows next week's trips.`:
+      `With only earlier trips, the average lags a bit behind, but it's exactly what will be known at the moment a trip is estimated. Adding it to the model lowers the average error on the exam from ${f1(z,2)} to <b>${f1(a,2)} L</b>: it's the most helpful feature of all. Shorter windows react sooner; longer ones are more stable.`;}
+  seg(["w-0","w-1"],i=>{mode=i;draw();});iw.addEventListener("input",draw);draw();})();
+
+/* ---------- all together ---------- */
+document.getElementById("all-big").innerHTML=`<div><b>${f1(R.media.test,2)} L</b><span>average error when always predicting the fleet average</span></div><div><b>${f1(R["todo, sin historial"].test,2)} L</b><span>with type, load, distance, hour and customer properly prepared</span></div><div><b>${f1(R["todo + media de los 30 días anteriores"].test,2)} L</b><span>adding the truck's history (looking back only)</span></div>`;
+})();
+</script>
+</body>
+</html>

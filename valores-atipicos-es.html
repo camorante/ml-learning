@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Valores atípicos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.segs{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.segs .lab{font-size:.9rem;color:var(--muted)}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:210px minmax(0,1fr) 72px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden}
+.meter2 .bar i{display:block;height:100%;border-radius:7px;transition:width .35s}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.meter2 .row{grid-template-columns:118px minmax(0,1fr) 58px;font-size:.84rem}}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.verdict{display:inline-block;border-radius:999px;padding:2px 10px;font-size:.85rem;font-weight:600}
+.verdict.ok{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.verdict.no{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.verdict.mid{background:color-mix(in srgb,var(--sample) 18%,transparent);color:var(--sample)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.situ h3{font-size:1.1rem}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec ul{margin:0;padding-left:18px;font-size:.93rem;color:var(--muted);display:grid;gap:4px}
+.dec ul b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+</style>
+
+<style>
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.case{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:8px;align-content:start}
+.case h3{font-size:1rem}
+.case dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0;font-size:.9rem}
+.case dt{color:var(--muted)}.case dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.case .ans{font-size:.9rem;color:var(--muted);min-height:1.2em}
+.case .ans b.ok{color:var(--good)}.case .ans b.no{color:var(--warn)}
+.case .btns button{padding:6px 12px;font-size:.88rem}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:230px minmax(0,1fr) 92px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden;position:relative}
+.meter2 .bar i{display:block;height:100%;border-radius:7px;transition:width .35s}
+.meter2 .bar u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.meter2 .row{grid-template-columns:120px minmax(0,1fr) 70px;font-size:.84rem}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Preparar los datos · tema 4 · explicado sin fórmulas · <a href="valores-atipicos-tecnico-es.html" target="_self">ver la versión técnica</a> · <a href="preparar-los-datos-es.html" target="_self">todos los temas</a> · <a href="outliers-en.html" target="_self">in English</a></p>
+  <h1>Valores atípicos</h1>
+  <p class="lede">Un valor atípico es uno que se aleja mucho del resto. A veces es un error (una coma mal puesta) y a veces es la parte más interesante de los datos (un camión que sube un puerto de montaña). Encontrarlos es fácil; lo difícil es decidir cuál es cuál y qué hacer con cada uno.</p>
+</header>
+
+<section class="first" aria-label="Juguete interactivo">
+  <div class="situ col">
+    <p class="eyebrow">La situación del juguete</p>
+    <p>Tenemos 40 viajes con dos datos cada uno: la <strong>carga</strong> que llevaba el camión (en toneladas) y su <strong>consumo</strong> (litros cada 100 km). Cuanta más carga, más consumo. Queremos una <strong>recta</strong> que resuma esa relación para, por ejemplo, predecir cuánto gastará un camión con 20 toneladas.</p>
+    <p>Uno de los viajes, el <strong style="color:var(--warn)">marcado en rojo</strong>, gastó en realidad 33 L/100 km. Pero quien copió el dato a mano puso mal la coma y escribió 330. Con el control de abajo puedes mover ese valor desde el correcto (33) hasta el erróneo (330) y ver qué le pasa a la recta.</p>
+  </div>
+  <figure class="fig"><svg id="hero" role="img" aria-label="Carga frente a consumo de 40 viajes y la recta que los resume"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada punto es un viaje: a la derecha, más carga; arriba, más consumo. La <b style="color:var(--mean)">línea azul</b> es la recta elegida abajo. La línea gris discontinua es la recta "verdadera", calculada con el dato correcto. Si el eje vertical se estira mucho es porque el viaje marcado tiene un valor enorme: fíjate en lo aplastados que quedan los demás.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>Consumo registrado del viaje marcado</h3>
+      <div class="slider"><label for="h-v">Valor que se escribió <output id="h-v-o"></output></label><input type="range" id="h-v" min="33" max="330" step="1" value="33"><div class="ends"><span>33 (el correcto)</span><span>330 (la coma mal puesta)</span></div></div>
+    </div>
+    <div class="dec">
+      <h3>¿Cómo se calcula la recta?</h3>
+      <div class="seg" role="group" aria-label="Método"><button type="button" id="h-m0" aria-pressed="true">Recta normal</button><button type="button" id="h-m1" aria-pressed="false">Recta robusta</button><button type="button" id="h-m2" aria-pressed="false">Quitar el atípico</button></div>
+      <ul>
+        <li><b>Recta normal</b>: la que pasa lo más cerca posible de todos los puntos a la vez. Es la que da Excel o cualquier programa por defecto.</li>
+        <li><b>Recta robusta</b>: parecida, pero a los puntos muy alejados les da menos peso, para que uno solo no pueda arrastrarla.</li>
+        <li><b>Quitar el atípico</b>: la recta normal sin el viaje marcado.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="big3 col" id="h-big"></div>
+  <div class="col stack">
+    <p><strong>Prueba en este orden:</strong></p>
+    <ol class="try">
+      <li>Con "Recta normal", mueve el valor de 33 a 330 y mira cómo la recta se tuerce y la predicción para 20 t se va.</li>
+      <li>Deja el valor en 330 y cambia a "Recta robusta": casi no se mueve.</li>
+      <li>Prueba "Quitar el atípico": funciona aquí porque sabemos que es un error. Las ideas 1 y 5 explican por qué no siempre se puede.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="h-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Lo que acabas de ver</p>
+    <h2>Un solo valor puede mandar sobre todos los demás</h2>
+    <p>La recta normal busca que la suma de las distancias <em>al cuadrado</em> entre los puntos y la recta sea lo más pequeña posible. Elevar al cuadrado hace que un punto a 300 unidades pese como 10 000 puntos a 3 unidades. Por eso un único dato erróneo puede torcerla entera. Los métodos <strong>robustos</strong> limitan cuánto puede pesar cada punto.</p>
+    <p>Pero el juguete era fácil porque sabíamos que el 330 era un error. En los datos reales nadie te lo dice. Antes de decidir qué hacer, hay que encontrar los valores atípicos y, sobre todo, entender <strong>por qué</strong> lo son.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 5</p>
+    <h2>¿Error o caso raro pero real?</h2>
+    <p>Estos seis viajes destacan en una flota de 800. Para cada uno, decide si crees que es un error de registro o un viaje real que simplemente fue distinto. Fíjate en las columnas de contexto: tipo de ruta y si el camión es frigorífico (lleva un motor aparte para el frío, que también gasta).</p>
+  </div>
+  <div class="cases" id="cases"></div>
+  <p class="qcard col" id="cases-msg">Elige una respuesta en cada tarjeta.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 5</p>
+    <h2>Buscar en una sola columna: las vallas</h2>
+    <p>La forma más sencilla de encontrar atípicos es mirar una columna y poner dos "vallas": todo lo que quede fuera es sospechoso. Las vallas se colocan a partir de la parte central de los datos. Se toma el 50 % de viajes del medio (sin el cuarto más bajo ni el cuarto más alto) y se mide cuánto ocupa. Las vallas quedan a una distancia de ese ancho multiplicado por un factor, por debajo y por encima. Es el método de los gráficos de caja.</p>
+  </div>
+  <figure class="fig"><svg id="iqr" role="img" aria-label="Consumo de los 800 viajes con las vallas"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada punto es un viaje, colocado según su consumo (hacia la derecha, más consumo); la altura no significa nada, solo separa los puntos para que no se tapen. La franja <b style="color:var(--mean)">azul</b> es el 50 % del medio. Las líneas <b style="color:var(--warn)">rojas</b> son las vallas: los puntos fuera se marcan en rojo. Los puntos con borde negro son los <b>errores reales</b>, para que veas cuáles se encuentran y cuáles no.</p>
+  <div class="slider col"><label for="q-k">Factor de las vallas <output id="q-k-o"></output></label><input type="range" id="q-k" min="1" max="6" step="0.5" value="1.5"><div class="ends"><span>1 (vallas cerca)</span><span>6 (vallas lejos)</span></div></div>
+  <p class="qcard col" id="q-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 5</p>
+    <h2>Cuando los errores se esconden entre ellos</h2>
+    <p>Otra forma habitual de buscar atípicos es medir a cuántas "desviaciones" está cada valor de la media y marcar los que pasen de 3. El problema es que la media y la desviación se calculan con todos los datos, <em>incluidos los errores</em>. Si hay muchos errores grandes, inflan la desviación y ya no parecen tan lejanos: se esconden unos a otros. Se llama <strong>enmascaramiento</strong>. La versión robusta usa la mediana (el valor del medio) y una desviación calculada también con medianas, que los errores no pueden inflar.</p>
+  </div>
+  <figure class="fig"><svg id="msk" role="img" aria-label="Cuántos errores encuentra cada método según cuántos haya"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Partimos de los viajes normales y añadimos errores de coma mal puesta (consumos de 250 a 400). Hacia la derecha, más errores. Cada línea dice qué porcentaje de esos errores encuentra cada método. La línea vertical es la cantidad que eliges abajo.</p>
+  <div class="slider col"><label for="m-n">Errores añadidos <output id="m-n-o"></output></label><input type="range" id="m-n" min="1" max="120" step="1" value="90"><div class="ends"><span>1</span><span>120 (14 % de los viajes)</span></div></div>
+  <p class="qcard col" id="m-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 de 5</p>
+    <h2>Atípico en la combinación, no en cada columna</h2>
+    <p>Un viaje con 20 toneladas es normal. Un viaje que gasta 24 L/100 km es normal. Pero un viaje con 20 toneladas <em>que gasta 24 L</em> es imposible: con esa carga se gasta mucho más. Mirando cada columna por separado nunca se encuentra. Hay que mirar si el viaje encaja con la <strong>relación</strong> entre columnas: lo lejos que queda de la recta robusta, comparado con lo que se alejan normalmente los viajes.</p>
+  </div>
+  <figure class="fig"><svg id="biv" role="img" aria-label="Carga frente a consumo de 800 viajes con los marcados"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada punto es un viaje. La franja <b style="color:var(--mean)">azul</b> es la zona donde caen los viajes normales alrededor de la recta robusta. Los puntos en <b style="color:var(--warn)">rojo</b> son los que marca el método elegido. Los <b style="color:var(--point)">triángulos naranjas</b> son viajes de montaña. Los consumos de más de 70 (la coma mal puesta) quedan fuera del dibujo y se indican con flechas arriba.</p>
+  <div class="seg" role="group" aria-label="Método"><button type="button" id="b-0" aria-pressed="true">Cada columna por separado</button><button type="button" id="b-1" aria-pressed="false">Distancia a la recta</button></div>
+  <p class="qcard col" id="b-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 de 5</p>
+    <h2>¿Y ahora qué hago con ellos?</h2>
+    <p>La idea 4 marcó 26 viajes: los 12 errores y 14 viajes de montaña que son reales. Hay varias formas de seguir, y cada una cambia los resultados. Medimos tres cosas: cuánto sube el consumo por cada tonelada (la pendiente de la recta), el consumo medio de la flota y cuánto más gasta un camión en montaña. La raya negra de cada barra es el valor verdadero.</p>
+  </div>
+  <div class="dec col">
+    <h3>Elige qué hacer con los viajes marcados</h3>
+    <div class="seg" role="group" aria-label="Qué hacer"><button type="button" id="a-dejar" aria-pressed="true">Dejarlos</button><button type="button" id="a-borrar" aria-pressed="false">Borrar los marcados</button><button type="button" id="a-corregir" aria-pressed="false">Corregir los errores</button><button type="button" id="a-robusto" aria-pressed="false">Método robusto</button></div>
+    <ul>
+      <li><b>Dejarlos</b>: usar los datos tal cual.</li>
+      <li><b>Borrar los marcados</b>: quitar los 26 viajes, errores y viajes de montaña juntos.</li>
+      <li><b>Corregir los errores</b>: investigar cada uno. La coma se arregla dividiendo entre 10, los galones se pasan a litros, y la carga mal declarada se deja como dato que falta. Los viajes de montaña se quedan.</li>
+      <li><b>Método robusto</b>: no tocar nada y usar la recta robusta y la mediana.</li>
+    </ul>
+  </div>
+  <div class="meter2 col" id="a-bars"></div>
+  <p class="qcard col" id="a-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta completa</h2>
+    <ol class="steps">
+      <li><div><strong>Busca en cada columna</strong> con vallas o con el método robusto de la mediana, no con la media y la desviación.</div></li>
+      <li><div><strong>Busca también en las combinaciones</strong>: viajes que no encajan con la relación entre columnas.</div></li>
+      <li><div><strong>Investiga cada caso con el contexto</strong>: ruta, tipo de camión, equipo, quién lo registró. ¿Es físicamente posible?</div></li>
+      <li><div><strong>Corrige los errores con causa conocida</strong> (coma, unidades) y marca como "dato que falta" los que no se pueden recuperar.</div></li>
+      <li><div><strong>No borres los casos raros reales</strong>: son los que más enseñan. Añade la columna que los explica (ruta de montaña).</div></li>
+      <li><div><strong>Si no puedes revisarlos uno a uno</strong>, usa métodos robustos que limiten cuánto pesa cada punto.</div></li>
+      <li><div><strong>Apunta qué hiciste y por qué</strong>, y repítelo igual en los datos nuevos.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>Dónde aparece en la telemetría de flota</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 30h24M12 30l6-14 4 6 6-12"/></svg><h3>Datos introducidos a mano</h3><p>Repostajes, cargas o kilómetros que alguien teclea: comas, unidades cambiadas, dígitos de más.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 32L16 12l6 10 4-6 8 16Z"/></svg><h3>Rutas y condiciones distintas</h3><p>Montaña, nieve, atascos o un camión frigorífico: casos raros pero reales que un modelo debe conocer.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6L34 32H6Z"/><path d="M20 16v8M20 28v1"/></svg><h3>Detección de fraude o averías</h3><p>Aquí el atípico es justo lo que se busca: un repostaje mayor que el depósito, un consumo que se dispara.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13"/><path d="M14 20h12"/></svg><h3>Informes de flota</h3><p>Un consumo medio mensual puede cambiar varios litros por un único registro erróneo.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Conexiones</p>
+    <h2>Con los modelos de la serie ML</h2>
+    <p>La <a href="regresion-lineal-polinomial-es.html" target="_self">regresión lineal</a> y <a href="k-means-es.html" target="_self">K-means</a> son muy sensibles a los atípicos porque usan distancias al cuadrado. Los <a href="arboles-de-decision-es.html" target="_self">árboles</a> y <a href="xgboost-es.html" target="_self">XGBoost</a> lo son poco en las columnas de entrada, pero no en lo que predicen. El <a href="filtro-de-kalman-es.html" target="_self">filtro de Kalman</a> descarta lecturas que no encajan con lo que espera. Y el "bosque de aislamiento" de la versión técnica usa árboles al revés: para encontrar los puntos más fáciles de separar.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo que cuesta y lo que se gana</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Lo que se gana</h3><ul class="pc">
+      <li>Resultados que no dependen de un puñado de errores.</li>
+      <li>Se descubren casos raros que explican cosas (rutas, tipos de camión).</li>
+      <li>Se encuentran fallos en cómo se registran los datos.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Lo que cuesta</h3><ul class="pc">
+      <li>Ningún método sabe distinguir un error de un caso raro: hace falta contexto.</li>
+      <li>Los umbrales (vallas, 3,5) se eligen con criterio.</li>
+      <li>Revisar a mano no escala: hay que convertir lo aprendido en reglas.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Valor atípico</dt><dd>Valor muy alejado de los demás. Puede ser un error o un caso real poco frecuente.</dd>
+      <dt>Recta normal (mínimos cuadrados)</dt><dd>La recta que hace mínima la suma de las distancias al cuadrado a los puntos.</dd>
+      <dt>Método robusto</dt><dd>Método al que unos pocos valores extremos no pueden mover mucho.</dd>
+      <dt>Cuartiles</dt><dd>Los valores que dejan por debajo el 25 % y el 75 % de los datos. Entre ellos está el 50 % del medio.</dd>
+      <dt>Vallas</dt><dd>Límites a partir de los cuartiles; lo que queda fuera es sospechoso.</dd>
+      <dt>Enmascaramiento</dt><dd>Cuando muchos atípicos inflan la desviación y se esconden unos a otros.</dd>
+      <dt>Residuo</dt><dd>Lo que se aleja un punto de la recta.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: las cuentas detrás de todo</summary>
+    <p style="padding-top:10px">No hacen falta para entender la idea:</p>
+    <div class="formula">vallas:  Q1 − k·(Q3 − Q1)   y   Q3 + k·(Q3 − Q1)      (k = 1,5 habitual)
+
+z clásico  = (x − media) / desviación típica              ( > 3 sospechoso )
+z robusto  = 0,6745 · (x − mediana) / MAD                 ( > 3,5 sospechoso )
+MAD        = mediana de |x − mediana|
+
+recta robusta (Huber): los puntos con residuo grande
+pesan menos, en proporción a lo lejos que están</div>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2>Todo en un minuto</h2>
+    <p>Un repaso animado: la coma mal puesta que tuerce una recta, error frente a caso raro, las vallas, los errores que se esconden entre ellos, el atípico que solo se ve en la combinación y qué hacer con cada uno. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJFVAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkB//9k=" aria-label="Animación: valores atípicos">
+      <source src="valores-atipicos-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"carga":[2.06,5.68,19.23,13.97,2.26,10.4,11.5,3.83,17.63,2.73,9.39,12.4,10.34,14.08,17.71,22.95,6.82,15.57,16.71,7.03,0.04,23.36,7.16,7.54,21.4,14.04,11.31,18.56,0.73,16.97,8.98,2.18,15.85,22.36,4.97,15.12,7.16,17.8,17.33,5.25,19.92,15.78,16.39,19.68,10.29,18.21,21.08,2.46,20.39,9.45,11.51,3.51,16.76,7.01,20.91,6.61,13.48,9.59,14.71,4.72,4.33,17.92,18.05,13.61,22.11,4.94,20.42,4.06,23.14,14.97,14.57,23.29,18.89,18.96,21.55,8.86,2.04,4.64,5.13,20.61,3.04,7.12,11.83,20.39,23.17,17.0,5.13,13.08,16.94,1.25,16.32,8.84,14.15,16.07,16.06,12.55,13.31,4.76,11.88,3.01,11.54,12.87,18.58,9.45,0.47,12.67,4.93,17.79,9.33,9.13,21.83,9.43,8.37,8.35,11.54,2.24,13.12,22.11,13.51,17.85,22.73,20.21,17.86,19.52,19.68,6.09,11.57,8.23,6.28,13.72,7.63,14.85,13.98,2.51,10.62,9.36,16.96,2.12,4.05,12.3,9.71,15.97,7.99,4.73,22.36,5.85,3.53,6.72,8.15,5.4,12.87,22.49,3.02,9.96,16.04,21.23,24.0,3.45,12.9,21.15,1.27,14.12,4.17,18.43,22.5,12.92,0.22,1.54,9.98,20.34,5.68,16.06,9.73,6.36,16.89,7.4,8.93,18.37,11.88,18.81,12.39,3.84,10.65,20.95,13.56,23.16,0.03,8.17,18.46,16.47,13.46,15.93,21.03,16.41,13.13,13.5,15.99,7.77,16.07,14.76,18.86,11.53,0.65,12.89,20.58,15.36,15.44,9.38,8.56,17.25,1.87,20.79,21.03,23.1,3.26,2.77,21.46,9.63,6.49,9.17,15.83,3.88,11.69,15.84,17.3,0.29,19.46,10.42,10.46,13.5,6.72,21.28,5.09,13.03,4.03,14.79,21.65,21.18,3.23,15.0,21.42,4.81,9.95,17.12,17.71,10.83,15.33,16.05,8.47,15.65,13.86,16.74,12.28,8.07,10.43,22.14,4.5,3.56,0.29,20.45,23.73,5.68,6.39,4.76,14.4,11.64,19.69,5.03,21.07,11.13,19.39,19.25,21.86,11.97,14.63,13.46,4.57,12.04,22.24,21.81,0.52,15.92,7.84,3.26,3.35,19.08,23.02,12.49,9.2,12.24,19.9,17.92,1.54,5.1,20.82,11.83,15.79,18.66,15.28,17.61,13.1,5.5,4.49,23.84,0.25,16.58,21.14,5.55,19.1,9.58,7.92,11.08,10.26,22.61,2.86,22.66,1.1,22.52,7.99,17.45,0.07,10.73,16.27,15.08,19.35,3.68,9.63,14.73,0.69,20.06,9.99,5.91,5.34,15.62,1.15,5.87,7.29,6.2,17.53,14.22,21.7,16.82,7.07,7.78,2.96,5.82,14.51,17.54,7.1,8.26,19.27,23.0,2.03,1.71,18.22,11.9,10.2,15.21,18.25,1.68,23.08,22.99,10.0,11.27,6.54,14.1,4.92,12.83,21.7,12.15,19.85,4.3,21.2,2.96,5.11,17.29,7.25,2.85,2.08,19.04,0.47,1.35,22.69,18.77,8.89,4.62,20.81,18.9,16.04,12.73,12.61,23.47,12.53,2.02,1.8,14.29,17.58,15.08,17.83,7.06,8.91,6.37,8.94,6.4,20.02,3.55,4.99,17.14,9.55,8.19,23.39,21.45,5.25,3.73,11.82,13.78,8.32,14.19,16.28,19.55,5.81,15.48,1.39,1.56,1.33,2.79,18.76,8.9,11.83,10.82,4.97,1.1,4.36,20.6,8.13,10.09,6.35,17.79,16.86,9.21,12.15,9.5,13.76,14.25,13.86,21.64,22.81,1.23,9.11,0.97,8.99,19.27,16.31,13.62,2.07,19.47,14.7,7.26,18.85,0.94,4.5,18.94,1.1,20.27,12.04,17.04,14.14,0.89,6.6,16.95,8.36,4.66,0.05,6.31,22.34,1.19,13.28,21.83,16.81,6.74,15.57,2.87,11.97,6.32,21.02,20.78,18.28,9.01,19.13,23.52,8.87,12.6,3.9,2.6,17.28,1.45,14.43,2.73,16.06,18.08,22.58,9.36,9.35,9.59,16.94,18.91,2.78,7.79,1.33,5.64,17.61,22.48,23.53,1.64,9.65,20.94,12.11,8.39,18.78,20.74,19.11,12.41,3.53,4.32,12.74,6.07,19.32,8.77,4.35,15.1,6.29,1.59,23.98,4.42,3.15,11.53,0.1,18.94,1.8,0.95,23.18,12.4,22.29,21.53,17.62,0.71,15.45,1.56,0.26,20.27,7.36,17.93,12.72,18.82,15.35,23.35,11.39,20.48,19.72,14.08,12.15,10.32,15.5,4.7,10.54,15.53,7.38,5.2,2.55,19.31,21.02,20.02,16.96,14.51,1.39,21.14,11.36,16.48,2.91,17.9,3.52,23.0,17.06,12.74,15.68,5.52,11.98,2.07,6.71,6.85,19.91,9.99,1.52,0.62,7.98,23.79,17.45,10.27,4.79,2.92,10.0,15.68,19.83,11.1,20.44,19.47,20.39,7.97,11.21,3.85,14.03,1.02,11.27,3.93,11.46,4.35,0.04,10.12,10.28,12.99,2.99,11.96,7.19,1.95,9.84,16.0,7.27,17.12,18.93,0.34,5.17,6.81,14.22,11.69,13.63,1.77,6.89,3.86,17.9,16.4,7.32,21.03,3.26,0.43,8.96,16.04,22.71,12.21,3.28,14.34,0.4,19.63,7.74,2.44,3.58,19.89,21.75,4.43,23.95,20.65,7.91,1.23,3.63,10.47,4.93,4.37,6.55,21.06,0.87,22.14,10.78,17.71,12.29,22.69,4.35,6.13,12.2,12.18,7.94,7.33,2.14,12.05,19.93,20.8,9.95,23.51,23.21,7.67,2.8,20.06,22.58,15.58,23.15,11.46,12.57,1.78,8.88,22.19,2.48,3.3,0.79,11.9,14.48,12.78,21.1,16.33,15.29,14.47,12.14,1.79,2.34,15.46,5.09,9.97,15.54,14.39,5.86,6.42,3.37,15.9,17.27,3.17,6.5,3.57,14.69,7.11,20.88,6.39,15.46,15.26,22.6,17.35,22.39,14.02,0.08,7.83,17.77,8.22,15.79,2.82,15.52,9.24,22.71,1.71,8.65,18.42,9.41,11.1,8.03,2.34,7.68,21.04,18.42,7.43,16.04,19.06,19.13,1.33,3.94,22.95,6.72,18.69,15.13,20.93,1.88,22.42,21.02,5.72,17.06,0.14,20.77,9.95,17.77,19.08,0.64,21.17,2.52,3.72,10.95,6.08,15.55,4.57,14.95,18.28,23.13,9.58,6.86,13.86,15.63,22.15,14.06,10.52,7.14,17.4,15.3,1.72,7.18,4.01,11.89,9.15],"cons":[22.5,29.5,37.0,33.6,25.6,33.7,30.7,27.8,37.3,27.1,31.2,32.7,32.4,35.5,36.7,46.1,27.6,37.8,36.2,25.4,20.2,42.8,29.5,31.6,41.4,34.2,30.2,38.6,23.1,41.2,32.1,25.8,39.9,40.6,26.5,35.6,31.3,36.6,43.5,27.5,40.6,38.3,43.6,37.4,31.9,38.9,42.0,26.2,39.4,31.8,30.7,25.4,38.2,28.1,41.1,25.7,33.1,30.8,33.3,24.8,29.8,38.5,41.9,32.5,44.1,21.9,39.7,26.5,41.8,36.2,33.3,42.8,38.9,38.9,23.2,29.8,25.4,25.6,25.5,39.9,24.0,25.8,29.4,38.0,43.1,36.0,25.7,38.2,38.8,30.1,35.5,31.9,33.3,38.2,37.2,35.3,32.6,27.5,29.6,24.2,33.9,34.5,35.6,31.4,22.9,33.1,25.1,37.3,29.3,31.5,42.2,32.0,30.4,27.2,32.4,27.2,31.8,42.1,32.7,36.4,42.6,41.4,39.1,40.1,41.0,24.6,33.5,29.8,27.1,34.1,27.3,37.0,33.1,21.7,31.3,29.3,36.9,26.1,25.2,33.0,34.1,33.9,29.6,27.9,44.3,30.6,23.9,28.8,29.0,25.9,32.2,10.5,25.0,32.0,34.5,42.1,42.5,23.3,29.2,42.6,24.1,34.0,24.9,36.3,42.9,33.3,22.9,23.5,28.5,37.6,27.6,33.5,31.0,29.0,35.0,29.6,29.9,39.2,31.5,38.8,33.7,28.3,32.6,41.5,32.0,43.3,20.8,29.1,38.9,38.3,35.0,36.6,40.8,38.9,32.3,34.1,38.5,28.6,37.7,36.6,42.1,34.1,19.9,33.5,40.9,37.1,36.4,33.4,31.4,9.4,22.6,37.3,43.6,42.5,24.6,21.8,40.4,31.2,27.0,29.4,35.0,28.5,31.4,33.7,36.5,21.4,39.1,30.7,29.3,33.5,28.4,38.6,29.5,36.2,22.4,34.4,42.8,42.9,27.5,32.2,39.2,25.2,31.5,35.4,45.8,32.2,36.7,34.1,29.7,35.9,33.5,38.9,32.3,31.4,30.2,44.5,28.5,23.6,22.6,40.7,41.6,28.2,28.5,24.7,34.9,33.8,39.3,25.2,43.5,30.3,39.9,41.0,42.8,37.2,34.5,33.8,25.7,8.9,42.8,41.8,22.8,37.9,31.0,21.8,28.5,38.2,43.9,30.5,29.4,30.9,41.6,39.5,23.4,26.3,41.3,31.1,35.2,37.5,37.1,37.9,31.7,27.5,26.9,45.7,21.3,37.6,44.4,26.4,22.4,31.4,28.3,31.9,304.0,41.0,26.0,41.8,21.3,41.8,28.9,38.2,23.5,34.5,34.6,35.1,36.4,25.6,31.5,34.1,21.1,38.4,28.5,28.3,29.8,34.1,25.6,27.0,26.2,28.4,38.9,35.3,41.0,39.7,27.8,29.9,25.6,25.7,31.9,34.9,27.6,29.9,36.3,41.4,26.2,20.5,39.0,33.1,32.3,33.2,38.8,21.1,44.8,41.1,31.5,30.7,28.0,32.0,26.7,34.4,41.4,35.4,40.3,27.0,41.7,27.5,25.4,37.0,28.0,25.4,24.1,40.3,22.8,22.2,42.2,39.5,26.1,28.3,39.7,38.3,36.7,32.9,30.9,42.6,35.4,25.4,25.5,33.9,37.4,37.2,40.4,28.3,28.4,24.5,32.3,25.2,40.7,26.6,31.8,37.7,30.4,30.1,43.9,43.5,27.8,24.1,29.2,34.9,28.4,37.1,34.5,39.9,26.0,34.5,26.0,23.7,22.9,257.0,37.6,29.4,31.6,35.0,27.0,24.0,27.8,40.2,29.1,28.4,28.5,38.4,36.5,32.3,30.0,31.2,32.1,32.9,34.1,43.7,40.5,28.9,28.2,26.2,31.0,47.5,40.1,34.7,20.4,38.7,33.2,31.9,36.6,23.3,30.2,38.3,23.0,24.6,31.7,35.3,33.6,21.1,26.4,37.4,29.3,27.0,21.6,30.9,40.9,21.4,35.6,40.5,37.3,29.7,43.3,24.0,34.4,28.2,40.0,38.7,37.8,27.3,37.7,41.3,30.4,34.6,24.4,23.6,35.7,21.0,34.2,25.4,37.2,39.2,41.8,25.8,31.9,32.8,51.2,40.5,26.3,33.4,23.7,29.6,44.2,43.4,42.9,22.9,28.8,41.8,32.4,27.5,37.6,38.7,27.8,32.8,25.4,23.9,31.7,29.2,39.0,30.3,29.0,39.1,28.8,24.2,44.0,25.5,28.2,30.4,21.9,35.9,21.5,23.5,43.6,33.7,41.5,40.2,37.0,22.0,37.7,25.8,23.0,39.3,27.1,38.6,33.1,35.9,38.1,43.0,31.7,39.0,38.3,36.2,38.9,31.5,37.0,29.3,32.5,35.9,27.9,28.1,26.0,38.7,41.9,39.8,34.6,33.4,24.6,43.4,33.4,36.5,23.4,39.0,33.2,40.0,38.4,32.3,37.2,27.9,34.0,25.6,29.2,26.4,23.9,32.7,24.2,19.9,25.8,44.9,41.4,32.6,25.9,25.1,26.5,34.5,41.5,33.4,36.9,41.5,41.2,30.7,39.3,25.5,32.8,28.5,33.6,24.0,32.9,25.0,23.8,32.7,27.3,34.4,26.4,39.3,28.1,23.5,36.5,36.2,31.1,38.2,41.6,24.0,28.7,28.3,43.6,35.9,36.7,24.1,27.0,23.9,38.5,37.5,25.5,41.3,25.5,22.9,29.2,40.3,43.9,30.7,23.8,36.2,23.2,44.9,28.9,23.8,24.5,38.2,42.5,21.3,42.3,42.6,27.8,21.1,28.4,33.1,26.1,24.9,27.5,40.3,22.3,40.6,32.5,37.0,30.0,40.2,25.8,25.7,28.8,35.4,29.9,27.7,23.0,33.6,42.1,39.6,31.5,42.0,43.3,26.9,21.4,47.6,42.1,37.1,49.1,34.5,33.4,26.0,29.3,44.4,24.0,25.1,24.2,29.7,33.2,36.4,38.4,35.8,36.5,37.3,39.5,23.7,22.1,35.2,28.2,31.4,35.8,35.6,27.4,28.0,24.4,34.6,38.6,30.3,29.4,28.6,37.6,32.1,39.0,28.1,34.5,34.4,39.4,35.5,43.5,43.2,24.0,30.9,39.2,28.0,36.0,25.7,38.0,29.7,41.6,22.8,32.4,39.5,37.4,307.0,29.9,21.3,28.5,40.0,37.6,29.0,37.1,44.2,39.4,31.8,31.7,39.9,29.9,42.1,34.0,40.7,25.5,42.3,37.0,28.8,37.1,23.3,39.1,32.4,39.7,38.0,23.4,40.0,23.5,23.9,31.2,26.4,38.0,25.8,33.6,40.7,43.7,32.3,28.1,357.0,35.9,40.4,34.9,31.7,28.7,39.1,33.0,24.1,27.2,25.2,38.5,30.4],"ruta":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"frio":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0],"tipo":["normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","normal","normal","normal","normal","raro: frigor\u00edfico","normal","raro: monta\u00f1a","normal","normal","normal","raro: monta\u00f1a","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: frigor\u00edfico","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","error: carga mal declarada","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","error: galones","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","error: galones","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","normal","error: galones","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","error: carga mal declarada","normal","normal","normal","error: coma desplazada","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","error: coma desplazada","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","normal","raro: monta\u00f1a","normal","normal","normal","normal","normal","normal","normal","normal","raro: frigor\u00edfico","normal","normal","error: carga mal declarada","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","normal","normal","normal","raro: frigor\u00edfico","normal","normal","normal","normal","normal","normal","normal","normal","normal","error: carga mal declarada","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","normal","normal","normal","normal","normal","normal","normal","error: carga mal declarada","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","raro: frigor\u00edfico","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","raro: monta\u00f1a","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: frigor\u00edfico","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","raro: monta\u00f1a","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","error: coma desplazada","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: monta\u00f1a","raro: monta\u00f1a","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","error: coma desplazada","normal","normal","normal","normal","normal","normal","normal","normal","normal","normal","raro: frigor\u00edfico","normal"],"acciones":{"dejar":[0.798,34.1,[5.81,24]],"borrar":[0.882,32.72,[5.56,10]],"corregir":[0.884,32.88,[7.03,24]],"robusto":[0.875,32.7,[6.96,24]],"verdad":[0.885,32.87,[7.03,24]]},"huber":[22.388,0.8754,1.846]};
+const N=D.cons.length,f1=(v,d)=>v.toFixed(d??1).replace(".",",").replace("-","−");
+const seg=(ids,cb)=>{const b=ids.map(i=>document.getElementById(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});};
+const median=a=>{const s=a.slice().sort((x,y)=>x-y),m=s.length/2;return s.length%2?s[Math.floor(m)]:(s[m-1]+s[m])/2;};
+const mean=a=>a.reduce((s,v)=>s+v,0)/a.length;
+const sd=a=>{const m=mean(a);return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/(a.length-1));};
+const quant=(a,q)=>{const s=a.slice().sort((x,y)=>x-y),h=(s.length-1)*q,lo=Math.floor(h),hi=Math.min(lo+1,s.length-1);return s[lo]+(h-lo)*(s[hi]-s[lo]);};
+const ols=(x,y,w)=>{w=w||x.map(()=>1);let sw=0,sx=0,sy=0;for(let i=0;i<x.length;i++){sw+=w[i];sx+=w[i]*x[i];sy+=w[i]*y[i];}const mx=sx/sw,my=sy/sw;let a=0,b=0;for(let i=0;i<x.length;i++){a+=w[i]*(x[i]-mx)*(y[i]-my);b+=w[i]*(x[i]-mx)**2;}const s=a/b;return [my-s*mx,s];};
+const huber=(x,y)=>{let b=ols(x,y);for(let it=0;it<200;it++){const r=x.map((v,i)=>y[i]-b[0]-b[1]*v),s=median(r.map(Math.abs))/0.6744897501960817;const w=r.map(v=>{const u=Math.abs(v/s);return u<=1.345?1:1.345/u;});const nb=ols(x,y,w);if(Math.abs(nb[0]-b[0])+Math.abs(nb[1]-b[1])<1e-10){b=nb;break;}b=nb;}return b;};
+const NORM=[...Array(N).keys()].filter(i=>D.tipo[i]==="normal");
+
+/* ---------- héroe ---------- */
+(function(){const idx=NORM.slice(0,39),x=idx.map(i=>D.carga[i]),y=idx.map(i=>D.cons[i]),mx=12.0;
+  const svg=document.getElementById("hero"),W=900,H=400,L=56,R=16,T=16,B=44,iv=document.getElementById("h-v");let mode=0;
+  const truth=ols(x.concat([mx]),y.concat([33]));
+  function draw(){const v=+iv.value,X=x.concat([mx]),Y=y.concat([v]);const b=mode===0?ols(X,Y):mode===1?huber(X,Y):ols(x,y);
+    const ymax=Math.max(60,v*1.08),sx=t=>L+t/24*(W-L-R),sy=c=>H-B-(c-10)/(ymax-10)*(H-T-B);svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const st=ymax>200?50:ymax>100?20:10;for(let c=10;c<=ymax;c+=st){el("line",{x1:L,x2:W-R,y1:sy(c),y2:sy(c),class:"g-line"},svg);txt(svg,L-6,sy(c)+4,c,{"text-anchor":"end","font-size":12});}
+    [0,4,8,12,16,20,24].forEach(t=>txt(svg,sx(t),H-B+17,t,{"text-anchor":"middle","font-size":12}));
+    txt(svg,W-R,H-8,"carga (toneladas)",{"text-anchor":"end","font-size":12});txt(svg,L+4,T+8,"consumo (L/100 km)",{"font-size":12});
+    el("line",{x1:sx(0),x2:sx(24),y1:sy(truth[0]),y2:sy(truth[0]+24*truth[1]),stroke:"var(--muted)","stroke-width":2,"stroke-dasharray":"7 5"},svg);
+    el("line",{x1:sx(0),x2:sx(24),y1:sy(Math.max(10,b[0])),y2:sy(b[0]+24*b[1]),stroke:"var(--mean)","stroke-width":3.5},svg);
+    x.forEach((t,i)=>el("circle",{cx:sx(t),cy:sy(y[i]),r:5.5,fill:"var(--sample)","fill-opacity":.8},svg));
+    el("circle",{cx:sx(mx),cy:sy(v),r:9,fill:mode===2?"none":"var(--warn)",stroke:"var(--warn)","stroke-width":2.5},svg);
+    const p20=b[0]+20*b[1],p20t=truth[0]+20*truth[1];
+    document.getElementById("h-v-o").textContent=v+" L";
+    document.getElementById("h-big").innerHTML=`<div><b style="color:${Math.abs(b[1]-truth[1])<0.06?"var(--good)":"var(--warn)"}">${f1(b[1],2)}</b><span>litros más por cada tonelada · verdad: ${f1(truth[1],2)}</span></div><div><b style="color:${Math.abs(p20-p20t)<1?"var(--good)":"var(--warn)"}">${f1(p20)} L</b><span>predicción con 20 t · verdad: ${f1(p20t)} L</span></div>`;
+    let m;if(v<40)m=`Con el dato correcto (${v} L), las tres opciones dan prácticamente la misma recta. Ahora mueve el valor hacia 330.`;
+    else if(mode===0)m=`Con ${v} L en un solo viaje de 40, la recta normal ${b[1]<truth[1]?"se aplana":"se tuerce"} y sube entera: predice <b>${f1(p20)} L</b> para 20 t en lugar de ${f1(p20t)}. Un único dato erróneo ha cambiado la respuesta para todos los camiones. Prueba "Recta robusta".`;
+    else if(mode===1)m=`La recta robusta apenas se mueve: predice <b>${f1(p20)} L</b> para 20 t (verdad: ${f1(p20t)}). Ha visto que ese punto está lejísimos de los demás y le ha dado muy poco peso, sin que nadie le diga que es un error.`;
+    else m=`Sin el viaje marcado, la recta es <b>${f1(p20)} L</b> para 20 t. Funciona porque sabíamos que era un error. Si fuera un viaje real y raro, quitarlo sería esconder información.`;
+    document.getElementById("h-msg").innerHTML=m;}
+  iv.addEventListener("input",draw);seg(["h-m0","h-m1","h-m2"],i=>{mode=i;draw();});draw();})();
+
+/* ---------- idea 1: casos ---------- */
+(function(){const [h0,h1]=D.huber,pick=t=>{let best=-1,bv=-1;D.tipo.forEach((v,i)=>{if(v===t&&!(t==="raro: montaña"&&D.frio[i])){const r=Math.abs(D.cons[i]-h0-h1*D.carga[i]);if(r>bv){bv=r;best=i;}}});return best;};
+  const C=[["error: coma desplazada","error","La coma está desplazada: 10 veces el consumo normal. Ningún camión gasta tanto."],
+    ["raro: montaña","real","Ruta de montaña: subir puertos con carga gasta 6–8 L más. Es real y conviene que el modelo lo aprenda."],
+    ["error: carga mal declarada","error","Con esa carga se gasta mucho más. La carga se declaró pero el camión viajó casi vacío: el consumo es normal para un camión vacío."],
+    ["raro: frigorífico","real","Camión frigorífico: el equipo de frío consume aparte. Real; lo explica la columna 'frigorífico'."],
+    ["error: galones","error","Menos de 10 L/100 km es imposible para un camión, y más con carga. El dato se registró en galones (1 galón = 3,785 L): en litros serían unos 33."],
+    ["normal","real","Viaje normal: carga media y consumo acorde. No todo lo que se revisa resulta raro."]];
+  const box=document.getElementById("cases"),ans={};
+  const order=[0,1,2,3,4,5];
+  order.forEach(k=>{const [t,sol,ex]=C[k],i=t==="normal"?NORM[7]:pick(t);
+    const d=document.createElement("div");d.className="case";
+    d.innerHTML=`<h3>Viaje ${k+1}</h3><dl><dt>carga</dt><dd>${f1(D.carga[i])} t</dd><dt>consumo</dt><dd>${f1(D.cons[i])} L/100 km</dd><dt>ruta</dt><dd>${D.ruta[i]?"montaña":"llana"}</dd><dt>frigorífico</dt><dd>${D.frio[i]?"sí":"no"}</dd></dl><div class="btns"><button type="button" data-a="error">Error</button><button type="button" data-a="real">Real</button></div><p class="ans"></p>`;
+    d.querySelectorAll("button").forEach(b=>b.onclick=()=>{ans[k]=b.dataset.a===sol;d.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+      d.querySelector(".ans").innerHTML=`<b class="${ans[k]?"ok":"no"}">${ans[k]?"Bien.":"No."}</b> ${ex}`;
+      const n=Object.keys(ans).length,ok=Object.values(ans).filter(Boolean).length;
+      document.getElementById("cases-msg").innerHTML=n<6?`Llevas ${n} de 6 (${ok} acertadas).`:`<b>${ok} de 6.</b> Fíjate en que para decidir has usado información que un detector automático no tiene: qué es físicamente posible, la ruta, el tipo de camión. Un detector solo dice "esto es raro"; decidir si es un error es trabajo con contexto.`;});
+    box.appendChild(d);});})();
+
+/* ---------- idea 2: vallas ---------- */
+(function(){const svg=document.getElementById("iqr"),W=900,H=280,L=20,R=20,T=20,B=44,is=document.getElementById("q-k");svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const y=D.cons,q1=quant(y,.25),q3=quant(y,.75),r=q3-q1,sx=v=>L+v/380*(W-L-R),jit=[...Array(N)].map((_,i)=>mulberry32(i+5)());
+  function draw(){const k=+is.value,lo=q1-k*r,hi=q3+k*r;svg.textContent="";
+    [0,50,100,150,200,250,300,350].forEach(t=>{el("line",{x1:sx(t),x2:sx(t),y1:T,y2:H-B,class:"g-line"},svg);txt(svg,sx(t),H-B+17,t,{"text-anchor":"middle","font-size":12});});
+    txt(svg,W-R,H-8,"consumo registrado (L/100 km)",{"text-anchor":"end","font-size":12});
+    el("rect",{x:sx(q1),y:T,width:sx(q3)-sx(q1),height:H-T-B,fill:"var(--mean)","fill-opacity":.15},svg);
+    [lo,hi].forEach(v=>el("line",{x1:sx(v),x2:sx(v),y1:T,y2:H-B,stroke:"var(--warn)","stroke-width":2.5},svg));
+    let fe=0,fr=0,fn=0;const miss={};
+    y.forEach((v,i)=>{const out=v<lo||v>hi,er=D.tipo[i].startsWith("error");if(er&&!out)miss[D.tipo[i]]=(miss[D.tipo[i]]||0)+1;if(out){if(er)fe++;else if(D.tipo[i].startsWith("raro"))fr++;else fn++;}
+      el("circle",{cx:sx(v),cy:T+10+jit[i]*(H-T-B-20),r:er?5.5:3.2,fill:out?"var(--warn)":"var(--sample)","fill-opacity":out?1:.45,stroke:er?"var(--ink)":"none","stroke-width":er?1.8:0},svg);});
+    document.getElementById("q-k-o").textContent=f1(k);
+    document.getElementById("q-msg").innerHTML=`Con factor ${f1(k)}, las vallas quedan en <b>${f1(lo)}</b> y <b>${f1(hi)}</b> L/100 km. Se marcan ${fe+fr+fn} viajes: <b>${fe} de los 12 errores</b>${fr?`, ${fr} raros reales`:""}${fn?` y ${fn} normales`:""}. ${fe<12?`Se escapan: ${Object.entries(miss).map(([t,c])=>`${c} de ${t.replace("error: ","")}`).join(", ")}. ${miss["error: carga mal declarada"]?"Los de carga mal declarada tienen un consumo normal para un camión vacío: mirando solo el consumo no hay nada raro. Para encontrarlos hace falta mirar la carga a la vez (idea 4).":""}`:""}`;}
+  is.addEventListener("input",draw);draw();})();
+
+/* ---------- idea 3: enmascaramiento ---------- */
+(function(){const base=NORM.map(i=>D.cons[i]),r=mulberry32(11),errs=[...Array(120)].map(()=>250+r()*150),is=document.getElementById("m-n");
+  const found=n=>{const all=base.concat(errs.slice(0,n)),m=mean(all),s=sd(all),md=median(all),mad=median(all.map(v=>Math.abs(v-md)))/0.6744897501960817;
+    const e=errs.slice(0,n);return [e.filter(v=>Math.abs(v-m)/s>3).length/n,e.filter(v=>Math.abs(v-md)/mad>3.5).length/n];};
+  const C=[];for(let n=1;n<=120;n++)C.push(found(n));
+  const pl=new Plot(document.getElementById("msk"),{W:900,H:300,pad:{l:52,r:16,t:16,b:40},x0:1,x1:120,y0:0,y1:1.05,xt:[1,20,40,60,80,100,120],yt:[0,0.25,0.5,0.75,1],fy:v=>Math.round(v*100)+"%",xl:"errores añadidos"});
+  el("path",{d:pl.ppath(C.map((c,i)=>[i+1,c[0]])),fill:"none",stroke:"var(--warn)","stroke-width":3},pl.g);
+  el("path",{d:pl.ppath(C.map((c,i)=>[i+1,c[1]])),fill:"none",stroke:"var(--good)","stroke-width":3},pl.g);
+  txt(pl.g,pl.sx(100),pl.sy(C[99][0])+22,"clásico (media)",{"font-size":13,"font-weight":700,style:"fill:var(--warn)","text-anchor":"middle"});
+  txt(pl.g,pl.sx(20),pl.sy(1)+18,"robusto (mediana)",{"font-size":13,"font-weight":700,style:"fill:var(--good)"});
+  const g=el("g",null,pl.g);
+  function draw(){const n=+is.value,[a,b]=C[n-1];g.textContent="";el("line",{x1:pl.sx(n),x2:pl.sx(n),y1:pl.sy(0),y2:pl.sy(1.05),stroke:"var(--ink)","stroke-width":1.5,"stroke-dasharray":"4 4"},g);
+    
+    document.getElementById("m-n-o").textContent=n;
+    document.getElementById("m-msg").innerHTML=`Con ${n} error${n>1?"es":""} entre ${base.length} viajes, el método clásico encuentra el <b>${Math.round(a*100)} %</b> y el robusto, el <b>${Math.round(b*100)} %</b>. ${a<0.95?"Los errores han inflado tanto la desviación (y movido tanto la media) que, medidos con ellas, muchos ya no parecen lejanos: se esconden unos a otros. Cuantos más errores, peor.":"Con pocos errores, los dos funcionan. Sube el número de errores."} La mediana y su desviación no se mueven aunque haya muchos errores: siguen describiendo los viajes buenos.`;}
+  is.addEventListener("input",draw);draw();})();
+
+/* ---------- idea 4: combinación ---------- */
+(function(){const svg=document.getElementById("biv"),W=900,H=400,L=56,R=16,T=30,B=44;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const [h0,h1,s]=D.huber,y=D.cons,q1=quant(y,.25),q3=quant(y,.75),lo=q1-1.5*(q3-q1),hi=q3+1.5*(q3-q1);
+  const cq1=quant(D.carga,.25),cq3=quant(D.carga,.75),clo=cq1-1.5*(cq3-cq1),chi=cq3+1.5*(cq3-cq1);
+  const sx=t=>L+t/24*(W-L-R),sy=c=>H-B-(c-0)/(70)*(H-T-B);let mode=0;
+  function draw(){svg.textContent="";
+    [0,10,20,30,40,50,60,70].forEach(c=>{el("line",{x1:L,x2:W-R,y1:sy(c),y2:sy(c),class:"g-line"},svg);txt(svg,L-6,sy(c)+4,c,{"text-anchor":"end","font-size":12});});
+    [0,4,8,12,16,20,24].forEach(t=>txt(svg,sx(t),H-B+17,t,{"text-anchor":"middle","font-size":12}));
+    txt(svg,W-R,H-8,"carga (toneladas)",{"text-anchor":"end","font-size":12});txt(svg,L+4,T-12,"consumo (L/100 km)",{"font-size":12});
+    if(mode){const band=3.5*s;el("path",{d:`M${sx(0)} ${sy(h0+band)}L${sx(24)} ${sy(h0+24*h1+band)}L${sx(24)} ${sy(h0+24*h1-band)}L${sx(0)} ${sy(h0-band)}Z`,fill:"var(--mean)","fill-opacity":.12},svg);
+      el("line",{x1:sx(0),x2:sx(24),y1:sy(h0),y2:sy(h0+24*h1),stroke:"var(--mean)","stroke-width":2.5},svg);}
+    else{[lo,hi].forEach(v=>el("line",{x1:L,x2:W-R,y1:sy(Math.min(v,70)),y2:sy(Math.min(v,70)),stroke:"var(--mean)","stroke-width":1.5,"stroke-dasharray":"6 4"},svg));}
+    let fe=0,fr=0,fn=0;
+    for(let i=0;i<N;i++){const x=D.carga[i],v=y[i],res=Math.abs(v-h0-h1*x)/s,flag=mode?res>3.5:(v<lo||v>hi||x<clo||x>chi);
+      const er=D.tipo[i].startsWith("error"),ra=D.tipo[i].startsWith("raro");if(flag){if(er)fe++;else if(ra)fr++;else fn++;}
+      const col=flag?"var(--warn)":"var(--sample)";
+      if(v>70){el("path",{d:`M${sx(x)} ${T-6}v14M${sx(x)-5} ${T-1}l5 -5l5 5`,stroke:col,"stroke-width":2.5,fill:"none"},svg);continue;}
+      if(D.ruta[i])el("path",{d:`M${sx(x)} ${sy(v)-6}l-6 10h12z`,fill:flag?"var(--warn)":"var(--point)"},svg);
+      else el("circle",{cx:sx(x),cy:sy(v),r:flag?5:2.6,fill:col,"fill-opacity":flag?1:.4},svg);}
+    document.getElementById("b-msg").innerHTML=mode?`Midiendo lo lejos que queda cada viaje de la recta robusta, se marcan <b>${fe+fr+fn}</b>: <b>los ${fe} errores</b>, también los 5 de carga mal declarada (abajo a la derecha) y los 3 en galones (abajo), más <b>${fr} viajes de montaña</b> (triángulos), que son reales. El método encuentra lo raro; no sabe si es un error. La columna "ruta" lo explica.`:`Mirando cada columna con sus vallas (líneas discontinuas para el consumo; la carga no tiene ninguna fuera), se marcan <b>${fe+fr+fn}</b> viajes, <b>${fe} de los 12 errores</b>: los de consumo disparado (flechas arriba) y algunos en galones. Los 5 viajes de 18–23 t que gastan como un camión vacío (abajo a la derecha) pasan desapercibidos. Pulsa "Distancia a la recta".`;}
+  seg(["b-0","b-1"],i=>{mode=i;draw();});draw();})();
+
+/* ---------- idea 5: qué hacer ---------- */
+(function(){const A=D.acciones,V=A.verdad;let cur="dejar";
+  const keys=["dejar","borrar","corregir","robusto"],btn=keys.map(k=>document.getElementById("a-"+k));
+  function draw(){const a=A[cur];
+    const row=(lab,v,t,mx,txtv,col)=>`<div class="row"><span>${lab}</span><span class="bar"><i style="width:${Math.min(100,v/mx*100).toFixed(1)}%;background:${col}"></i><u style="left:${(t/mx*100).toFixed(1)}%"></u></span><span class="num">${txtv}</span></div>`;
+    const ok=(v,t,tol)=>Math.abs(v-t)<=tol?"var(--good)":"var(--warn)";
+    document.getElementById("a-bars").innerHTML=row("L más por tonelada",a[0],V[0],1.2,f1(a[0],3),ok(a[0],V[0],0.012))+row("consumo medio de la flota",a[1],V[1],40,f1(a[1],2)+" L",ok(a[1],V[1],0.25))+row("cuánto más se gasta en montaña",a[2][0],V[2][0],9,f1(a[2][0],2)+" L",ok(a[2][0],V[2][0],0.2));
+    const M={dejar:`Con los errores dentro, la pendiente sale ${f1(a[0],2)} en vez de ${f1(V[0],2)}, el consumo medio sube a ${f1(a[1],2)} L (la coma mal puesta pesa mucho) y el efecto de la montaña se queda en ${f1(a[2][0],1)} L en vez de ${f1(V[2][0],1)}.`,
+      borrar:`Borrar todo lo marcado arregla la pendiente y el consumo medio, pero se lleva por delante ${24-a[2][1]} de los 24 viajes de montaña, justo los más exigentes. El efecto de la montaña baja a <b>${f1(a[2][0],1)} L</b> (verdad: ${f1(V[2][0],1)}): un modelo entrenado así subestimaría el consumo en los puertos.`,
+      corregir:`Investigando cada caso y corrigiendo solo los errores, las tres cifras coinciden con la verdad: pendiente ${f1(a[0],3)}, consumo medio ${f1(a[1],2)} L, montaña ${f1(a[2][0],2)} L. Es lo mejor, pero exige saber qué pasó con cada viaje.`,
+      robusto:`Sin tocar nada, la recta robusta da una pendiente de ${f1(a[0],3)} y la mediana, ${f1(a[1],2)} L. El efecto de la montaña, medido desde la recta robusta, es ${f1(a[2][0],2)} L. Casi tan bueno como corregir, y sin revisar a mano. Pero ojo: la mediana no es lo mismo que la media (contesta otra pregunta).`};
+    document.getElementById("a-msg").innerHTML=M[cur];}
+  btn.forEach((b,i)=>b.onclick=()=>{cur=keys[i];btn.forEach(x=>x.setAttribute("aria-pressed",String(x===b)));draw();});draw();})();
+})();
+</script>
+
+</body>
+</html>

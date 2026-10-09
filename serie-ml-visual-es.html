@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Serie ML visual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: índice de la serie. Cabecera con el progreso y una ruta numerada de temas (el orden es la ruta de aprendizaje). Misma paleta que las páginas */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9; --soft:#E8EDF5;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --point:#DD6A26; --point-ring:#FFFFFF; --good:#1C8A5A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545; --soft:#1C2533;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --point:#FF9A55; --point-ring:#0E131B; --good:#4CC38A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545; --soft:#1C2533;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --point:#FF9A55; --point-ring:#0E131B; --good:#4CC38A;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.55;padding-inline:20px;padding-block:0 72px}
+.wrap{max-width:1060px;margin:0 auto}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;margin:0;text-wrap:balance}
+p{margin:0}
+.eyebrow{font-family:var(--f-mono);font-size:.76rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+header.top{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:28px;align-items:center;padding-block:56px 36px}
+header.top>*{min-width:0}
+h1{font-size:clamp(2.6rem,7vw,4.8rem);font-weight:800;letter-spacing:-.025em}
+.lede{font-size:1.18rem;color:var(--muted);max-width:44ch;margin-top:14px}
+.heroart{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:10px}
+.heroart svg{display:block;width:100%;height:auto}
+@media (max-width:760px){header.top{grid-template-columns:1fr;padding-top:40px}}
+
+.stats{display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:22px}
+.stat{display:grid}
+.stat b{font-family:var(--f-display);font-size:1.9rem;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.stat span{font-size:.85rem;color:var(--muted)}
+.progress{margin-top:18px;height:8px;border-radius:4px;background:var(--soft);overflow:hidden;max-width:420px}
+.progress i{display:block;height:100%;background:var(--mean);border-radius:4px}
+
+.bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding-block:8px 18px;border-top:1px solid var(--line);padding-top:22px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:inherit;font-size:.9rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 14px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.chip:hover{border-color:var(--mean)}
+.search{font:inherit;font-size:.95rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 16px;min-width:0;width:240px;max-width:100%}
+:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:grid;grid-template-rows:auto 1fr;transition:transform .15s,border-color .15s,box-shadow .15s}
+.card.ready:hover{transform:translateY(-2px);border-color:var(--band-edge);box-shadow:0 10px 30px -18px rgba(20,40,80,.45)}
+.card .art{background:var(--soft);border-bottom:1px solid var(--line);aspect-ratio:16/8;position:relative}
+.card .art svg{position:absolute;inset:0;width:100%;height:100%}
+.card .num{position:absolute;top:10px;left:12px;font-family:var(--f-mono);font-size:.78rem;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:2px 9px}
+.card .tag{position:absolute;top:10px;right:12px;font-family:var(--f-mono);font-size:.72rem;letter-spacing:.04em;border-radius:999px;padding:3px 9px}
+.tag.ok{background:var(--good);color:var(--surface)}
+.tag.soon{background:var(--surface);color:var(--muted);border:1px dashed var(--line)}
+.card .body{padding:16px 18px 18px;display:grid;gap:10px;align-content:start}
+.card h3{font-size:1.25rem;font-weight:700}
+.card .fam{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mean)}
+.card p.d{font-size:.95rem;color:var(--muted)}
+.links{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.links a{display:inline-flex;align-items:center;gap:7px;font-size:.9rem;text-decoration:none;border-radius:999px;padding:6px 13px;border:1px solid var(--line);color:var(--ink);background:var(--surface)}
+.links a.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+.links a:hover{border-color:var(--mean)}
+.links svg{width:15px;height:15px;flex:none}
+.meta{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.8rem;color:var(--muted);font-family:var(--f-mono)}
+.meta span{display:inline-flex;align-items:center;gap:5px}
+.card.soon .art svg{opacity:.45;filter:grayscale(.6)}
+.card.soon h3{color:var(--muted)}
+.empty{color:var(--muted);padding:30px 0}
+footer{margin-top:44px;padding-top:22px;border-top:1px solid var(--line);color:var(--muted);font-size:.9rem;display:grid;gap:6px}
+@media (prefers-reduced-motion: reduce){.card{transition:none}.card.ready:hover{transform:none}}
+.xseries{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 20px;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--point);border-radius:14px;padding:16px 20px;margin-bottom:26px}
+.xseries h2{font-size:1.3rem;font-weight:700;margin-top:4px}
+.xseries p.d{color:var(--muted);font-size:.95rem;margin-top:4px;max-width:60ch}
+.xseries a{display:inline-flex;align-items:center;gap:7px;font-size:.95rem;font-weight:700;text-decoration:none;border-radius:999px;padding:8px 16px;background:var(--point);color:var(--surface);white-space:nowrap}
+</style>
+</head>
+<body>
+
+<main class="wrap">
+  <header class="top">
+    <div>
+      <p class="eyebrow">Colección · explicaciones interactivas · <a href="https://claude.ai/artifact/JYyviYALBxvRFdNtrLGbZy" id="enhub" target="_blank" rel="noopener" style="color:inherit">in English</a></p>
+      <h1>Serie ML visual</h1>
+      <p class="lede">Algoritmos de machine learning explicados dos veces: una versión sencilla, sin fórmulas y con un video corto, y una versión técnica para programadores con matemáticas, código verificado y un ejemplo resuelto a mano.</p>
+      <div class="stats" id="stats"></div>
+      <div class="progress" aria-hidden="true"><i id="prog"></i></div>
+    </div>
+    <div class="heroart"><svg id="heroart" viewBox="0 0 480 300" role="img" aria-label="Ilustración: datos, una curva ajustada y su banda de incertidumbre"></svg></div>
+  </header>
+
+  <aside class="xseries" aria-label="Colección relacionada">
+    <div><p class="eyebrow">Colección hermana · antes del modelo</p><h2>Preparar los datos</h2><p class="d">Separar la prueba, explorar, limpiar errores de registro, atípicos, huecos y clases raras, y preparar variables sin fugas. Lo que hay que hacer antes de usar cualquiera de estos algoritmos.</p></div>
+    <a id="datahub" href="preparar-los-datos-es.html" target="_self">Ver la colección →</a>
+  </aside>
+
+  <div class="bar">
+    <div class="chips" role="group" aria-label="Filtrar temas">
+      <button class="chip" type="button" data-f="all" aria-pressed="true">Todos</button>
+      <button class="chip" type="button" data-f="ready" aria-pressed="false">Disponibles</button>
+      <button class="chip" type="button" data-f="soon" aria-pressed="false">Próximamente</button>
+    </div>
+    <input class="search" id="q" type="search" placeholder="Buscar un tema…" aria-label="Buscar un tema">
+  </div>
+
+  <p class="eyebrow" style="margin-bottom:14px">Ruta sugerida: cada tema se apoya en los anteriores</p>
+  <div class="grid" id="grid"></div>
+  <p class="empty" id="empty" hidden>Ningún tema coincide con la búsqueda.</p>
+
+  <footer>
+    <p>Cada tema incluye: página sencilla con gráficos interactivos y un video corto con música, y página técnica con ecuaciones, widgets, código en Python verificado y un ejemplo realista resuelto paso a paso.</p>
+    <p>Las redes neuronales quedan fuera de esta serie: por su tamaño tendrán su propia colección aparte.</p>
+    <p id="mode"></p>
+  </footer>
+</main>
+
+<script>
+(function(){
+"use strict";
+/* Catálogo. Para añadir un tema: rellenar simple/tech (archivo local y artifact) y poner ready:true. */
+const TOPICS=[
+  {n:1,id:"regresion",title:"Regresión lineal y polinomial",fam:"Fundamentos",ready:true,video:true,
+   d:"La recta que mejor resume los datos, mínimos cuadrados, la parábola y la trampa del sobreajuste.",
+   simple:{file:"regresion-lineal-polinomial-es.html",url:"https://claude.ai/artifact/J8uTZD4ULjzMXBiMGyvLk1"},
+   tech:{file:"regresion-lineal-polinomial-tecnico-es.html",url:"https://claude.ai/artifact/6wLRsJbT6d5QnqXsGTrEh8"},
+   example:"Velocidad más eficiente de un camión",kw:"lineal cuadratica polinomial minimos cuadrados ridge sobreajuste"},
+  {n:2,id:"logistica",title:"Regresión logística",fam:"Fundamentos",ready:true,video:true,
+   d:"Pasar de predecir números a predecir probabilidades: la curva S, la sorpresa, el umbral y la frontera de decisión.",
+   simple:{file:"regresion-logistica-es.html",url:"https://claude.ai/artifact/P7FkB4L8cC7ZqCkEBayBJQ"},
+   tech:{file:"regresion-logistica-tecnico-es.html",url:"https://claude.ai/artifact/Y6PxsoodMC6KLAhtQeQUQq"},
+   example:"Cuándo mandar un camión al taller",kw:"clasificacion sigmoide probabilidad umbral roc newton irls softmax"},
+  {n:3,id:"gradiente",title:"Descenso de gradiente",fam:"Fundamentos",ready:true,video:true,
+   d:"Cómo aprende casi todo el machine learning: la montaña con niebla, el tamaño del paso, el zigzag, los hoyos falsos y SGD.",
+   simple:{file:"descenso-de-gradiente-es.html",url:"https://claude.ai/artifact/PFuJJTaWsnkR9sJKYd1hw2"},
+   tech:{file:"descenso-de-gradiente-tecnico-es.html",url:"https://claude.ai/artifact/PfgRqVeuwH3YaXqRxv9rJS"},
+   example:"Escalar la carga: de 6 789 iteraciones a 7",kw:"optimizacion tasa de aprendizaje sgd adam momentum nesterov convergencia"},
+  {n:4,id:"arbol",title:"Árboles de decisión",fam:"Árboles",ready:true,video:true,
+   d:"Partir el espacio con preguntas de sí o no: pureza, sobreajuste, poda y por qué un árbol solo es inestable.",
+   simple:{file:"arboles-de-decision-es.html",url:"https://claude.ai/artifact/Cv3FKW45rEy5bb5SMd16kS"},
+   tech:{file:"arboles-de-decision-tecnico-es.html",url:"https://claude.ai/artifact/Bf1YJ9vKWu7sRoUW8nDMkm"},
+   example:"¿Llegará tarde la entrega?",kw:"arbol decision gini entropia cart poda importancia"},
+  {n:5,id:"ensamble",title:"Random Forest y Boosting",fam:"Árboles",ready:true,video:true,
+   d:"Muchos árboles votando a la vez, o árboles pequeños en fila corrigiendo los errores del anterior: bootstrap, OOB, gradient boosting y parada temprana.",
+   simple:{file:"random-forest-y-boosting-es.html",url:"https://claude.ai/artifact/FETxFQyNgCUhKjKGnfxTew"},
+   tech:{file:"random-forest-y-boosting-tecnico-es.html",url:"https://claude.ai/artifact/DW5VtA7v16QjNkDpfQdAJG"},
+   example:"¿Cuántos minutos de retraso?",kw:"bosque random forest bagging bootstrap oob boosting gradient xgboost lightgbm adaboost ensamble"},
+  {n:6,id:"xgboost",title:"XGBoost",fam:"Árboles",ready:true,video:true,
+   d:"Boosting en producción: una multa por complicarse, parar a tiempo, datos vacíos sin rellenar y SHAP para explicar cada predicción.",
+   simple:{file:"xgboost-es.html",url:"https://claude.ai/artifact/Vhjwc3EuST44wR6Dr2phd4"},
+   tech:{file:"xgboost-tecnico-es.html",url:"https://claude.ai/artifact/P8hKFBdK2711cDB4qpab5n"},
+   example:"El primer árbol de XGBoost, a mano",kw:"xgboost lightgbm catboost boosting shap gradiente hessiano parada temprana vacios monotona tabular"},
+  {n:7,id:"knn",title:"k vecinos más cercanos",fam:"Distancias",ready:true,video:true,
+   d:"Decidir copiando a los casos más parecidos: cuántos vecinos, por qué hay que escalar y la maldición de la dimensión.",
+   simple:{file:"k-vecinos-mas-cercanos-es.html",url:"https://claude.ai/artifact/TY277c91gehFs9dSCUoFGF"},
+   tech:{file:"k-vecinos-mas-cercanos-tecnico-es.html",url:"https://claude.ai/artifact/EnS8Y2Co9iP2mmzeNf7c7N"},
+   example:"¿Este camión se va a averiar?",kw:"knn vecinos distancia escalado kd-tree hnsw dimension"},
+  {n:8,id:"kmeans",title:"K-means",fam:"No supervisado",ready:true,video:true,
+   d:"Agrupar datos sin etiquetas: asignar y mover centros, el codo, los arranques que se atascan y las formas que no ve.",
+   simple:{file:"k-means-es.html",url:"https://claude.ai/artifact/Bn3oTiyJQnsfDaFpJ5m3mK"},
+   tech:{file:"k-means-tecnico-es.html",url:"https://claude.ai/artifact/U11w27KVeTMefHHkPasP2P"},
+   example:"¿Dónde poner 2 bodegas?",kw:"clustering grupos centroides kmeans++ codo silueta lloyd"},
+  {n:9,id:"pca",title:"PCA",fam:"No supervisado",ready:true,video:true,
+   d:"Girar la nube de puntos para quedarse con las direcciones que más importan: la mejor sombra, comprimir, reconstruir y sus límites.",
+   simple:{file:"pca-es.html",url:"https://claude.ai/artifact/5ywrrt6795RoPD4n8jV8yK"},
+   tech:{file:"pca-tecnico-es.html",url:"https://claude.ai/artifact/68DSirExEiEs8BSSmaAG6b"},
+   example:"Resumir cada camión en un solo número",kw:"componentes principales dimensionalidad svd autovectores varianza explicada"},
+  {n:10,id:"svm",title:"Máquinas de vectores soporte",fam:"Distancias",ready:true,video:true,
+   d:"La calle más ancha entre dos grupos: vectores soporte, margen blando con multa y el truco del kernel para fronteras curvas.",
+   simple:{file:"maquinas-de-vectores-soporte-es.html",url:"https://claude.ai/artifact/TVq2ebV9GKWewHhrqzmP1j"},
+   tech:{file:"maquinas-de-vectores-soporte-tecnico-es.html",url:"https://claude.ai/artifact/P86vFoWecfxbBDwsWmHoyg"},
+   example:"¿Frenada brusca o normal?",kw:"svm margen kernel rbf vectores soporte smo bisagra hinge dual"},
+  {n:11,id:"bayes",title:"Bayes",fam:"Probabilísticos",ready:true,video:true,
+   d:"Cambiar de opinión con orden: la tasa base, las pistas que se encadenan, proporciones con pocos datos y el clasificador Naive Bayes.",
+   simple:{file:"bayes-es.html",url:"https://claude.ai/artifact/KKgZqDjkB27SwDgHJQenyq"},
+   tech:{file:"bayes-tecnico-es.html",url:"https://claude.ai/artifact/XkcWX3M396BehSFuVvdQyJ"},
+   example:"¿La alerta de avería es real?",kw:"bayes teorema prior posterior naive bayes beta binomial tasa base calibracion odds"},
+  {n:12,id:"gp",title:"Procesos Gaussianos",fam:"Probabilísticos",ready:true,video:true,
+   d:"Adivinar una curva completa con pocos puntos y decir cuánto duda en cada lugar.",
+   simple:{file:"procesos-gaussianos-es.html",url:"https://claude.ai/artifact/8SvwzuBsYS28ZymPxavbmN"},
+   tech:{file:"procesos-gaussianos-tecnico-es.html",url:"https://claude.ai/artifact/PrvHVAFBGQRf61zhqXjTJM"},
+   example:"Un camión entra en un túnel",kw:"gp gaussian kernel incertidumbre bayesiano"},
+  {n:13,id:"markov",title:"Cadenas de Markov",fam:"Probabilísticos",ready:true,video:true,
+   d:"Estados que saltan con probabilidades fijas: la tabla de cambios, el reparto a largo plazo, los tiempos de espera y el modelo oculto que adivina lo que no se ve.",
+   simple:{file:"cadenas-de-markov-es.html",url:"https://claude.ai/artifact/L8JYmgppKpHnk14zcrkyMu"},
+   tech:{file:"cadenas-de-markov-tecnico-es.html",url:"https://claude.ai/artifact/XxGkgu2fqNvAgd9bhNij7D"},
+   example:"¿Dónde estará el camión dentro de 2 horas?",kw:"markov hmm oculto viterbi forward estacionaria transicion estados"},
+  {n:14,id:"kalman",title:"Filtro de Kalman",fam:"Probabilísticos",ready:true,video:true,
+   d:"Predecir, medir y corregir: convertir un GPS ruidoso en una trayectoria limpia, atravesar túneles y estimar la velocidad sin medirla.",
+   simple:{file:"filtro-de-kalman-es.html",url:"https://claude.ai/artifact/RGtEvTzAunmLAgH5b93dWH"},
+   tech:{file:"filtro-de-kalman-tecnico-es.html",url:"https://claude.ai/artifact/UsVjijP49LcfqFtSrZJfbF"},
+   example:"¿Dónde está el camión? Cuatro segundos a mano",kw:"kalman gps series tiempo rts suavizado nis fusion sensores"}
+];
+const LOCAL=location.protocol==="file:";
+const href=o=>o?(LOCAL?o.file:o.url):"#";
+const NS="http://www.w3.org/2000/svg";
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a||{})e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const path=(pts)=>pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join("");
+
+/* mini ilustraciones (viewBox 320x160) */
+const ART={
+  regresion(s){const r=mulberry32(3);const P=[];for(let i=0;i<10;i++){const x=30+i*28;P.push([x,128-0.32*(x-30)+(r()-0.5)*44]);}
+    const f=x=>128-0.32*(x-30);P.forEach(([x,y])=>el("line",{x1:x,x2:x,y1:y,y2:f(x),stroke:"var(--sample)","stroke-width":2},s));
+    el("path",{d:path([[20,f(20)],[300,f(300)]]),stroke:"var(--mean)","stroke-width":3.5,fill:"none","stroke-linecap":"round"},s);
+    P.forEach(([x,y])=>el("circle",{cx:x,cy:y,r:5.5,fill:"var(--point)",stroke:"var(--point-ring)","stroke-width":2},s));},
+  gp(s){const xs=[...Array(81)].map((_,i)=>10+i*3.75),m=x=>80-30*Math.sin(x/45),sd=x=>4+24*(1-Math.max(...[70,160,250].map(d=>Math.exp(-((x-d)**2)/(2*28*28)))));
+    const up=xs.map(x=>[x,m(x)-2*sd(x)/1.6]),lo=xs.map(x=>[x,m(x)+2*sd(x)/1.6]).reverse();
+    el("path",{d:path(up)+path(lo).replace("M","L")+"Z",fill:"var(--band)",stroke:"var(--band-edge)","stroke-dasharray":"3 3"},s);
+    el("path",{d:path(xs.map(x=>[x,m(x)])),stroke:"var(--mean)","stroke-width":3.5,fill:"none"},s);
+    [70,160,250].forEach(x=>el("circle",{cx:x,cy:m(x),r:5.5,fill:"var(--point)",stroke:"var(--point-ring)","stroke-width":2},s));},
+  logistica(s){const xs=[...Array(81)].map((_,i)=>10+i*3.75);el("path",{d:path(xs.map(x=>[x,135-105/(1+Math.exp(-(x-160)/22))])),stroke:"var(--mean)","stroke-width":3.5,fill:"none"},s);
+    const r=mulberry32(5);for(let i=0;i<12;i++){const x=20+r()*280,c=x+(r()-.5)*70>160;el("circle",{cx:x,cy:c?30:135,r:5,fill:c?"var(--point)":"var(--sample)"},s);}},
+  gradiente(s){for(let k=1;k<=5;k++)el("ellipse",{cx:200,cy:85,rx:28*k,ry:12*k,fill:"none",stroke:"var(--band-edge)"},s);
+    el("path",{d:"M40 30 L95 120 L130 50 L165 108 L182 68 L195 92 L200 85",stroke:"var(--point)","stroke-width":2.5,fill:"none"},s);el("circle",{cx:200,cy:85,r:5,fill:"var(--good)"},s);},
+  arbol(s){el("rect",{x:20,y:15,width:280,height:130,fill:"none",stroke:"var(--line)"},s);el("line",{x1:150,x2:150,y1:15,y2:145,stroke:"var(--mean)","stroke-width":3},s);el("line",{x1:20,x2:150,y1:80,y2:80,stroke:"var(--mean)","stroke-width":3},s);el("line",{x1:150,x2:300,y1:105,y2:105,stroke:"var(--mean)","stroke-width":3},s);
+    const r=mulberry32(8);for(let i=0;i<22;i++){const x=28+r()*265,y=22+r()*118,c=(x<150&&y<80)||(x>=150&&y>105);el("circle",{cx:x,cy:y,r:4.5,fill:c?"var(--point)":"var(--sample)"},s);}},
+  ensamble(s){for(let t=0;t<3;t++){const ox=55+t*105;el("circle",{cx:ox,cy:35,r:7,fill:"var(--mean)"},s);[[-28,85],[28,85]].forEach(([dx,y])=>{el("line",{x1:ox,y1:35,x2:ox+dx,y2:y,stroke:"var(--muted)","stroke-width":2},s);el("circle",{cx:ox+dx,cy:y,r:6,fill:t%2?"var(--point)":"var(--sample)"},s);});}
+    el("path",{d:"M55 112 Q160 150 265 112",stroke:"var(--good)","stroke-width":2.5,fill:"none","stroke-dasharray":"5 4"},s);},
+  knn(s){const r=mulberry32(4);for(let i=0;i<24;i++){const x=25+r()*270,y=18+r()*125;el("circle",{cx:x,cy:y,r:4.5,fill:x+y*0.6>200?"var(--point)":"var(--sample)"},s);}
+    el("circle",{cx:165,cy:80,r:38,fill:"var(--band)",stroke:"var(--band-edge)"},s);el("circle",{cx:165,cy:80,r:6,fill:"var(--ink)"},s);},
+  kmeans(s){const r=mulberry32(9),C=[[80,55,"var(--point)"],[220,50,"var(--sample)"],[160,120,"var(--mean)"]];C.forEach(([cx,cy,c])=>{for(let i=0;i<9;i++)el("circle",{cx:cx+(r()-.5)*70,cy:cy+(r()-.5)*45,r:4.5,fill:c,"fill-opacity":.75},s);el("path",{d:`M${cx-8} ${cy}h16M${cx} ${cy-8}v16`,stroke:"var(--ink)","stroke-width":3},s);});},
+  pca(s){const r=mulberry32(2);for(let i=0;i<40;i++){const t=(r()-.5)*230,u=(r()-.5)*40;el("circle",{cx:160+t*0.92-u*0.38,cy:80-t*0.38*0.9-u*0.92,r:3.5,fill:"var(--sample)","fill-opacity":.7},s);}
+    el("line",{x1:50,y1:125,x2:270,y2:35,stroke:"var(--mean)","stroke-width":3.5},s);el("line",{x1:145,y1:55,x2:175,y2:105,stroke:"var(--point)","stroke-width":3},s);},
+  svm(s){el("line",{x1:60,y1:150,x2:260,y2:10,stroke:"var(--mean)","stroke-width":3.5},s);["-34","34"].forEach(o=>el("line",{x1:60+ +o,y1:150,x2:260+ +o,y2:10,stroke:"var(--mean)","stroke-width":1.5,"stroke-dasharray":"5 4"},s));
+    const r=mulberry32(6);for(let i=0;i<16;i++){const a=r(),b=r(),side=i%2;const x=side?190+a*110:20+a*100,y=side?60+b*90:10+b*90;el("circle",{cx:x,cy:y,r:4.5,fill:side?"var(--point)":"var(--sample)"},s);}},
+  markov(s){const C=[[100,85],[240,38],[240,125]],col=["var(--mean)","var(--sample)","var(--point)"];
+    [[0,1],[1,0],[0,2],[2,0],[1,2],[2,1]].forEach(([a,b],k)=>{const p=C[a],q=C[b],mx=(p[0]+q[0])/2,my=(p[1]+q[1])/2,dx=q[0]-p[0],dy=q[1]-p[1],l=Math.hypot(dx,dy),nx=-dy/l*14,ny=dx/l*14;el("path",{d:`M${p[0]} ${p[1]}Q${mx+nx} ${my+ny} ${q[0]} ${q[1]}`,stroke:"var(--muted)","stroke-width":2,fill:"none"},s);});
+    C.forEach((c,i)=>el("circle",{cx:c[0],cy:c[1],r:20,fill:"var(--surface)",stroke:col[i],"stroke-width":4},s));},
+  xgboost(s){const P=[[20,120],[70,120],[70,92],[125,92],[125,70],[180,70],[180,58],[235,58],[235,40],[300,40]];el("path",{d:"M"+P.map(p=>p.join(" ")).join("L"),stroke:"var(--mean)","stroke-width":3.5,fill:"none"},s);
+    const r=mulberry32(8);for(let i=0;i<16;i++){const x=25+i*17,y=125-x*0.28+(r()-.5)*26;el("circle",{cx:x,cy:y,r:4,fill:"var(--point)","fill-opacity":.8},s);}},
+  bayes(s){el("rect",{x:60,y:30,width:44,height:110,rx:6,fill:"var(--line)"},s);el("rect",{x:60,y:134,width:44,height:6,rx:3,fill:"var(--point)"},s);
+    el("rect",{x:216,y:30,width:44,height:110,rx:6,fill:"var(--line)"},s);el("rect",{x:216,y:100,width:44,height:40,rx:6,fill:"var(--point)"},s);
+    el("path",{d:"M118 85H200",stroke:"var(--muted)","stroke-width":3,fill:"none"},s);el("path",{d:"M200 85l-10-6v12z",fill:"var(--muted)"},s);},
+  kalman(s){const r=mulberry32(12);let d="",m="";for(let i=0;i<=20;i++){const x=15+i*14.5,y=110-60*Math.sin(i/7);d+=(i?"L":"M")+x+" "+y;const yy=y+(r()-.5)*36;el("circle",{cx:x,cy:yy,r:3.5,fill:"var(--point)","fill-opacity":.75},s);}
+    el("path",{d,stroke:"var(--mean)","stroke-width":3.5,fill:"none"},s);},
+  nn(s){const L=[[2,40],[3,30],[3,30],[1,0]],X=[50,130,210,285];const pos=L.map(([k],li)=>[...Array(k)].map((_,j)=>[X[li],80+(j-(k-1)/2)*42]));
+    for(let i=0;i<pos.length-1;i++)pos[i].forEach(a=>pos[i+1].forEach(b=>el("line",{x1:a[0],y1:a[1],x2:b[0],y2:b[1],stroke:"var(--band-edge)","stroke-width":1.5},s)));
+    pos.flat().forEach(([x,y])=>el("circle",{cx:x,cy:y,r:10,fill:"var(--surface)",stroke:"var(--mean)","stroke-width":2.5},s));}
+};
+const ICON={
+  play:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>',
+  sigma:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.5 3H3.5l5 5-5 5h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>'
+};
+
+/* cabecera */
+const ready=TOPICS.filter(t=>t.ready).length;
+document.getElementById("stats").innerHTML=`<div class="stat"><b>${ready}</b><span>temas listos</span></div><div class="stat"><b>${ready*2}</b><span>páginas</span></div><div class="stat"><b>${TOPICS.filter(t=>t.video).length}</b><span>videos</span></div><div class="stat"><b>${TOPICS.length-ready}</b><span>en camino</span></div>`;
+document.getElementById("prog").style.width=(ready/TOPICS.length*100)+"%";
+if(LOCAL){const m=document.getElementById("datahub");m.href="preparar-los-datos-es.html";m.target="_self";const e=document.getElementById("enhub");e.href="visual-ml-series-en.html";e.target="_self";}
+document.getElementById("mode").textContent=LOCAL?"Abierto desde tu carpeta: los enlaces llevan a los archivos HTML locales (los videos deben estar en la misma carpeta).":"Abierto en línea: los enlaces llevan a las páginas publicadas.";
+(function(){const s=document.getElementById("heroart"),r=mulberry32(7);
+  for(let y=50;y<=250;y+=50)el("line",{x1:20,x2:460,y1:y,y2:y,stroke:"var(--line)"},s);
+  const xs=[...Array(111)].map((_,i)=>20+i*4),m=x=>150-70*Math.sin((x-20)/80)+0.0008*(x-240)**2,D=[60,130,215,330,400];
+  const sd=x=>5+40*(1-Math.max(...D.map(d=>Math.exp(-((x-d)**2)/(2*32*32)))));
+  el("path",{d:path(xs.map(x=>[x,m(x)-sd(x)]))+path(xs.map(x=>[x,m(x)+sd(x)]).reverse()).replace("M","L")+"Z",fill:"var(--band)",stroke:"var(--band-edge)","stroke-dasharray":"3 3"},s);
+  for(let k=0;k<3;k++){const ph=r()*6;el("path",{d:path(xs.map(x=>[x,m(x)+sd(x)*0.8*Math.sin(x/37+ph)])),stroke:"var(--sample)","stroke-width":1.4,fill:"none",opacity:.55},s);}
+  el("path",{d:path(xs.map(x=>[x,m(x)])),stroke:"var(--mean)","stroke-width":4,fill:"none","stroke-linecap":"round"},s);
+  D.forEach(x=>el("circle",{cx:x,cy:m(x)+(r()-.5)*8,r:7,fill:"var(--point)",stroke:"var(--point-ring)","stroke-width":2.5},s));
+})();
+
+/* tarjetas */
+const grid=document.getElementById("grid");
+for(const t of TOPICS){
+  const c=document.createElement("article");c.className="card "+(t.ready?"ready":"soon");c.dataset.state=t.ready?"ready":"soon";
+  c.dataset.text=(t.title+" "+t.fam+" "+t.d+" "+(t.kw||"")).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+  c.innerHTML=`<div class="art"><svg viewBox="0 0 320 160" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg><span class="num">${String(t.n).padStart(2,"0")}</span><span class="tag ${t.ready?"ok":"soon"}">${t.ready?"Disponible":"Próximamente"}</span></div>
+  <div class="body"><p class="fam">${t.fam}</p><h3>${t.title}</h3><p class="d">${t.d}</p>
+  ${t.ready?`<div class="meta">${t.video?"<span>▶ video incluido</span>":""}${t.example?`<span>ejemplo: ${t.example}</span>`:""}</div>
+  <div class="links"><a class="primary" href="${href(t.simple)}" target="${LOCAL?"_self":"_blank"}" rel="noopener">${ICON.play}Versión sencilla</a><a href="${href(t.tech)}" target="${LOCAL?"_self":"_blank"}" rel="noopener">${ICON.sigma}Versión técnica</a></div>`:""}</div>`;
+  grid.appendChild(c);ART[t.id](c.querySelector("svg"));
+}
+/* filtros */
+let F="all";const q=document.getElementById("q");
+function apply(){const s=q.value.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim();let n=0;
+  grid.querySelectorAll(".card").forEach(c=>{const ok=(F==="all"||c.dataset.state===F)&&(!s||c.dataset.text.includes(s));c.hidden=!ok;if(ok)n++;});
+  document.getElementById("empty").hidden=n>0;}
+document.querySelectorAll(".chip").forEach(b=>b.addEventListener("click",()=>{F=b.dataset.f;document.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));apply();}));
+q.addEventListener("input",apply);
+})();
+</script>
+</body>
+</html>

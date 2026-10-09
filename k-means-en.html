@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>K-means</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: same identity as the visual ML series. One reading column + live figures. Blue = the model, orange = the data, violet = the errors */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+:root{--c5:#C2457A;--c6:#7A6A1F;--c7:#2A8A8A}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--c5:#F07BB0;--c6:#E2C860;--c7:#5FD0D0}}
+:root[data-theme="dark"]{--c5:#F07BB0;--c6:#E2C860;--c7:#5FD0D0}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.hist{display:flex;flex-wrap:wrap;gap:6px;font-family:var(--f-mono);font-size:.82rem}
+.hist span{border:1px solid var(--line);border-radius:999px;padding:2px 10px}
+.hist span.bad{border-color:var(--warn);color:var(--warn)}
+.hist span.ok{border-color:var(--good);color:var(--good)}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Visual ML series · explained without formulas · <a href="k-means-technical-en.html" target="_self">see the technical version</a> · <a href="visual-ml-series-en.html" target="_self">all topics</a> · <a href="k-means-es.html" target="_self">en español</a></p>
+  <h1>K-means</h1>
+  <p class="lede">Group data without anyone telling you the groups: drop a few centers, let each point join the nearest one, move each center to the middle of its points, and repeat until nothing changes.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <figure class="fig"><svg id="hero" role="img" aria-label="Points that group around moving centers"></svg></figure>
+  <div class="kpis" id="h-kpi"></div>
+  <p class="qcard col" id="h-msg"></p>
+  <div class="controls">
+    <div class="btns"><button type="button" class="primary" id="h-step">One step</button><button type="button" id="h-run">Run to the end</button><button type="button" id="h-new">New starting centers</button><button type="button" id="h-data">New data</button></div>
+    <div class="slider"><label for="h-k">Number of groups (K) <output id="h-k-o"></output></label><input type="range" id="h-k" min="2" max="7" step="1" value="4"><div class="ends"><span>2</span><span>7</span></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Before we start</p>
+    <h2>Where should the warehouses go?</h2>
+    <p>A company delivers to hundreds of customers and wants to open 3 warehouses. Where should it put them so the trucks drive as little as possible? A very natural method: put the 3 warehouses anywhere; assign each customer to the nearest warehouse; then move each warehouse to the <strong>center</strong> of its customers. Now some customers have a different warehouse closer to them: reassign them and move again. After a few rounds, nothing changes.</p>
+    <p>That is K-means. "K" is the number of groups you ask for, and "means" (averages) are the centers, which are always the average of their group. Nobody tells the algorithm which groups exist: it finds them on its own. That is why it is called <strong>unsupervised</strong> learning.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 5</p>
+    <h2>Two steps that repeat: assign and move</h2>
+    <p>Eight customers and two warehouses. We start with the warehouses badly placed on purpose: both in the west, on top of customers A and B. Press "Next" and watch them fix themselves.</p>
+  </div>
+  <figure class="fig"><svg id="dep" role="img" aria-label="Eight customers and two warehouses that move step by step"></svg></figure>
+  <p class="col qcard" id="dep-q"></p>
+  <div class="btns"><button type="button" class="primary" id="dep-next">Next</button><button type="button" id="dep-reset">Start over</button></div>
+  <p class="col note">Each round makes the sum of squared distances from the customers to their warehouse (the <strong>inertia</strong>) go down or stay the same: assigning to the nearest warehouse never raises it, and the average is exactly the point that makes it smallest. That is why K-means always finishes.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 5</p>
+    <h2>How many groups? Look for the elbow</h2>
+    <p>K-means doesn't know how many groups there are: you tell it. With more groups the inertia always goes down (with one group per point it would reach zero), so "the lowest inertia" is no way to choose. What you look for is the <strong>elbow</strong>: the K after which adding another group barely helps.</p>
+  </div>
+  <div class="lab">
+    <figure class="fig"><svg id="elb" role="img" aria-label="Grouping with the chosen K"></svg></figure>
+    <figure class="fig"><svg id="elbE" role="img" aria-label="Inertia by number of groups"></svg><figcaption id="elb-c"></figcaption></figure>
+  </div>
+  <div class="slider col"><label for="elb-k">K <output id="elb-k-o"></output></label><input type="range" id="elb-k" min="1" max="8" step="1" value="2"><div class="ends"><span>1</span><span>8</span></div></div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 5</p>
+    <h2>The result depends on where you start</h2>
+    <p>K-means always reaches a place where nothing changes, but not always the <strong>best</strong> one. If two centers start in the same group, they can end up splitting it between them while two other groups share a single center. It gets stuck in a solution that is "good enough for it" but bad.</p>
+    <p>Two remedies are always used: start with centers <strong>spread apart</strong> (the k-means++ method, which picks each new center far from the previous ones) and run it several times, keeping the run with the lowest inertia.</p>
+  </div>
+  <figure class="fig"><svg id="loc" role="img" aria-label="K-means result from one particular start"></svg></figure>
+  <div class="btns"><button type="button" id="loc-rand">Start at random</button><button type="button" class="primary" id="loc-pp">Start with k-means++</button></div>
+  <p class="col qcard" id="loc-q"></p>
+  <div class="hist col" id="loc-h"></div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 5</p>
+    <h2>It only sees round groups</h2>
+    <p>Since each point goes to the nearest center, the border between two groups is always a straight line halfway between their centers. That works with round, similar clouds, but it fails with stretched or curved shapes, or with groups of very different sizes.</p>
+  </div>
+  <figure class="fig"><svg id="shp" role="img" aria-label="K-means on different data shapes"></svg></figure>
+  <div class="seg" role="group" aria-label="Shape of the data"><button type="button" data-s="blobs" aria-pressed="true">Round clouds</button><button type="button" data-s="long" aria-pressed="false">Stretched</button><button type="button" data-s="moons" aria-pressed="false">Moons</button><button type="button" data-s="sizes" aria-pressed="false">Different sizes</button></div>
+  <p class="col qcard" id="shp-q"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 5</p>
+    <h2>Groups don't come with names (and watch the units)</h2>
+    <p>600 trips from a fleet, with their average speed and their kilometers. K-means returns "group 1, group 2, group 3": we are the ones who look at the centers and name them. And since it measures distances, it has the same problem as KNN: if you don't scale, the kilometers (hundreds) crush the speed (tens), and the groups get cut by distance alone.</p>
+  </div>
+  <figure class="fig"><svg id="trips" role="img" aria-label="Trips grouped by average speed and kilometers"></svg></figure>
+  <div class="seg" role="group" aria-label="Scale"><button type="button" id="tr-raw" aria-pressed="false">Not scaled</button><button type="button" id="tr-std" aria-pressed="true">Scaled</button></div>
+  <p class="col qcard" id="tr-q"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The full recipe</h2>
+    <ol class="steps">
+      <li><div><strong>Scale the features</strong> so they all weigh about the same.</div></li>
+      <li><div><strong>Choose K</strong>, the number of groups.</div></li>
+      <li><div><strong>Place K starting centers</strong> spread apart (k-means++).</div></li>
+      <li><div><strong>Assign</strong> each point to the nearest center.</div></li>
+      <li><div><strong>Move</strong> each center to the average of its points.</div></li>
+      <li><div><strong>Repeat</strong> 4 and 5 until nothing changes; do several starts and keep the one with the lowest inertia.</div></li>
+      <li><div><strong>Look at the centers and name them.</strong> Try several K values and choose with the elbow and common sense.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>What is it used for?</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="12" cy="14" r="3"/><circle cx="28" cy="12" r="3"/><circle cx="20" cy="28" r="3"/><path d="M4 34h32"/></svg><h3>Placing warehouses and zones</h3><p>Split customers or delivery points into delivery zones, or decide where to put depots and charging stations.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 30c6-12 10-12 14-4s8 8 14-6"/></svg><h3>Driving and trip profiles</h3><p>Group trips or drivers by speed, hard braking, stops and schedules to discover patterns without labeling them by hand.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="14" cy="16" r="6"/><circle cx="26" cy="16" r="6"/><path d="M6 34c2-6 6-8 8-8s6 2 6 8M20 34c2-6 6-8 6-8s6 2 8 8"/></svg><h3>Customer segments</h3><p>Groups of customers with similar habits, so you can offer each one what they need.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="8" width="28" height="24" rx="3"/><path d="M6 24l8-8 6 6 4-4 10 10"/></svg><h3>Compressing images</h3><p>Reduce millions of colors to 16: each pixel takes the color of the nearest center. It is K-means on colors.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>The good and the not so good</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>The good</h3><ul class="pc">
+      <li>Very simple and very fast, even with millions of points.</li>
+      <li>The centers are easy to interpret: "the typical trip of this group".</li>
+      <li>It needs no answers: it discovers structure in unlabeled data.</li>
+      <li>It works as a first step for other models (summarizing, compressing).</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>The not so good</h3><ul class="pc">
+      <li>You have to tell it K in advance.</li>
+      <li>It can get stuck depending on the start.</li>
+      <li>It assumes round groups of similar size.</li>
+      <li>Sensitive to units and to extreme values (one very odd point drags its center).</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Group (cluster)</dt><dd>A set of points that are more like each other than like the rest.</dd>
+      <dt>Center (centroid)</dt><dd>The average of the points in a group: its "typical point".</dd>
+      <dt>K</dt><dd>How many groups you ask for.</dd>
+      <dt>Inertia</dt><dd>The sum of the squared distances from each point to its center. The smaller it is, the tighter the groups.</dd>
+      <dt>Elbow</dt><dd>The K after which adding groups barely lowers the inertia.</dd>
+      <dt>k-means++</dt><dd>A way of choosing the starting centers far from each other.</dd>
+      <dt>Unsupervised</dt><dd>Learning without correct answers: the algorithm looks for structure on its own.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the formulas behind it all</summary>
+    <p style="padding-top:10px">You don't need them to understand the idea:</p>
+    <div class="formula">inertia = sum, over every point, of (distance to its center)²
+
+repeat:
+  assign: each point → the nearest center
+  move:   each center → average of its points
+until no point changes group</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in one minute</h2>
+    <p>An animated recap: assign and move, the elbow, starts that get stuck, and the shapes K-means can't see. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALFVQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsBQsB//Z" aria-label="Animation: K-means">
+      <source src="k-means-with-audio-en.mp4" type="video/mp4">
+      Your browser can't play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- shared library: 2D CART trees + drawing ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,class],...]; returns the root node with children and box */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* tree diagram */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"yes",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} leaves`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"too big to draw well",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"orange":"violet"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} of ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+
+const COL=["var(--point)","var(--sample)","var(--mean)","var(--good)","var(--c5)","var(--c6)","var(--c7)"];
+const d2=(a,b)=>(a[0]-b[0])**2+(a[1]-b[1])**2;
+const assign=(P,C)=>P.map(p=>{let b=0,bd=Infinity;C.forEach((c,k)=>{const d=d2(p,c);if(d<bd){bd=d;b=k;}});return b;});
+const moveC=(P,L,C)=>C.map((c,k)=>{const S=P.filter((_,i)=>L[i]===k);return S.length?[S.reduce((a,p)=>a+p[0],0)/S.length,S.reduce((a,p)=>a+p[1],0)/S.length]:c.slice();});
+const inertia=(P,L,C)=>P.reduce((a,p,i)=>a+d2(p,C[L[i]]),0);
+function kpp(P,K,r){const C=[P[Math.floor(r()*P.length)].slice()];while(C.length<K){const D=P.map(p=>Math.min(...C.map(c=>d2(p,c))));const s=D.reduce((a,b)=>a+b,0);let u=r()*s,i=0;while(u>D[i]&&i<P.length-1){u-=D[i];i++;}C.push(P[i].slice());}return C;}
+function randInit(P,K,r){const idx=new Set();while(idx.size<K)idx.add(Math.floor(r()*P.length));return [...idx].map(i=>P[i].slice());}
+function run(P,C){let L=assign(P,C);for(let it=0;it<100;it++){const N=moveC(P,L,C);const L2=assign(P,N);C=N;if(L2.every((v,i)=>v===L[i])){L=L2;break;}L=L2;}return {C,L,J:inertia(P,L,C)};}
+function best(P,K,r,n){let B=null;for(let t=0;t<n;t++){const R=run(P,kpp(P,K,r));if(!B||R.J<B.J)B=R;}return B;}
+function blobs(r,centers,n,s){const P=[];centers.forEach(([cx,cy,sx,sy])=>{for(let i=0;i<n;i++)P.push([cx+(sx||s)*gauss(r),cy+(sy||s)*gauss(r)]);});return P;}
+const cross=(pl,g,c,col,s,hollow)=>{s=s||11;const x=pl.sx(c[0]),y=pl.sy(c[1]);el("circle",{cx:x,cy:y,r:s+3,fill:hollow?"none":"var(--surface)",stroke:col,"stroke-width":hollow?2:3,"stroke-dasharray":hollow?"3 3":""},g);if(!hollow)el("path",{d:`M${x-s*0.6} ${y-s*0.6}L${x+s*0.6} ${y+s*0.6}M${x+s*0.6} ${y-s*0.6}L${x-s*0.6} ${y+s*0.6}`,stroke:col,"stroke-width":3.5,"stroke-linecap":"round"},g);};
+const pts=(pl,g,P,L,r,op)=>P.forEach((p,i)=>el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:r||4.5,fill:L?COL[L[i]]:"var(--muted)","fill-opacity":op||0.85},g));
+
+/* ---------- hero ---------- */
+(function(){const svg=document.getElementById("hero"),pl=new Plot(svg,{W:900,H:440,pad:{l:10,r:10,t:10,b:10},x0:0,x1:20.45,y0:0,y1:10});
+  const gL=el("g",null,pl.g),gP=el("g",null,pl.g),gC=el("g",null,pl.top);let seed=4,P,C,L,phase,steps,timer=null;const ik=document.getElementById("h-k");
+  function data(){const r=mulberry32(seed);const n=3+Math.floor(r()*3);const cs=[...Array(n)].map(()=>[2.5+r()*15.5,2+r()*6,0.6+r()*0.8]);P=blobs(r,cs,Math.floor(300/n),1);P=P.filter(p=>p[0]>0.2&&p[0]<20.2&&p[1]>0.2&&p[1]<9.8);}
+  function init(){const r=mulberry32(seed*7+(+ik.value)*3+Date.now()%97);C=randInit(P,+ik.value,r);L=null;phase="assign";steps=0;draw();}
+  function step(){if(phase==="done")return;if(phase==="assign"){const L2=assign(P,C);if(L&&L2.every((v,i)=>v===L[i])){phase="done";}else{L=L2;phase="move";}}else{C=moveC(P,L,C);phase="assign";}steps++;draw();}
+  function draw(){gP.textContent="";gC.textContent="";gL.textContent="";pts(pl,gP,P,L,4.5);C.forEach((c,k)=>cross(pl,gC,c,COL[k]));
+    const J=L?inertia(P,L,C):null;document.getElementById("h-k-o").textContent=ik.value;
+    document.getElementById("h-kpi").innerHTML=`<span>steps: <b>${steps}</b></span><span>inertia: <b>${J===null?"—":J.toFixed(0)}</b></span>`;
+    document.getElementById("h-msg").innerHTML=phase==="done"?"<b>Done:</b> no point changed group. Try other starting centers: do you always get the same result?":L===null?"The centers (✕) start on random points. Press <b>One step</b>: each point will take the color of its nearest center.":phase==="move"?"<b>Assign:</b> each point took the color of the nearest center. Next step: each center moves to the average of its points.":"<b>Move:</b> each center jumped to the middle of its group. Next step: reassign, because now some points have a different center closer to them.";}
+  document.getElementById("h-step").onclick=step;
+  document.getElementById("h-run").onclick=()=>{clearInterval(timer);timer=setInterval(()=>{step();if(phase==="done")clearInterval(timer);},380);};
+  document.getElementById("h-new").onclick=()=>{clearInterval(timer);init();};document.getElementById("h-data").onclick=()=>{clearInterval(timer);seed+=1;data();init();};
+  ik.addEventListener("input",()=>{clearInterval(timer);init();});data();init();})();
+
+/* ---------- warehouses step by step ---------- */
+(function(){const N="ABCDEFGH",P=[[1,1],[2,1],[1,3],[3,2],[6,5],[7,4],[8,6],[7,7]];
+  const pl=new Plot(document.getElementById("dep"),{W:900,H:400,pad:{l:40,r:16,t:16,b:36},x0:0,x1:9.5,y0:0,y1:8,xt:[0,2,4,6,8],yt:[0,2,4,6,8],fx:v=>v+" km",fy:v=>v+" km"});
+  const gL=el("g",null,pl.g),gP=el("g",null,pl.top),gC=el("g",null,pl.top);
+  const S=[];let C=[[1,1],[2,1]],L=null;S.push({C,L,t:"Start: the warehouses (✕) sit on customers A and B, both in the west. No customer is assigned yet."});
+  for(let it=0;it<3;it++){const L2=assign(P,C);const J=inertia(P,L2,C);const same=L&&L2.every((v,i)=>v===L[i]);L=L2;
+    S.push({C,L,t:same?`<b>Assign again:</b> nobody changes warehouse. <b>Done.</b> Final inertia: ${J.toFixed(1)}. Each warehouse ended up at the center of its zone.`:`<b>Assign:</b> each customer goes to the nearest warehouse. `+(it===0?`B's warehouse gets the whole east (6 customers). Inertia: ${J.toFixed(1)}.`:`Now the 4 in the west go with one and the 4 in the east with the other. Inertia: ${J.toFixed(1)}.`)});
+    if(same)break;const C2=moveC(P,L,C);C=C2;S.push({C,L,t:`<b>Move:</b> each warehouse jumps to the average of its customers: (${C[0].map(v=>+v.toFixed(2)).join(", ")}) and (${C[1].map(v=>+v.toFixed(2)).join(", ")}).`});}
+  let k=0;function draw(){const s=S[k];gL.textContent="";gP.textContent="";gC.textContent="";
+    if(s.L)P.forEach((p,i)=>el("line",{x1:pl.sx(p[0]),y1:pl.sy(p[1]),x2:pl.sx(s.C[s.L[i]][0]),y2:pl.sy(s.C[s.L[i]][1]),stroke:COL[s.L[i]],"stroke-width":2,"stroke-opacity":.6},gL));
+    P.forEach((p,i)=>{el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:9,fill:s.L?COL[s.L[i]]:"var(--muted)",stroke:"var(--point-ring)","stroke-width":2},gP);txt(gP,pl.sx(p[0])+12,pl.sy(p[1])-8,N[i],{"font-size":14,class:"t-ink"});});
+    s.C.forEach((c,j)=>cross(pl,gC,c,COL[j],12));document.getElementById("dep-q").innerHTML=`Step ${k} of ${S.length-1}. `+s.t;document.getElementById("dep-next").disabled=k>=S.length-1;}
+  document.getElementById("dep-next").onclick=()=>{k=Math.min(S.length-1,k+1);draw();};document.getElementById("dep-reset").onclick=()=>{k=0;draw();};draw();})();
+
+/* ---------- elbow ---------- */
+(function(){const r=mulberry32(21),P=blobs(r,[[2.5,7,0.8],[7.5,7.5,0.9],[3,2.5,0.9],[7.5,3,0.7]],60,1);
+  const R=[null];for(let K=1;K<=8;K++)R.push(best(P,K,r,6));
+  const pl=new Plot(document.getElementById("elb"),{W:500,H:420,pad:{l:8,r:8,t:8,b:8},x0:0,x1:10,y0:0,y1:10});const gP=el("g",null,pl.g),gC=el("g",null,pl.top);
+  const pe=new Plot(document.getElementById("elbE"),{W:380,H:420,pad:{l:52,r:12,t:24,b:40},x0:0.5,x1:8.5,y0:0,y1:R[1].J*1.05,xt:[1,2,3,4,5,6,7,8],yt:[0,R[1].J/2,R[1].J].map(v=>Math.round(v)),xl:"K",yl:"inertia"});
+  el("path",{d:pe.ppath(R.slice(1).map((x,i)=>[i+1,x.J])),fill:"none",stroke:"var(--mean)","stroke-width":3},pe.g);R.slice(1).forEach((x,i)=>el("circle",{cx:pe.sx(i+1),cy:pe.sy(x.J),r:4,fill:"var(--mean)"},pe.g));
+  const mk=el("circle",{r:8,fill:"none",stroke:"var(--point)","stroke-width":3},pe.top);const ik=document.getElementById("elb-k");
+  function draw(){const K=+ik.value,x=R[K];gP.textContent="";gC.textContent="";pts(pl,gP,P,x.L,4.5);x.C.forEach((c,k)=>cross(pl,gC,c,COL[k%7],9));mk.setAttribute("cx",pe.sx(K));mk.setAttribute("cy",pe.sy(x.J));document.getElementById("elb-k-o").textContent=K;
+    const gain=K>1?(1-x.J/R[K-1].J)*100:0;document.getElementById("elb-c").textContent=`K = ${K}: inertia ${x.J.toFixed(0)}`+(K>1?` (${gain.toFixed(0)}% less than with ${K-1}). `:". ")+(K<4?"Each new group still separates different clouds: a big improvement.":K===4?"The elbow: from here on the curve flattens out.":"Now we are cutting real clouds into pieces: little improvement.");}
+  ik.addEventListener("input",draw);draw();})();
+
+/* ---------- starts ---------- */
+(function(){const r0=mulberry32(33),P=blobs(r0,[[2,7.5,0.55],[7.8,7.6,0.55],[2.2,2.3,0.55],[8,2.4,0.55]],45,1);
+  const pl=new Plot(document.getElementById("loc"),{W:900,H:420,pad:{l:10,r:10,t:10,b:10},x0:-1.4,x1:11.4,y0:0,y1:10});const gP=el("g",null,pl.g),gC=el("g",null,pl.top);
+  const opt=best(P,4,mulberry32(5),10).J;let seed=2;const H=[];
+  function go(pp){const r=mulberry32(seed++*31+7);const C0=pp?kpp(P,4,r):randInit(P,4,r),R=run(P,C0);gP.textContent="";gC.textContent="";pts(pl,gP,P,R.L,5);
+    C0.forEach((c,k)=>cross(pl,gC,c,COL[k],9,true));R.C.forEach((c,k)=>cross(pl,gC,c,COL[k],11));
+    const ok=R.J<opt*1.01;H.unshift({ok,pp});if(H.length>12)H.pop();
+    document.getElementById("loc-q").innerHTML=`${pp?"k-means++":"Random"}: final inertia <b>${R.J.toFixed(0)}</b> (the best possible is ${opt.toFixed(0)}). `+(ok?"It found the 4 groups.":"<b>Stuck:</b> one center shares a cloud with another while two clouds share one center.")+" The dashed circles mark where each center started.";
+    document.getElementById("loc-h").innerHTML=H.map(h=>`<span class="${h.ok?"ok":"bad"}">${h.pp?"++":"random"} ${h.ok?"✓":"✗"}</span>`).join("");}
+  document.getElementById("loc-rand").onclick=()=>go(false);document.getElementById("loc-pp").onclick=()=>go(true);
+  for(let t=1;t<60;t++){const R=run(P,randInit(P,4,mulberry32(t*31+7)));if(R.J>opt*1.05){seed=t;break;}}go(false);})();
+
+/* ---------- shapes ---------- */
+(function(){const pl=new Plot(document.getElementById("shp"),{W:900,H:400,pad:{l:10,r:10,t:10,b:10},x0:-1,x1:11,y0:0,y1:10});const gP=el("g",null,pl.g),gC=el("g",null,pl.top);
+  const sets={blobs:()=>{const r=mulberry32(2);return {P:blobs(r,[[2.5,7,0.8],[8,6.5,0.8],[5,2.5,0.8]],70,1),K:3,t:"Three round, similar clouds: K-means nails it. This is its ideal case."};},
+    long:()=>{const r=mulberry32(3);const P=[];for(const cy of [2.6,5,7.4])for(let i=0;i<70;i++)P.push([1+r()*9,cy+0.35*gauss(r)]);return {P,K:3,t:"Three horizontal bands: K-means would rather cut vertically into three \"round\" blocks than follow the bands. It sees distances, not shapes."};},
+    moons:()=>{const r=mulberry32(4);const P=[];for(let i=0;i<110;i++){const t=Math.PI*r();P.push([3+2.8*Math.cos(t)+0.25*gauss(r),4.3+2.8*Math.sin(t)+0.25*gauss(r)]);P.push([5.8-2.8*Math.cos(t)+0.25*gauss(r),5.7-2.8*Math.sin(t)+0.25*gauss(r)]);}return {P,K:2,t:"Two interlocking moons: any straight line cuts them badly. For these shapes other methods are used (DBSCAN, spectral clustering)."};},
+    sizes:()=>{const r=mulberry32(5);return {P:blobs(r,[[3.2,5,1.6,1.6]],220,1).concat(blobs(r,[[8.6,7.6,0.35,0.35],[8.6,2.4,0.35,0.35]],20,1)),K:3,t:"One big cloud and two small ones: K-means splits the big one and merges or neglects the small ones, because it pays off to spread the centers where most of the points are."};}};
+  const btns=[...document.querySelectorAll("[data-s]")];
+  function draw(name){const {P,K,t}=sets[name](),R=best(P,K,mulberry32(9),8);gP.textContent="";gC.textContent="";pts(pl,gP,P,R.L,4.5);R.C.forEach((c,k)=>cross(pl,gC,c,COL[k],10));document.getElementById("shp-q").innerHTML=t;btns.forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.s===name)));}
+  btns.forEach(b=>b.onclick=()=>draw(b.dataset.s));draw("blobs");})();
+
+/* ---------- trips ---------- */
+(function(){const r=mulberry32(12),T=[];const tipos=[[22,40,"urban delivery"],[52,140,"regional"],[78,430,"long haul"]];
+  tipos.forEach(([v,k])=>{for(let i=0;i<200;i++)T.push([Math.max(5,v+v*0.18*gauss(r)),Math.max(5,k+k*0.25*gauss(r))]);});
+  const pl=new Plot(document.getElementById("trips"),{W:900,H:400,pad:{l:56,r:16,t:16,b:42},x0:0,x1:110,y0:0,y1:700,xt:[0,20,40,60,80,100],yt:[0,200,400,600],fx:v=>v+" km/h",fy:v=>v+" km",xl:"average speed",yl:"trip km"});
+  const gP=el("g",null,pl.g),gC=el("g",null,pl.top);
+  const mean=a=>a.reduce((x,y)=>x+y,0)/a.length,sd=a=>{const m=mean(a);return Math.sqrt(mean(a.map(x=>(x-m)**2)));};
+  const mv=mean(T.map(t=>t[0])),sv=sd(T.map(t=>t[0])),mk=mean(T.map(t=>t[1])),sk=sd(T.map(t=>t[1]));
+  function draw(std){const Z=std?T.map(([v,k])=>[(v-mv)/sv,(k-mk)/sk]):T;const R=best(Z,3,mulberry32(3),8);
+    const C=R.C.map(c=>std?[c[0]*sv+mv,c[1]*sk+mk]:c);gP.textContent="";gC.textContent="";pts(pl,gP,T,R.L,4,0.75);C.forEach((c,k)=>cross(pl,gC,c,COL[k],11));
+    const order=C.map((c,k)=>[c[0],k]).sort((a,b)=>a[0]-b[0]);
+    document.getElementById("tr-q").innerHTML=(std?"<strong>Scaled:</strong> the three groups match three kinds of trip. Looking at the centers, we name them: ":"<strong>Not scaled:</strong> the groups are horizontal bands: only the kilometers count. Centers: ")+order.map(([v,k],j)=>`<b style="color:${COL[k]}">${std?tipos[j][2]+" ":""}(${C[k][0].toFixed(0)} km/h, ${C[k][1].toFixed(0)} km)</b>`).join(", ")+".";
+    document.getElementById("tr-raw").setAttribute("aria-pressed",String(!std));document.getElementById("tr-std").setAttribute("aria-pressed",String(std));}
+  document.getElementById("tr-raw").onclick=()=>draw(false);document.getElementById("tr-std").onclick=()=>draw(true);draw(true);})();
+})();
+</script>
+
+</body>
+</html>

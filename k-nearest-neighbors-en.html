@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>k-nearest neighbors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: same identity as the visual ML series. One reading column + live figures. Blue = the model, orange = the data, purple = the errors */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.duo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.duo{grid-template-columns:1fr}}
+.vt{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.vt i{display:inline-block;width:16px;height:16px;border-radius:50%}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Visual ML series · explained without formulas · <a href="k-nearest-neighbors-technical-en.html" target="_self">see the technical version</a> · <a href="visual-ml-series-en.html" target="_self">all topics</a> · <a href="k-vecinos-mas-cercanos-es.html" target="_self">en español</a></p>
+  <h1>k-nearest neighbors</h1>
+  <p class="lede">The easiest algorithm to explain: to decide what something new is, find the known cases that look most like it and go with what the majority says.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <figure class="fig"><svg id="hero" role="img" aria-label="Map of dots in two colors; tapping places a new point and highlights its nearest neighbors"></svg></figure>
+  <p class="qcard col" id="h-msg"></p>
+  <div class="controls">
+    <div class="slider"><label for="h-k">Neighbors who vote (k) <output id="h-k-o"></output></label><input type="range" id="h-k" min="1" max="25" step="2" value="5"><div class="ends"><span>1</span><span>25</span></div></div>
+    <div class="btns"><button type="button" id="h-map" aria-pressed="false">Show the decision map</button></div>
+  </div>
+  <p class="status">Tap or click anywhere on the map to place the new point.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Before we start</p>
+    <h2>"Birds of a feather…"</h2>
+    <p>You want to know what your house is worth. What do you do? You look at what the <strong>most similar</strong> houses sold for: same neighborhood, similar size, similar age. If the three most similar ones sold for $180k, $190k and $200k, yours is probably worth about $190k.</p>
+    <p>You haven't learned any formula for the housing market. You've just looked for <strong>neighbors</strong> and copied what happened to them. That is exactly k-nearest neighbors (KNN for short).</p>
+  </div>
+  <figure class="fig"><svg id="house" role="img" aria-label="Houses by size and age; the three most similar to the new house"></svg>
+    <figcaption>Each sold house is a dot (size and age). The new one (♦) takes the average of its 3 nearest neighbors.</figcaption></figure>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 5</p>
+    <h2>How many neighbors? Small k is jumpy, large k is blurry</h2>
+    <p>With <strong>k = 1</strong>, each new point copies its single nearest neighbor. If that neighbor was an odd case (noise), we copy the mistake: the map fills up with little islands. With <strong>a very large k</strong>, even faraway points get a vote and the map turns into a blur that no longer follows the real shape. The best k is somewhere in between, and you pick it by looking at accuracy on new data.</p>
+  </div>
+  <div class="lab">
+    <figure class="fig"><svg id="kmap" role="img" aria-label="Decision map depending on k"></svg></figure>
+    <figure class="fig"><svg id="kacc" role="img" aria-label="Accuracy on the learning data and on new data depending on k"></svg><figcaption id="kacc-c"></figcaption></figure>
+  </div>
+  <div class="slider col"><label for="k-k">k <output id="k-k-o"></output></label><input type="range" id="k-k" min="1" max="81" step="2" value="1"><div class="ends"><span>1</span><span>81</span></div></div>
+  <div class="legend">
+    <span><svg viewBox="0 0 28 14"><path d="M2 7H26" stroke="var(--point)" stroke-width="3"/></svg>Accuracy on the data it knows</span>
+    <span><svg viewBox="0 0 28 14"><path d="M2 7H26" stroke="var(--ink)" stroke-width="3" stroke-dasharray="6 4"/></svg>Accuracy on new data</span>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 5</p>
+    <h2>What does "close" mean? Watch the units</h2>
+    <p>Eight trucks: kilometers since their last service, average engine temperature, and whether they broke down. A new truck (♦) arrives with 14,000 km and 97 °C. Does it look more like the ones that broke down?</p>
+    <p>If we measure distance with the raw numbers, a difference of 1,000 km weighs the same as a difference of 1,000 °C. Temperature, which goes from 87 to 101, practically <strong>disappears</strong> from the calculation. The fix is to put all the features on the same scale (for example, from 0 to 1) before measuring distances.</p>
+  </div>
+  <figure class="fig"><svg id="scale" role="img" aria-label="Trucks by kilometers and temperature, with the three neighbors of the new truck"></svg></figure>
+  <div class="seg" role="group" aria-label="How to measure distance"><button type="button" id="sc-raw" aria-pressed="true">Raw units</button><button type="button" id="sc-norm" aria-pressed="false">Scaled from 0 to 1</button></div>
+  <p class="col qcard" id="sc-msg"></p>
+  <div class="legend">
+    <span><svg viewBox="0 0 28 14"><circle cx="14" cy="7" r="5" fill="var(--point)"/></svg>Broke down</span>
+    <span><svg viewBox="0 0 28 14"><circle cx="14" cy="7" r="5" fill="var(--sample)"/></svg>Didn't break down</span>
+    <span><svg viewBox="0 0 28 14"><path d="M2 12 Q14 0 26 12" fill="none" stroke="var(--mean)" stroke-width="2" stroke-dasharray="5 4"/></svg>Zone of the 3 nearest neighbors</span>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 5</p>
+    <h2>It learns nothing: it remembers everything</h2>
+    <p>Most models study the data once, extract a rule (a line, a tree) and then throw the data away. KNN does the opposite: it doesn't "study" anything, it just <strong>stores every case</strong>, and all the work comes at prediction time, when the new case has to be compared with every stored one.</p>
+  </div>
+  <figure class="fig"><svg id="lazy" role="img" aria-label="Comparisons needed to make a prediction depending on the amount of stored data"></svg></figure>
+  <div class="slider col"><label for="lz-n">Stored cases <output id="lz-n-o"></output></label><input type="range" id="lz-n" min="2" max="8" step="1" value="4"><div class="ends"><span>100</span><span>100 million</span></div></div>
+  <p class="col note">That's why, with lots of data, people use "indexes" (like the index of a book) that find the neighbors without looking at all of them, or <strong>approximate</strong> searches that accept not always finding the exact neighbor in exchange for being thousands of times faster. That's how search engines for similar images or texts work.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 5</p>
+    <h2>It predicts numbers too: the average of the neighbors</h2>
+    <p>To predict a number (minutes of delay, price, fuel use), instead of voting you <strong>average</strong> what happened to the k neighbors. Move k and watch the curve: with k = 1 it passes through every point, noise included; with a large k it flattens out.</p>
+  </div>
+  <figure class="fig"><svg id="reg" role="img" aria-label="Predicting numbers by averaging neighbors"></svg></figure>
+  <div class="slider col"><label for="rg-k">Neighbors who are averaged (k) <output id="rg-k-o"></output></label><input type="range" id="rg-k" min="1" max="40" step="1" value="5"><div class="ends"><span>1</span><span>40</span></div></div>
+  <p class="col status" id="rg-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 5</p>
+    <h2>With too many features, everyone is far away</h2>
+    <p>With 2 features, some points are close and others far. But with 50 or 100 features something strange happens: <strong>all the distances look alike</strong>. The "nearest" neighbor is almost as far as the farthest one, and "being similar" stops meaning anything. This is called the <strong>curse of dimensionality</strong>.</p>
+  </div>
+  <figure class="fig"><svg id="curse" role="img" aria-label="Histogram of distances depending on the number of features"></svg></figure>
+  <div class="slider col"><label for="cu-d">Number of features <output id="cu-d-o"></output></label><input type="range" id="cu-d" min="0" max="7" step="1" value="0"><div class="ends"><span>1</span><span>500</span></div></div>
+  <p class="col status" id="cu-msg"></p>
+  <p class="col note">That's why, before using KNN, it pays to keep only the features that matter, or to compress them (we'll see this in PCA). Modern search systems use hundreds of features, but chosen very carefully by a neural network so that distance really does mean something.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The complete recipe</h2>
+    <ol class="steps">
+      <li><div><strong>Store every known case</strong> along with its answer.</div></li>
+      <li><div><strong>Put the features on the same scale</strong> so none of them dominates just because of its units.</div></li>
+      <li><div><strong>Measure the distance</strong> from the new case to every stored one.</div></li>
+      <li><div><strong>Keep the k nearest.</strong></div></li>
+      <li><div><strong>Vote</strong> (if it's a category) or <strong>average</strong> (if it's a number). The closest ones can count more.</div></li>
+      <li><div><strong>Choose k</strong> by trying several and checking accuracy on data it didn't use.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>What is it used for?</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="17" cy="17" r="10"/><path d="M25 25l9 9"/></svg><h3>Finding similar things</h3><p>"Trips like this one", "customers like this one", "products you might like": almost every similarity search is nearest neighbors.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 30l8-10 7 6 13-16"/><circle cx="34" cy="10" r="3"/></svg><h3>Spotting the unusual</h3><p>A trip whose nearest neighbor is very far away doesn't look like anything known: maybe a GPS fault, fraud or a strange event.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="8" width="28" height="24" rx="3"/><path d="M6 16h28M14 8v24"/><path d="M22 24h6" stroke-dasharray="2 2"/></svg><h3>Filling in missing values</h3><p>If a record is missing its temperature, it gets filled in with the temperature of its most similar records (KNNImputer).</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="12" cy="14" r="4"/><circle cx="28" cy="12" r="4"/><circle cx="20" cy="28" r="4"/><path d="M15 16l3 8M25 15l-3 9"/></svg><h3>The memory of AI assistants</h3><p>When an assistant "searches your documents", it turns the text into numbers and looks for the passages closest to your question.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>The good and the not so good</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>The good</h3><ul class="pc">
+      <li>You can understand it in a minute, and every prediction explains itself: "these are the similar cases".</li>
+      <li>It assumes no particular shape: it adapts to curved, odd boundaries.</li>
+      <li>Adding new data is instant: you just store it.</li>
+      <li>It works just as well for categories, numbers and similarity search.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>The not so good</h3><ul class="pc">
+      <li>Predicting is slow and uses a lot of memory with lots of data.</li>
+      <li>Very sensitive to units: you have to scale.</li>
+      <li>It struggles with many features or with features that don't matter.</li>
+      <li>It doesn't tell you which features matter or give you a general rule.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Neighbor</dt><dd>A stored case that looks like the new one.</dd>
+      <dt>k</dt><dd>How many neighbors vote or get averaged.</dd>
+      <dt>Distance</dt><dd>A number that measures how alike two cases are: the smaller it is, the more alike they are.</dd>
+      <dt>Scaling</dt><dd>Putting all the features in comparable ranges, for example from 0 to 1.</dd>
+      <dt>Lazy learning</dt><dd>Not building any model until the question arrives; KNN is the classic example.</dd>
+      <dt>Curse of dimensionality</dt><dd>With many features, all points end up almost equally far from each other.</dd>
+      <dt>Approximate search</dt><dd>Finding "almost" nearest neighbors much faster.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the formulas behind it all</summary>
+    <p style="padding-top:10px">You don't need them to understand the idea:</p>
+    <div class="formula">distance between A and B = √( (difference in feature 1)² + (difference in feature 2)² + … )
+
+scaled feature = (value − minimum) / (maximum − minimum)
+
+classify: the most common class among the k nearest
+predict a number: the average of the k nearest</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in one minute</h2>
+    <p>An animated recap: the neighbors who vote, the effect of k, why you have to scale, and the curse of dimensionality. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABIqoEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgP/Z" aria-label="Animation: k-nearest neighbors">
+      <source src="k-nearest-neighbors-with-audio-en.mp4" type="video/mp4">
+      Your browser can't play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- shared library: 2D CART trees + drawing ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,class],...]; returns the root node with children and box */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* tree diagram */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"yes",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} leaves`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"too big to draw properly",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"orange":"purple"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} of ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+
+const bnd=x=>5+1.8*Math.sin(x/1.5);
+function genSet(r,n,noise){return [...Array(n)].map(()=>{const x=0.3+r()*9.4,y=0.3+r()*9.4;let c=y>bnd(x)?1:0;if(r()<noise)c=1-c;return [x,y,c];});}
+const near=(P,x,y,k)=>P.map((p,i)=>[(p[0]-x)**2+(p[1]-y)**2,i]).sort((a,b)=>a[0]-b[0]).slice(0,k);
+const vote=(P,x,y,k)=>near(P,x,y,k).reduce((a,[d,i])=>a+P[i][2],0)/k;
+function probMap(pl,g,f,nx,ny){g.textContent="";g.setAttribute("shape-rendering","crispEdges");nx=nx||60;ny=ny||40;const X0=pl.o.x0,X1=pl.o.x1,Y0=pl.o.y0,Y1=pl.o.y1,w=(X1-X0)/nx,h=(Y1-Y0)/ny;
+  for(let i=0;i<nx;i++)for(let k=0;k<ny;k++){const x=X0+(i+0.5)*w,y=Y0+(k+0.5)*h,p=f(x,y),c=p>0.5?"var(--point)":p<0.5?"var(--sample)":"var(--muted)";
+    const xa=Math.round(pl.sx(X0+i*w)),xb=Math.round(pl.sx(X0+(i+1)*w)),ya=Math.round(pl.sy(Y0+(k+1)*h)),yb=Math.round(pl.sy(Y0+k*h));
+    el("rect",{x:xa,y:ya,width:xb-xa,height:yb-ya,fill:c,"fill-opacity":(0.05+0.4*Math.abs(p-0.5)*2).toFixed(3)},g);}}
+const diamond=(pl,g,x,y,s)=>el("path",{d:`M${pl.sx(x)} ${pl.sy(y)-s}L${pl.sx(x)+s} ${pl.sy(y)}L${pl.sx(x)} ${pl.sy(y)+s}L${pl.sx(x)-s} ${pl.sy(y)}Z`,fill:"var(--ink)",stroke:"var(--point-ring)","stroke-width":2.5},g);
+
+/* ---------- hero ---------- */
+(function(){const r=mulberry32(3);const P2=[...Array(200)].map(()=>{const x=0.3+r()*19.85,y=0.3+r()*9.4;let c=y>bnd(x)?1:0;if(r()<0.1)c=1-c;return [x,y,c];});const svg=document.getElementById("hero");
+  const plot=new Plot(svg,{W:900,H:440,pad:{l:10,r:10,t:10,b:10},x0:0,x1:20.45,y0:0,y1:10});
+  const gMap=el("g",null,plot.g),gL=el("g",null,plot.g);svg.style.cursor="crosshair";
+  dotsP(plot,plot.top,P2,5.5);const gQ=el("g",null,plot.top);
+  let q=[9.6,5.2],showMap=false;const ik=document.getElementById("h-k");
+  function draw(){const k=+ik.value;document.getElementById("h-k-o").textContent=k;gL.textContent="";gQ.textContent="";
+    const nn=near(P2,q[0],q[1],k),rad=Math.sqrt(nn[nn.length-1][0]);
+    el("ellipse",{cx:plot.sx(q[0]),cy:plot.sy(q[1]),rx:plot.sx(rad)-plot.sx(0),ry:plot.sy(0)-plot.sy(rad),fill:"var(--band)",stroke:"var(--band-edge)","stroke-dasharray":"5 4"},gL);
+    nn.forEach(([d,i])=>el("line",{x1:plot.sx(q[0]),y1:plot.sy(q[1]),x2:plot.sx(P2[i][0]),y2:plot.sy(P2[i][1]),stroke:"var(--ink)","stroke-width":1.4,"stroke-opacity":.55},gL));
+    nn.forEach(([d,i])=>el("circle",{cx:plot.sx(P2[i][0]),cy:plot.sy(P2[i][1]),r:9,fill:"none",stroke:"var(--ink)","stroke-width":2},gQ));
+    const o=nn.filter(([d,i])=>P2[i][2]).length,v=k-o,cls=o>v?"orange":"purple";diamond(plot,gQ,q[0],q[1],11);
+    const dots=n=>'<span class="vt">'+[...Array(n.o)].map(()=>'<i style="background:var(--point)"></i>').join("")+[...Array(n.v)].map(()=>'<i style="background:var(--sample)"></i>').join("")+"</span>";
+    document.getElementById("h-msg").innerHTML=`The <b>${k}</b> nearest neighbor${k===1?"":"s"}: ${o} orange and ${v} purple. ${dots({o,v})} The new point is <b style="color:var(${o>v?"--point":"--sample"})">${cls}</b> (${Math.round(Math.max(o,v)/k*100)}% of the votes).`;
+    if(showMap)probMap(plot,gMap,(x,y)=>vote(P2,x,y,k),90,44);else gMap.textContent="";}
+  svg.addEventListener("click",e=>{const p=plot.toSvg(e);if(!p)return;q=[plot.ix(p.x),plot.iy(p.y)];draw();});
+  ik.addEventListener("input",draw);const bm=document.getElementById("h-map");bm.onclick=()=>{showMap=!showMap;bm.setAttribute("aria-pressed",String(showMap));bm.textContent=showMap?"Hide the decision map":"Show the decision map";draw();};draw();})();
+
+/* ---------- houses ---------- */
+(function(){const r=mulberry32(5);const H=[...Array(26)].map(()=>{const m=60+r()*140,a=2+r()*45;return [m,a,Math.round(40+1.45*m-1.1*a+gauss(r)*12)];});
+  const pl=new Plot(document.getElementById("house"),{W:900,H:320,pad:{l:52,r:16,t:16,b:40},x0:50,x1:210,y0:0,y1:50,xt:[60,100,140,180],yt:[0,10,20,30,40,50],fx:v=>v+" m²",fy:v=>v,xl:"size",yl:"age (years)"});
+  const q=[118,22],nn=H.map((h,i)=>[((h[0]-q[0])/160)**2+((h[1]-q[1])/50)**2,i]).sort((a,b)=>a[0]-b[0]).slice(0,3);
+  nn.forEach(([d,i])=>el("line",{x1:pl.sx(q[0]),y1:pl.sy(q[1]),x2:pl.sx(H[i][0]),y2:pl.sy(H[i][1]),stroke:"var(--mean)","stroke-width":2},pl.g));
+  H.forEach((h,i)=>{const isN=nn.some(n=>n[1]===i);el("circle",{cx:pl.sx(h[0]),cy:pl.sy(h[1]),r:isN?8:6,fill:"var(--point)","fill-opacity":isN?1:.45,stroke:"var(--point-ring)","stroke-width":2},pl.top);
+    if(isN)txt(pl.top,pl.sx(h[0])+11,pl.sy(h[1])+4,"$"+h[2]+"k",{"font-size":13,class:"t-ink"});});
+  const avg=Math.round(nn.reduce((a,[d,i])=>a+H[i][2],0)/3);diamond(pl,pl.top,q[0],q[1],11);txt(pl.top,pl.sx(q[0]),pl.sy(q[1])+30,`≈ $${avg}k`,{"font-size":14,"text-anchor":"middle",style:"fill:var(--mean);font-weight:700"});})();
+
+/* ---------- effect of k ---------- */
+(function(){const r=mulberry32(17),TR=genSet(r,160,0.12),TE=genSet(r,600,0.12);
+  const pl=new Plot(document.getElementById("kmap"),{W:520,H:440,pad:{l:8,r:8,t:8,b:8}});const g=el("g",null,pl.g);dotsP(pl,pl.top,TR,4.6);
+  el("path",{d:pl.fpath(bnd,0,10),fill:"none",stroke:"var(--good)","stroke-width":2.5,"stroke-dasharray":"7 5"},pl.top);
+  const ks=[];for(let k=1;k<=81;k+=2)ks.push(k);
+  const acc=(S,k,self)=>S.filter((p,j)=>{const nn=near(TR,p[0],p[1],k);return ((nn.reduce((a,[d,i])=>a+TR[i][2],0)/k)>0.5?1:0)===p[2];}).length/S.length;
+  const aTr=ks.map(k=>acc(TR,k)),aTe=ks.map(k=>acc(TE,k));let best=0;aTe.forEach((v,i)=>{if(v>aTe[best])best=i;});
+  const pe=new Plot(document.getElementById("kacc"),{W:380,H:440,pad:{l:46,r:12,t:24,b:40},x0:0,x1:82,y0:0.6,y1:1.02,xt:[1,21,41,61,81],yt:[0.6,0.7,0.8,0.9,1],fy:v=>Math.round(v*100)+"%",xl:"k",yl:"accuracy"});
+  el("path",{d:pe.ppath(ks.map((k,i)=>[k,aTr[i]])),fill:"none",stroke:"var(--point)","stroke-width":3},pe.g);el("path",{d:pe.ppath(ks.map((k,i)=>[k,aTe[i]])),fill:"none",stroke:"var(--ink)","stroke-width":3,"stroke-dasharray":"7 5"},pe.g);
+  const mk=el("line",{stroke:"var(--muted)","stroke-dasharray":"4 4"},pe.top),m1=el("circle",{r:6,fill:"var(--point)"},pe.top),m2=el("circle",{r:6,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":2.5},pe.top);
+  const ik=document.getElementById("k-k");
+  function draw(){const k=+ik.value,i=ks.indexOf(k);probMap(pl,g,(x,y)=>vote(TR,x,y,k),56,48);const X=pe.sx(k);mk.setAttribute("x1",X);mk.setAttribute("x2",X);mk.setAttribute("y1",pe.o.pad.t);mk.setAttribute("y2",pe.o.H-pe.o.pad.b);
+    m1.setAttribute("cx",X);m1.setAttribute("cy",pe.sy(aTr[i]));m2.setAttribute("cx",X);m2.setAttribute("cy",pe.sy(aTe[i]));document.getElementById("k-k-o").textContent=k;
+    document.getElementById("kacc-c").innerHTML=`k = ${k}: ${Math.round(aTr[i]*100)}% accuracy on the data it knows and ${Math.round(aTe[i]*100)}% on new data. `+(k===1?"On the data it knows it gets almost everything right… because each point is its own neighbor.":Math.abs(i-best)<=2?"Close to the best k for new data.":i<best?"Still jumpy: little islands around the noise.":"Too blurry: the boundary no longer follows the green curve.");}
+  ik.addEventListener("input",draw);draw();})();
+
+/* ---------- scale ---------- */
+(function(){const T=[["A",4000,98,1],["B",6000,88,0],["C",9000,101,1],["D",12000,90,0],["E",15000,99,1],["F",18000,87,0],["G",21000,92,0],["H",25000,100,1]],Q=[14000,97];
+  const pl=new Plot(document.getElementById("scale"),{W:900,H:380,pad:{l:54,r:16,t:16,b:42},x0:2000,x1:27000,y0:85,y1:103,xt:[5000,10000,15000,20000,25000],yt:[86,90,94,98,102],fx:v=>(v/1000)+"k km",fy:v=>v+" °C",xl:"km since service",yl:"temperature"});
+  const gZ=el("g",null,pl.g),gN=el("g",null,pl.top);
+  T.forEach(([n,x,y,c])=>{el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:9,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},pl.top);txt(pl.top,pl.sx(x)+13,pl.sy(y)+5,n,{"font-size":14,class:"t-ink"});});
+  diamond(pl,pl.top,Q[0],Q[1],12);
+  const lo=[4000,87],hi=[25000,101];
+  function draw(scaled){gZ.textContent="";gN.textContent="";
+    const d=T.map(([n,x,y],i)=>[scaled?Math.hypot((x-Q[0])/(hi[0]-lo[0]),(y-Q[1])/(hi[1]-lo[1])):Math.hypot(x-Q[0],y-Q[1]),i]).sort((a,b)=>a[0]-b[0]).slice(0,3);const R=d[2][0];
+    if(scaled)el("ellipse",{cx:pl.sx(Q[0]),cy:pl.sy(Q[1]),rx:pl.sx(Q[0]+R*(hi[0]-lo[0]))-pl.sx(Q[0]),ry:pl.sy(Q[1])-pl.sy(Q[1]+R*(hi[1]-lo[1])),fill:"var(--band)",stroke:"var(--mean)","stroke-width":2,"stroke-dasharray":"7 5"},gZ);
+    else el("rect",{x:pl.sx(Q[0]-R),y:pl.sy(103),width:pl.sx(Q[0]+R)-pl.sx(Q[0]-R),height:pl.sy(85)-pl.sy(103),fill:"var(--band)",stroke:"var(--mean)","stroke-width":2,"stroke-dasharray":"7 5"},gZ);
+    d.forEach(([dd,i])=>{el("line",{x1:pl.sx(Q[0]),y1:pl.sy(Q[1]),x2:pl.sx(T[i][1]),y2:pl.sy(T[i][2]),stroke:"var(--ink)","stroke-width":2},gN);el("circle",{cx:pl.sx(T[i][1]),cy:pl.sy(T[i][2]),r:14,fill:"none",stroke:"var(--ink)","stroke-width":2},gN);});
+    const s=d.filter(([dd,i])=>T[i][3]).length,names=d.map(([dd,i])=>T[i][0]).join(", ");
+    document.getElementById("sc-msg").innerHTML=scaled?`<strong>Scaled:</strong> both features count the same. Neighbors: <b>${names}</b>, ${s} of 3 broke down → <b style="color:var(--point)">breakdown risk</b>. The hot trucks look like each other, which is what really matters here.`:`<strong>Raw units:</strong> only the kilometers count (the "zone" is a vertical strip). Neighbors: <b>${names}</b>, ${s} of 3 broke down → <b style="color:var(--sample)">no risk</b>. But notice: the three that broke down are exactly the hot ones.`;
+    document.getElementById("sc-raw").setAttribute("aria-pressed",String(!scaled));document.getElementById("sc-norm").setAttribute("aria-pressed",String(scaled));}
+  document.getElementById("sc-raw").onclick=()=>draw(false);document.getElementById("sc-norm").onclick=()=>draw(true);draw(false);})();
+
+/* ---------- lazy ---------- */
+(function(){const s=document.getElementById("lazy"),W=900,H=230;s.setAttribute("viewBox",`0 0 ${W} ${H}`);const iN=document.getElementById("lz-n");
+  const fmt=n=>n>=1e6?(n/1e6).toLocaleString("en-US")+" million":n.toLocaleString("en-US");
+  function draw(){s.textContent="";const n=10**(+iN.value);document.getElementById("lz-n-o").textContent=fmt(n);
+    const rows=[["A line or a tree",Math.log10(30),"a few operations, always"],["KNN, looking at all",Math.log10(n),`${fmt(n)} comparisons per question`],["KNN with an index",Math.log10(Math.max(2,Math.log2(n)*20)),`≈ ${fmt(Math.round(Math.log2(n)*20))} comparisons`]];
+    rows.forEach(([lab,v,t],i)=>{const y=30+i*66;txt(s,20,y+4,lab,{"font-size":15,class:"t-ink"});el("rect",{x:20,y:y+14,width:W-40,height:16,rx:8,fill:"var(--line)"},s);
+      el("rect",{x:20,y:y+14,width:Math.max(8,(W-40)*v/8),height:16,rx:8,fill:i===1?"var(--point)":"var(--mean)"},s);txt(s,W-20,y+4,t,{"font-size":13,"text-anchor":"end"});});}
+  iN.addEventListener("input",draw);draw();})();
+
+/* ---------- regression ---------- */
+(function(){const r=mulberry32(22),f=x=>3+2*Math.sin(x/1.4)+0.35*x;const X=[...Array(45)].map((_,i)=>0.15+i*9.7/44+(r()-0.5)*0.18),Y=X.map(x=>f(x)+0.8*gauss(r));
+  const pl=new Plot(document.getElementById("reg"),{W:900,H:340,pad:{l:40,r:16,t:16,b:30},x0:0,x1:10,y0:0,y1:11,xt:[0,2,4,6,8,10],yt:[0,2,4,6,8,10]});
+  el("path",{d:pl.fpath(f,0,10),fill:"none",stroke:"var(--good)","stroke-width":2,"stroke-dasharray":"6 5"},pl.g);const pth=el("path",{fill:"none",stroke:"var(--mean)","stroke-width":3.5},pl.g);
+  dotsP(pl,pl.top,X.map((x,i)=>[x,Y[i],1]),5.5);const ik=document.getElementById("rg-k");
+  const pred=(x,k)=>X.map((xi,i)=>[Math.abs(xi-x),i]).sort((a,b)=>a[0]-b[0]).slice(0,k).reduce((a,[d,i])=>a+Y[i],0)/k;
+  function draw(){const k=+ik.value;document.getElementById("rg-k-o").textContent=k;pth.setAttribute("d",pl.ppath([...Array(601)].map((_,i)=>{const x=i*10/600;return [x,pred(x,k)];})));
+    document.getElementById("rg-msg").innerHTML=k<=2?"With such a small k, the curve jumps around to pass through every point: it copies the noise.":k<=10?"A good balance: it follows the shape (green) without chasing every point.":"Too many neighbors: the curve flattens out and falls short at the edges, because there all the neighbors are off to one side.";}
+  ik.addEventListener("input",draw);draw();})();
+
+/* ---------- curse of dimensionality ---------- */
+(function(){const DS=[1,2,5,10,20,50,100,500],r=mulberry32(31);const pl=new Plot(document.getElementById("curse"),{W:900,H:300,pad:{l:20,r:20,t:16,b:40},x0:0,x1:1.05,y0:0,y1:1,xt:[0,0.25,0.5,0.75,1],fx:v=>Math.round(v*100)+"%",xl:"distance (as % of the largest)"});
+  const g=el("g",null,pl.g),iD=document.getElementById("cu-d");
+  const cache={};for(const d of DS){const q=[...Array(d)].map(()=>r()),D=[...Array(400)].map(()=>{let s=0;for(let j=0;j<d;j++){const v=r()-q[j];s+=v*v;}return Math.sqrt(s);});const mx=Math.max(...D);cache[d]=D.map(v=>v/mx);}
+  function draw(){const d=DS[+iD.value];document.getElementById("cu-d-o").textContent=d;g.textContent="";const D=cache[d],bins=Array(42).fill(0);D.forEach(v=>bins[Math.min(41,Math.floor(v*40))]++);const mxb=Math.max(...bins);
+    bins.forEach((b,i)=>{if(!b)return;el("rect",{x:pl.sx(i/40)+1,y:pl.sy(b/mxb*0.95),width:pl.sx(1/40)-pl.sx(0)-2,height:pl.sy(0)-pl.sy(b/mxb*0.95),rx:2,fill:"var(--mean)"},g);});
+    const mn=Math.min(...D);el("line",{x1:pl.sx(mn),x2:pl.sx(mn),y1:pl.sy(0),y2:pl.sy(1),stroke:"var(--point)","stroke-width":2.5},g);txt(g,pl.sx(mn)+6,pl.sy(0.97),"the nearest",{"font-size":12,style:"fill:var(--point)"});
+    document.getElementById("cu-msg").innerHTML=`With <b>${d}</b> feature${d>1?"s":""}, the nearest neighbor is at <b>${Math.round(mn*100)}%</b> of the distance to the farthest. `+(d<=2?"Some neighbors are truly close and others very far.":d<=20?"The distances start to bunch up.":"Almost everyone is equally far: there are no \"close\" neighbors anymore.");}
+  iD.addEventListener("input",draw);draw();})();
+})();
+</script>
+
+</body>
+</html>

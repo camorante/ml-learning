@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Proyecto completo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.segs{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.segs .lab{font-size:.9rem;color:var(--muted)}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:210px minmax(0,1fr) 72px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden}
+.meter2 .bar i{display:block;height:100%;border-radius:7px;transition:width .35s}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.meter2 .row{grid-template-columns:118px minmax(0,1fr) 58px;font-size:.84rem}}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.verdict{display:inline-block;border-radius:999px;padding:2px 10px;font-size:.85rem;font-weight:600}
+.verdict.ok{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.verdict.no{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.verdict.mid{background:color-mix(in srgb,var(--sample) 18%,transparent);color:var(--sample)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.situ h3{font-size:1.1rem}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec ul{margin:0;padding-left:18px;font-size:.93rem;color:var(--muted);display:grid;gap:4px}
+.dec ul b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+</style>
+<style>
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.case{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:8px;align-content:start}
+.case h3{font-size:1rem}
+.case dl{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:0;font-size:.9rem}
+.case dt{color:var(--muted)}.case dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.case .ans{font-size:.9rem;color:var(--muted);min-height:1.2em}
+.case .ans b.ok{color:var(--good)}.case .ans b.no{color:var(--warn)}
+.case .btns button{padding:6px 12px;font-size:.88rem}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:230px minmax(0,1fr) 92px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden;position:relative}
+.meter2 .bar i{display:block;height:100%;border-radius:7px;transition:width .35s}
+.meter2 .bar u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.meter2 .row{grid-template-columns:120px minmax(0,1fr) 70px;font-size:.84rem}}
+</style>
+<style>
+.dec .seg{margin-top:4px}
+.dec .tag{font-family:var(--f-mono);font-size:.78rem;color:var(--muted)}
+.dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.dash div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.dash b{display:block;font-family:var(--f-display);font-size:1.5rem;font-weight:800;font-variant-numeric:tabular-nums}
+.dash span{font-size:.85rem;color:var(--muted)}
+.dash .bad b{color:var(--warn)} .dash .ok b{color:var(--good)}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Preparar los datos · tema 8 · explicado sin fórmulas · <a href="proyecto-completo-tecnico-es.html" target="_self">ver la versión técnica</a> · <a href="preparar-los-datos-es.html" target="_self">todos los temas</a> · <a href="end-to-end-project-en.html" target="_self">in English</a></p>
+  <h1>Proyecto completo</h1>
+  <p class="lede">Juntamos los siete temas en un proyecto de verdad: de datos de flota en bruto a una lista de camiones para revisar cada lunes, y después, vigilarla mientras se usa. Verás qué pasos cambian el resultado, cómo un informe puede prometer lo que luego no pasa y qué hacer cuando, meses después, algo cambia en los datos.</p>
+</header>
+
+<section class="first" aria-label="Juguete interactivo">
+  <div class="situ col">
+    <p class="eyebrow">La situación del juguete</p>
+    <p>Una flota de <strong>300 camiones</strong> manda cada semana sus datos: kilómetros, horas desde el último mantenimiento, vibración del motor, temperatura, códigos de fallo. Cada lunes, un modelo calcula el riesgo de que cada camión se averíe esa semana, y los que pasan de un límite van al taller. Una avería en ruta cuesta 4 000 €; una revisión innecesaria, 150 €.</p>
+    <p>Los datos llegan como llegan: con mensajes repetidos, temperaturas imposibles (−40 °C o 255 °C cuando el sensor falla) y semanas sin vibración. Construimos el modelo con las semanas 0 a 59 (aprende con las 48 primeras y se examina con las 12 siguientes) y escribimos un <strong>informe</strong> con lo que costaría usarlo. Luego lo usamos de verdad en las semanas 60 a 79 y miramos lo que <strong>pasó en realidad</strong>.</p>
+  </div>
+  <div class="decs">
+    <div class="dec"><h3>1 · Limpiar los datos</h3><p class="tag">temas 3 y 4</p><div class="seg" role="group" aria-label="Limpiar"><button type="button" id="s0-1" aria-pressed="true">Sí</button><button type="button" id="s0-0" aria-pressed="false">No</button></div><p>Sí: quitar los mensajes repetidos y convertir las temperaturas imposibles en "dato que falta". No: usar los datos tal como llegan.</p></div>
+    <div class="dec"><h3>2 · Marcar los huecos del sensor</h3><p class="tag">tema 5</p><div class="seg" role="group" aria-label="Huecos"><button type="button" id="s1-1" aria-pressed="true">Sí</button><button type="button" id="s1-0" aria-pressed="false">No</button></div><p>Sí: añadir una columna "faltaba la vibración" (el sensor suele fallar antes de una avería). No: rellenar el hueco con la vibración media y olvidarlo.</p></div>
+    <div class="dec"><h3>3 · Historial solo del pasado</h3><p class="tag">temas 1 y 7</p><div class="seg" role="group" aria-label="Historial"><button type="button" id="s2-1" aria-pressed="true">Sí</button><button type="button" id="s2-0" aria-pressed="false">No</button></div><p>El modelo usa "averías del camión en las últimas 12 semanas". Sí: contando solo semanas ya terminadas. No: contando también la semana que se intenta predecir, que en la tabla ya está pero el lunes nadie conoce.</p></div>
+    <div class="dec"><h3>4 · No reequilibrar las clases</h3><p class="tag">tema 6</p><div class="seg" role="group" aria-label="Reequilibrar"><button type="button" id="s3-1" aria-pressed="true">Sí</button><button type="button" id="s3-0" aria-pressed="false">No</button></div><p>Sí: entrenar con los datos tal cual, para que los riesgos sean realistas. No: dar a cada avería el peso de muchos camiones sanos (y no corregir los riesgos después).</p></div>
+    <div class="dec"><h3>5 · Límite de aviso por costes</h3><p class="tag">tema 6</p><div class="seg" role="group" aria-label="Límite"><button type="button" id="s4-1" aria-pressed="true">Sí</button><button type="button" id="s4-0" aria-pressed="false">No</button></div><p>Sí: avisar si el riesgo pasa de 150 / (150 + 4 000) ≈ 3,6 %. No: avisar si pasa del 50 %, el valor por defecto de casi todas las librerías.</p></div>
+  </div>
+  <figure class="fig"><svg id="hero" role="img" aria-label="Coste semanal que promete el informe y coste que hubo de verdad"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Dos barras de coste semanal para los 300 camiones (averías que se escapan más revisiones innecesarias): la de arriba es lo que promete el <b style="color:var(--sample)">informe</b>, calculado con las semanas de examen; la de abajo, lo que costó <b style="color:var(--mean)">de verdad</b> usar ese modelo en las 20 semanas siguientes. La línea discontinua es el coste de no avisar nunca (solo pagar averías). Cuanto más corta la barra, mejor; si las dos barras no se parecen, el informe miente.</p>
+  <div class="big3 col" id="h-big"></div>
+  <div class="col stack">
+    <p><strong>Prueba en este orden:</strong></p>
+    <ol class="try">
+      <li>Con todo en "Sí": el informe y la realidad casi coinciden, y el modelo ahorra más de la mitad del coste.</li>
+      <li>Pon el paso 3 en "No": el informe promete un modelo buenísimo y en la realidad casi no sirve.</li>
+      <li>Vuelve a "Sí" y pon el paso 5 en "No": el modelo apenas avisa y cuesta lo mismo que no tenerlo.</li>
+      <li>Ahora pon también el paso 4 en "No": reequilibrar "arregla" el límite del 50 % por casualidad. Vuelve a poner el 5 en "Sí" y mira qué pasa al juntar las dos cosas.</li>
+      <li>Por último, prueba los pasos 1 y 2: aportan menos, pero se notan.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="h-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Lo que acabas de ver</p>
+    <h2>Un error de preparación no da error: da un informe bonito</h2>
+    <p>Ninguno de estos fallos hace que el programa se pare ni salga un mensaje en rojo. El modelo entrena, el informe sale con buenos números y el problema aparece semanas después, cuando el taller se llena o las averías se escapan. Por eso cada paso de esta serie existe: no para que el modelo "funcione", sino para que lo que dice el informe sea lo que va a pasar.</p>
+    <p>Los pasos no pesan igual. Una fuga (paso 3) o un límite mal puesto (paso 5) pueden convertir un buen modelo en uno inútil. La limpieza y los huecos (pasos 1 y 2) aportan unos cientos de euros por semana. Y hay pasos que solo se pueden juzgar juntos: reequilibrar (paso 4) parece buena idea con el límite del 50 % y es un desastre con el límite por costes.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 3</p>
+    <h2>El camino completo</h2>
+    <p>Este es el orden en que conviene trabajar, con el tema de la serie que explica cada paso:</p>
+    <ol class="steps">
+      <li><div><strong>Separar antes de mirar</strong> (<a href="separar-antes-de-mirar-es.html" target="_self">tema 1</a>): apartar las últimas semanas como examen, antes de tocar nada.</div></li>
+      <li><div><strong>Mirar los datos</strong> (<a href="analisis-exploratorio-es.html" target="_self">tema 2</a>): rangos, distribuciones, relaciones, cosas raras. Solo con la parte de aprender.</div></li>
+      <li><div><strong>Limpiar registros</strong> (<a href="duplicados-y-errores-de-registro-es.html" target="_self">tema 3</a>): repetidos, saltos de GPS, sensores congelados.</div></li>
+      <li><div><strong>Atípicos</strong> (<a href="valores-atipicos-es.html" target="_self">tema 4</a>): separar errores de casos extremos reales.</div></li>
+      <li><div><strong>Huecos</strong> (<a href="datos-que-faltan-es.html" target="_self">tema 5</a>): preguntar por qué faltan y marcarlos.</div></li>
+      <li><div><strong>Variables</strong> (<a href="preparar-variables-es.html" target="_self">tema 7</a>): escalas, categorías, ciclos e historial, todo en una tubería.</div></li>
+      <li><div><strong>Modelo y límite</strong> (<a href="clases-desbalanceadas-es.html" target="_self">tema 6</a>): medir con costes y elegir el límite de aviso.</div></li>
+      <li><div><strong>Examen final</strong>: una sola vez, con las semanas apartadas.</div></li>
+      <li><div><strong>Usarlo y vigilarlo</strong>: las dos ideas siguientes.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 3</p>
+    <h2>Vigilar el modelo mientras se usa</h2>
+    <p>Desde la semana 60, el modelo hace su trabajo cada lunes. En la semana 80, sin avisar a nadie, se instala en 120 camiones una caja de telemetría nueva cuyo sensor mide la vibración con otro filtro: <strong>lee un 30 % menos</strong>. Los motores no han cambiado; los números, sí. El modelo cree que esos camiones están más sanos de lo que están.</p>
+    <p>¿Cómo nos enteramos? No podemos esperar a ver las averías: llegan con una semana de retraso y son pocas. Hay que vigilar también lo que llega antes: los datos que entran y los avisos que salen.</p>
+  </div>
+  <figure class="fig"><svg id="dist" role="img" aria-label="Vibración de la semana elegida frente a la de los datos de entrenamiento"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> La zona <b style="color:var(--muted)">gris</b> es cómo se repartía la vibración en las semanas con las que aprendió el modelo; la línea <b style="color:var(--point)">naranja</b>, cómo se reparte en la semana elegida. Si la naranja se separa de la gris, algo ha cambiado en los datos. Debajo, tres señales de la semana: el índice de cambio de los datos (más de 0,25 es un cambio importante), cuántos camiones mandó al taller y el ahorro frente a no avisar en las cuatro semanas anteriores (con una semana de retraso, porque las averías se conocen después).</p>
+  <div class="slider col"><label for="d-w">Semana <output id="d-w-o"></output></label><input type="range" id="d-w" min="60" max="103" step="1" value="70"><div class="ends"><span>60</span><span>103</span></div></div>
+  <div class="dash col" id="d-dash"></div>
+  <figure class="fig"><svg id="series" role="img" aria-label="Índice de cambio y avisos por semana"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> En horizontal, las semanas de uso. Barras <b style="color:var(--mean)">azules</b>: camiones enviados al taller cada semana (escala de la izquierda). Línea <b style="color:var(--warn)">roja</b>: el índice de cambio de la vibración (escala de la derecha); la raya punteada marca 0,25.</p>
+  <p class="qcard col" id="d-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 3</p>
+    <h2>Qué hacer cuando salta la alarma</h2>
+    <p>La alarma salta al cerrar la semana 80. Hay tres reacciones habituales:</p>
+    <ul>
+      <li><strong>No hacer nada</strong>: seguir con el mismo modelo.</li>
+      <li><strong>Reentrenar</strong>: volver a entrenar el modelo cada 4 semanas con todos los datos que ya tienen resultado, incluidos los nuevos.</li>
+      <li><strong>Arreglar el dato</strong>: buscar el origen (la caja nueva), averiguar cuánto se desvía cada camión comparando sus semanas antes y después, y corregir sus lecturas antes de que lleguen al modelo. Hacen falta unas semanas de datos para calcularlo.</li>
+    </ul>
+  </div>
+  <div class="chips col" id="r-chips" role="group" aria-label="Reacción"></div>
+  <figure class="fig"><svg id="react" role="img" aria-label="Ahorro semanal frente a no avisar según la reacción"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Ahorro de cada semana frente a no avisar nunca (media de 4 semanas, para que se lea mejor): 70 % quiere decir que el modelo evita el 70 % del coste de las averías. La línea gris es "no hacer nada"; la de color, la reacción elegida. La raya vertical es la semana 80.</p>
+  <p class="qcard col" id="r-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta completa para usarlo de verdad</h2>
+    <ol class="steps">
+      <li><div><strong>Guarda la tubería entera</strong>: limpieza, variables, modelo y límite, con su versión y los datos con que se entrenó.</div></li>
+      <li><div><strong>Calcula las variables igual</strong> en el entrenamiento y en el uso diario, con lo que se sabe cada lunes.</div></li>
+      <li><div><strong>Vigila los datos que entran</strong>: cómo se reparten, cuántos faltan, valores imposibles.</div></li>
+      <li><div><strong>Vigila lo que sale</strong>: número de avisos y riesgo medio. Un cambio brusco es una pista temprana.</div></li>
+      <li><div><strong>Mide el resultado</strong> cuando llegue (averías, coste) y compáralo con el informe.</div></li>
+      <li><div><strong>Ante una alarma, busca la causa</strong> antes de reentrenar: un sensor, un cambio de software, una flota nueva, una temporada.</div></li>
+      <li><div><strong>Reentrena con un plan</strong>: cada cuánto, con qué semanas, y el mismo examen antes de sustituir el modelo.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>Lo que cambia en una flota sin que nadie lo diga</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="8" y="10" width="24" height="20" rx="3"/><path d="M14 18h12M14 24h8"/></svg><h3>Hardware y firmware</h3><p>Cajas de telemetría nuevas, actualizaciones del firmware, sensores de otro fabricante: mismos nombres de columna, otros números.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13"/><path d="M20 12v8l6 4"/></svg><h3>Estaciones</h3><p>El invierno sube las averías y la temperatura del motor cambia: lo que era raro en verano es normal en enero.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 28l8-8 6 5 12-13"/></svg><h3>La flota misma</h3><p>Camiones nuevos, rutas nuevas, clientes nuevos: el modelo ve casos que no había visto.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6L34 32H6Z"/><path d="M20 16v8M20 28v1"/></svg><h3>El propio modelo</h3><p>Si el taller revisa los camiones avisados, esas averías ya no ocurren: los datos nuevos tienen menos averías justo donde el modelo acertaba.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Conexiones</p>
+    <h2>Con los modelos de la serie ML</h2>
+    <p>El modelo de este proyecto es un <a href="random-forest-y-boosting-es.html" target="_self">boosting de árboles</a>, la familia de <a href="xgboost-es.html" target="_self">XGBoost</a>: no necesita escalar y admite huecos, pero no se libra de las fugas ni de un límite mal puesto. La <a href="regresion-logistica-es.html" target="_self">regresión logística</a> sería una alternativa más sencilla y fácil de explicar al taller. El <a href="bayes-es.html" target="_self">teorema de Bayes</a> explica por qué, cuando cambia la frecuencia de averías, hay que revisar los riesgos y el límite. Y el <a href="filtro-de-kalman-es.html" target="_self">filtro de Kalman</a> es otra forma de seguir una señal que se va desviando con el tiempo.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo que cuesta y lo que se gana</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Lo que se gana</h3><ul class="pc">
+      <li>Un informe que se cumple.</li>
+      <li>Problemas detectados en una o dos semanas, no cuando el taller se queja.</li>
+      <li>Decisiones (reentrenar, arreglar) basadas en la causa, no en el susto.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Lo que cuesta</h3><ul class="pc">
+      <li>Más trabajo antes de entrenar y después de desplegar que en el modelo en sí.</li>
+      <li>Hablar con quien sabe de los datos: telemetría, taller, negocio.</li>
+      <li>Las alarmas también fallan: a veces el cambio es real y el modelo sigue bien.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Producción</dt><dd>Usar el modelo de verdad, con datos nuevos, para tomar decisiones.</dd>
+      <dt>Deriva de los datos (data drift)</dt><dd>Los datos que entran se reparten distinto que los del entrenamiento.</dd>
+      <dt>Deriva del concepto (concept drift)</dt><dd>Cambia la relación entre los datos y lo que se predice: la misma vibración ya no significa el mismo riesgo.</dd>
+      <dt>Índice de estabilidad (PSI)</dt><dd>Un número que mide cuánto ha cambiado el reparto de una columna: 0 es igual, más de 0,25 es un cambio importante.</dd>
+      <dt>Retraso de la etiqueta</dt><dd>El tiempo que tarda en saberse si la predicción acertó.</dd>
+      <dt>Reentrenar</dt><dd>Volver a entrenar el modelo con datos más recientes.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: las cuentas detrás de todo</summary>
+    <p style="padding-top:10px">No hacen falta para entender la idea:</p>
+    <div class="formula">coste de una semana = averías que se escapan × 4 000 € + revisiones innecesarias × 150 €
+ahorro             = 1 − coste / coste de no avisar nunca
+
+índice de estabilidad (PSI): se parten los datos de entrenamiento en 10 tramos iguales y,
+en cada tramo, con e = proporción en el entrenamiento y a = proporción esta semana:
+   PSI = suma de (a − e) × ln(a / e)</div>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2>Todo en un minuto</h2>
+    <p>Un repaso animado: los pasos del proyecto, el informe que promete y la realidad que no cumple, el sensor que cambia en la semana 80 y cómo reaccionar. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xACUAAEAAgMBAQEAAAAAAAAAAAAABgEFBwgEAwIBAQEBAAAAAAAAAAAAAAAAAAABAxAAAgIBAgQDBQMHCQMLBQEBAAECAwQFERITIQYHMUFhInFRFFIykRWBQjZ1I3JignSzkiQzNbTDsQiUxKGi03NT0RaDVUYXsmMYk4QRAQEBAQEBAQAAAAAAAAAAAAARARJRITH/wAARCAIcA8ADASIAAhEAAxEA/9oADAMBAAIRAxEAPwDSIANGYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABItC7G7j7mxZ5el4H1VELXTKfPx69rIxjJx2tthLykuu23UCOgmv/wBpO+P/AIh/8rwv+3Pjk+F3euLBznot80lu1TZj3S/s1Wyk/wAyAiAPpfRdjWzpvqsptg9p12wlCcH8pQklJfnR8wAAAAAAAAAAAAAAAAAAAAAAAAAG4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+lFNmTdVTVHistshXCO6XFOclGK3eyW7aXUluR4Wd54lNt92kuFdNc7LJfVYb4YVxcpPZXtvZJ9F1AhwAAAAAAN0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA6H8Cf1Wyv2rf/AKfHOeDofwJ/VbK/at/+nxwMz3j4n6b2ZqFWBlYWbk2WY8chTodKioynOCi+OSe+8Gz49ueL/bncObVg8OVgZF0lClZUa+XZN+UFbXOSU5PpFSSTfRPc1r47frRifsqn/UZBrnTaMjKz8OjFjKWRbkUxpUd+LmOxcLW3yfX2bAdMeJPZOL3XpORdCqEdTxKp242RFJTny1xPGsfnKE0mop/dls16nL0Yym9oxlJ/JJt/gjtWTUYtza2jFuT9Nkur+BzV4TOE+/KJQ24Gs9x/hdVjj/0F3BAZVWwW8q7Ir5yhJL8Wj914eVdW7a8fIsrW+9kKbJQW3nvOMXFbfE607m7cxu58THwsrb6aGdRk3w8ubXRxy5W68lOTSl5e7uYrVe8+0MTT8/TadX0uqcMLJphjU2RUIvkzjGuPLXK8+iSfmQctH0px78h7U023NeaqrnY/wgmbH8KPDqruiU9T1OMnp2NNVwpTcfq70k5RlJdVVWtuPbrJvh38zdWqdw9sdi49FWTZi6ZCS2pxsen35Rj0co00QcuFes5Lbf1A5Ntptolw212VS+zZCUH+Ekmfg63wtR7Y7+wLHV9Jq2MnwW13Ve/VJrpx12RVtbfnGS2326M0J4ndhLs3Pqtw+OemZrlyONuUqLY9ZY8p/pJL3q5Pq4779UBB/p7/APwbf/8AOf8A5HzOrPDnX13F2vp+TKSlfTD6TI8t+djpR4n/ABw4Z/zjQfifon5D7t1GqMeGnJms2nZbLgyd5SS/ht44/mAiCTk0km2/JJbt/BI/bouS3dVqS8265pL4vY2T4I6F+Uu5LNQsjvVplDsW66fUX711/nUeZL8yNg+NevfkrttYFbSu1W3k9Nt1jVbTuf53wQ/nMDnE+tONkZO/Jouu28+VVOzb+xFmzvCjw5x+4uLWNWrdmBVY68fG6qOVbDbjlY1s+TW/d4V9+W6fRG2Na707U7I5eFkXV4s+BOOHhY/FKFb8pSrpSjWn6cTTfnsByvZVZTLgshOuX2ZxlCX4SSZ+Dq7HyO1PEbTZuMcbU8dPgnGypwyMebXT7yjdVL1jKL2fo2c99/8AZ1nZmsPEU5W4l8Odh3S+9KrfZwnt05lUvdlt5raXqBFT6041+TuqKbrmvNVVzs2+PAmbL8KfDmjuZz1bVIylp9FvLqx93H6u6PWXHJbPk17pNJ+9Lp5Jm5dV7l7Y7HpppyrsbToyX7nFx6ffcV04o00R34U+nFJJb+oHJttNtEuG2uyqX2bIShL8JJM/CTb2XV/JHW2Jndsd/wCn2Ov6TVsbfgthbV+8qk10Uo2RjdVL1jJbfyWaO7u7Qp7A7r0q+M5vSbsujKqsmnOdMKb4O6ibS3m61s4vbeUWvXcCX+Cmhabn6LqM8/TcTJsjqCjGWVi12TUPp4Phi7YNpb9dl0Iz406VjYOu4NeBg1Y1b09SlDFx41wc+fauKSqik5bbLd9djeWgdy6R3PRdk6VkfUU1W8qcuVbVtZwqW21kIN+6090tjya/3z272vlVY2q5jx7rK1dCP099u9fG48W9dc0usX08wOSmtuj6FpOTUYpyb8klu38EupIsDR7u8+6rcPAl7ubnZNqucXw14ztlZK+UXs9owe+z2beyOjtF7Z7b7E06dlVePjwpr4snUcrgd09vOdl0lvFN+UIbR9EgOVbMLLpjx2YuTXD7U6LYR/tSikfA6t0rxF7S7gy1p+NqNdt1jca6r6ba43P7NbugoSb9I+b9ERHxO8LsDLwMjV9GxoYubjRldfjURUasqqK3m41rpC6K3kuFJT2aa32A0AAAB+6qbb5cNVdlsvs1wlN/hFNk58Muwl3lnW25bnDTcJw57hvGV9kusceEv0d0uKyS6qPl1ZvvL1DtjsHT6+a8TScbfgqrpq9+2SXVRhXGVtskuspPf2sDk27HvxmldTbS35K2udbf9tI+R1ppXcfbHfVF9ONbjalCC/fYuTT78Yy6cUqb4qXC/JTjut/Xc0p4r+H9Hal9OoabGUdOzLHW6W3L6XI2cuCMnu3VZFNw4nvFprfyA1sfSmi7Ilw01WWy+zXCU3+EU2Tzwv7Aj3hl25Wbxx0zDlFWRjvGWTdJbqiM11jFR96yS67NJeZvbO1XtjsLBqV0sTSsd+7TTRV79jj58FdUXZPb9KT39rA5Nuoux3tdVbS/lbXOt/hNI+Z1rpuu9sd+Yt0MezF1SqOyux8in34KXROdN0VJJ+k10+TNI+Knh5X2nfVqGnKX5Ny7HDltuTxL9uJVcT6uuaTdbfVbOLfkBrqNc7N+CEpbefDFvb8ExOE6/vxlD+JOP+/Y3P8A8P3+Jr/8OF/vvJ73ZoWgz1TC7g1+3GhhaZizqhXkbcqeTbbxQlOGz5nAk+CtJ8Unvt0A5h+hzHTz/pcnk7b87kW8vb58zh4NvznnOvdC7o0PuWq1aVnUZcaUlZVFShKEX0XFTZGEuB+SfDw+hC8rwv7fxe5cnXs36ajRa8dZM8WxxhjxzOJqfHHoljpJWcvyc5cO23QDn6rAzb6+ZViZVtf/AIlePbOH9qMHH/pPO+j29V5r5HXOgd5ds65a8LSNRxrbK4trHrhOl8EfN1VzhWpRj/IT2RCfGXszBy9Hu13GohTm4ThK+dUVH6jHlJQlzUtlKdbalGfntumBz7GEpvaMZSfyim3+CP1KqyC3lXZFfOUJJfi0bE8EP1wX7Py/9mbv7w7aw+58PFx86casLGzYZmVvLg46aK7N6+PpwRbkuOW62gn6gcnU4uTkJumi+5LzdVVk0vi4xex82mm00010afRr4rzR1HpXiF2NC+rStP1HEx0mqqY10WUYrfkoQt5caXu+ibe0n6s+vfHYGm934Vv7mqjUowbxsyEFGfMS6V3uKXMqk+j4t3HziBzLoX+caX/T8T/UQOue5P8AJtW/oOZ/UTOStIpsx9d0+m2LhZVqeNXZB+cZwyYxlF/BrY607k/ybVv6Dmf1EwON4+S+Ba6tJdW/JLzfwR69H0vJ1rOxNPxI8d+VbCqtPyTl5yk/SMVvKT+SOne3+zu3OwNNlkTWOrKauPL1TKUeN7fecZS35UN+kYQ6vourA5eng5lcOOeLkwh9udFsY/2nFI+B1DheK/Zup5ccGGoSjKyfLhPJx7aseyUnsoqya4VxPouNRRgfEzwywNQwMnVdJxoYufjQldbTRFRqy64Lea5UdoxuUd5RlFLi22e+6YGjNEx3fqenp1Oyt5uLGa4HKLi7obxl0a2a80/Q6j1/tbt+vSdTlXo2lxnHCypQlDCx1KMlTNxcWobpp+Wxqzwc7v0LQcHMwtQyuTk5moVPHr5F1nHxVxrXvQhKMd59PeaN55N9eJTdfc+Gumudlktm+GFcXKT2W7eyT6IuDi912QinOE47+soyXXb2o/BuDxa737d7o0fCx9KzPqLas5XTj9PfVtXyZx4t7a4J9Wui6n68KfDPF1TGjrus0q+icn9Fhz/w7FB7PIvX6cOJNVw8ns291sINRU4uTkremi+5LzdVVliX54RZ+LK51S4LISrkvOM4uMl+aSTOr9Y707X7PlXh5mXThz4U44uNTKUoQflKVVENq4v04tt/Q+tmP2x3/pnMcMTVcSzeMbVHa2uS81Ge0bqbI/L3X7NhBySCU9+9nW9maxLE4pW4t0edh3S+9OrfZwnt05lcvdlt59H6kWIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHQ/gT+q2V+1b/9PjnPB0P4E/qtlftW/wD0+OBLtd7D7e7nyoZep4Dyr4VKmM1fk17VxlKSjtVZCPnJvfbfqXo3Y/bXbNrycHTMfGtSf94slZZZCPrw2Xzm4Lbz4WjUPjhm5mP3LhxpysmiP5LqfDVfbXFv6jI6tQklv7TWF2dmZEeG7LyrY/ZsvtmvwlJoDfHib4n6fhafk6RpGTXl52TCVN19EuKrEqmtp7WR92V0o7xSi2o77t79DXXg5+umD/3GX/p5EDJ74O/rpg/9zl/6eRRuPxXzr9P7M1KePOVc7ZUY7nFtSVd1qjYk11XFHeL9jZy+dMeM36lZn9Jw/wCuRzONHV3hviV4fZ2hwgtuPEV8vbO+crJN/iaB8TtQu1DvLWHZJtY9/wBLUn5QqoiopL5by4pP2tm7/CTWKtW7QwK1JO7T+LDujv1jwScq2/ZKqUdvg/kat8XOztRwe4MrVsfFuyMLUJRudtNcrFTfwqNldqgm47tccG+jT280QebwY1C7E7wox4SfLzcbIptj6Pl1u6En7Yyh0+LNq+MuJXk9mZlkkuLFyMW+D9VJ3Kp7fGNjRB/Bbs/UI6rLXczGtxsfHosrxudCVcrrrlwylCMkpcEK+LeW2zckl6kp8cNYqw+269P4lz9Qya9ob9eTjvmTnt8uPgj8WBEfAnXvptTztGsl7mbV9RQm+n1GOvfS9s6Xv/7ZmfHrRebg6ZrEI+9j2yxLn/8Aru9+pv8AhsjJfzzTWhatboWq4OpVffxMiu3b7UYv34fzocUfznUfdmmQ7u7UzMbFas+txa7sWXo5bwuqaft2X4gYLwZ0P8ldq1ZM47XanbLKfTryl+7oXw4Yua/jNS+L3cH5b7qyaq5cVGmxWHXt5OcHxXyXxtbj8II39rmo0dm9r5GRHhjDTsGNWPH7VkYKqiH558O/5zkeyyd052WScpzlKc5PzlKT3k38W9y6OtOxcSvB7V0OmCSX5Px7H7Z3QVs3+eU2QzWvBSrXNTzdSv1vL5mXfO5r6WuSgpP3a03Zu4wjtGPsRJfDHWKtY7R0ucZJ2YlKw74+sbMb3Vv/ABV8El7Gac8RMDurtzXM2ay9X/J+TfZfi31ZOW6FXZJy5LcJcMJVt8PC9uiTXQg2v2T4Zx7JzsjLp1TIy45GPybKJ48K4vaalCzeM5PeGzS6eUmR7x8xIvRtJymtp1Z9lSe3XguocmvxrTIN2j2x3v3er7KNT1HCx6obxyczKz4VXWbraqraTlJ7btyScVt82Yzvbtzuftv6anXM55dd7nKhfX25MW60lKfLs2lDbi23cV5gdBeHuJXh9o6FVWklLBqte3rO/e2cn7XKXU548SNRt1HvDWrLZOXJypY1aflCrH/dxivkujl8W2b48KtYq1ftHTlGSduFF4V0d+sZUv3G16cdTjJGpfFnszUdP7gy9Tx8W6/B1Cznq2muViquklzareFNxfEnKLfRp/NARLtru3V+0r78jS7YVTyKeTZzK1bFxUlJPgl7vFFr3ZPfbd/Ma73drvc7rWq51mXGqTnXBxrhCuUls3CFcIpbroTHw48LZ9zfU5OtU5uFgxrUcdpci669yXvwVsJb1Qimm3HZya28jw+JXYem9kTwY4moZGVZl82TovhWpVVV7JT44bb8Unwr3V5MDYfgL/kOqftL/m9ZEvHv9YtO/Zcf9TcSvwEaehaqt+q1Jbr5b48Nvx2MD45aNqWZremZGNhZWTVLB5PHRTZalbG+yTg+CMtntJNb+YFeAOJXPUNaymk51YuPVB/JXWylLb48tIzXj3qF1Ok6Vgwk415WVbZak/vrHrjwRfzSlZxbfNIi/gdq0NO7hy9OvfA9QxuCtS6f3jGm58vr+k4Ozp81sbD8Xe1MvuXQ6bMGqV2Xp9zujTDrO2mceG2EF6zW0ZqPm9ml1A5srssonC2uThZXJThOPRxnB8UZJ+jTW6OytIynqOm4OTYk3lYmPbNejdtMZSXwbbOT9D7Q1rX9QqwMfByYSlNRtstpsrrx4b7TstlOMVFRW/Tzb6I6unbi6Bpbsskq8XTsRNyl02qx69vxajsl82XByJrmLHB1bUsWH3KM3Jqj7IwunFL8yR4D752VLOy8nKn0lkX23NfJ22Oe35tz4EHS/g5iV43ZmHZFe9k5GVdY/nJXSqX4RrSNV+NGoXZfd92POT5eFjY9VUN+i5launJL5ylPr8EbG8EdYrzO2p6fxLnadk2bw368nJfMhPb5cfHH4oi3jT2dqE9VjruHjXZOPfRXXk8mErJUXUrgjOcYpy4LIcPvbbJxafoBrPt/uDUe2NQjqGnWRryIwsr9+HHCULI7NTg2lJeTW/qkz2693x3H3LVyNS1Cd9HHGz6eMKq6lOP3ZKNcI9Vu9t2zO+Hfhzk91ag5ajj5eNpdUJuy7hlTK21rauqiU49Wpe9NpNJLZ+ZkPEnw20jsvAozMXUsu2zIyFTVi5EKm5RUXKc+ZBQe0El+h5yQG0PCLEhi9l6a4pJ5Esi+b+cp3zj1+EYRX5jTvjDqFub3jm1Tk3DDrox6o+kY8qNkml/KnNt/PobT8FdYr1DtaOFxLnabfbVOG/XlXTdtU9vk+KUfjEhXjN2dqMdZlrmJjXZOLl1VRvlTCVjovqgq/wB5GKbUJwjFxlttummBGfCfULcDvPSlXJqOXOzFtivKddtcns/4ZxjJe1G8/FLEhl9l6yprd00wyIeydNsJJr826+DNVeDvZ2o5OvU6zk412PhYCnOE7q5V87IlBwhGpTSclDic5SXRbJb9TY3jFrFWmdo5WO5LnajOvFqhv1ceNWWy+EYR2ftkgIh/w/f4mv8A8GF/vvPv/wAQN1ip0CnifLlZm2OPo5wjRGMn7UpyS+J8f+H7/E1/+HC/33n6/wCIL/6f/wD+/wD5sBF/BSc4941xjJpTwMxTS8pJRjJJ/CST+JsjxvtnX2lCMZNRt1HGjNL9KKhbNJ+ziin+Y1r4LfrlR/Qs3+rRsfxy/VSj9qY/9TeBp3w9snV3foMoScX9fVHp6xnvGS+DTaZ0X4ideztf/Z9v++Jzh2D+t2g/tGj/AHnR/iH+p+v/ALPt/wB6A0p4Ifrgv2fl/wCzNn+NGoXYPaFsKpOP1mXRjWNPZuqXHZOPwly0n810NYeCH64L9n5f+zNz+IvbV3dXbeVg4+zyoShk4ybSU7aW3y230XMi5RTfRNrcDlHzOtOwNRu1XtPRcq+TnbLEjCc35ylTKVXE382oJt/M5lxu0e4svOWBXpGesly4XCePbCMHv1lZZKKhGC83JvbY6q7c0eOgaLp2mKSl9JjV1Sn5KU0t7J/Bzcn19C4Odu8MaGJ4l5EIJJS1nDt2XzulRZL/AK0mdGdyf5Nq39BzP6iZzNrWqQ1rv+zOqfFVbrdCqkvJ11X11QkvY4wTXxOme5P8m1b+g5n9RMg0L4F4leR3TZdNbvF026dfsnZOurf+zKX4m6O9e0v/AFppkNNlnW4NayIXWOqtWO3lqXDCScorhUnxfFI0T4OaxVpPdmNC6ShXn0WYe78lZPhnVv8AxTgor2yNy+KOi6vrHb7ej25MMzDuWQq8a2ddl9XDKNlUeCUXKSTU4x9XHZdQIh//AD3hf/OZf/I6/wDtTbWnYdmHh4uLbbPKlTRVTO6cdpXcEFBzlHqk5bbvqcmU5fdmTkrEqyNdsyZS4VQrc3mcW+2zjxbr8+23qbAyPDDxDpx4Xw1vmvlKyyp6nl1TqfDxSg5T/dPg8nJT26FwQCONHD7sjjQW0aNcVUV8owzuFL8yR1V3H/k2r/0DM/qJnJOkzk9awJ2T45flDGc7HLi4n9RDeTk/Pd9d35nXWt02ZOmalTVHjstw8quEV+lOdM1GK+LewwcZL7v5jsvQsSvB0rTsWtJV04eNWkvlGqO/4vqcf5OmZ+DBPKw8rFXE6+K+i2pcaXWKc4pOS+SOseydZr13tzSs6uSbeNXXat/uX0RVdsJe3ijv8GmMHK/cefdqut6nmXycrLsy+T39IqxxhFeyMEopeiRsvwDz7oarquBxN024ccnh36K2m2MOJL5uNmz+CIr4gdlan2/rua44mRbhZORZfi5FVU7IOF03PlylBPhsrb4XF7PpuujNjeCXaOfpUM3WM+izGeVVDHxarYuFjqUuOd0oS2lFSkoqG+zezflsB9vHvEhPQ9MytlzKdQdSl68N9E5SXw3qTNAG8PHzWKuTpWkQkna7J5t0U/uwUXVVv/E5WNfA0eNAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA214Y+I2g9o6Jfg6j9Zzp51l8eRQrI8E6qoreXHHrvB9NjUoAm3id3Vpvd2tY+bp3P5NeDXRLn18uXMjdbN7R4pdNprqQkAASjw91/C7Z7jxdSzub9PVXkRlyYcye9lTjHaO8d+r69SLgDcviJ4n9u90duZGm4H1v1Fl2POPOx+XDaqxSlvLjl128uhpoAuiRdn94al2bn/V4TVldiUcjFsb5WRWvJPbrGcf0JrrH2ptG7tM8bO1MupSynmadbt71dlErop/ybKOPiXxjF+w5vBB0Xq/jf21h1S+ghl6ndt7sVVLHq39OOy339v4YNmjO5e5NR7q1GzUNQmnOS4K6obqqipP3aqotvZLfdt9ZPqzDgAdMeDeq3an2jRXcnvg5FuHCb/Tqhw2Q/sKzg/mkE8KPDvSe59Izc7Vsey5SylTjcu6yqUI0w3tl+7a3UpTUfeT+70Nszt7d8PtGVblTp2FjqTjVx8Vts5dXwRk3bdbN/F/PZAa58edf4atO0OuXWx/W5KT/RjvCiL+MuOf8ANRo8zPdXcF/dGtZmqXJw58/3Vbe/KoguGqvf+TFdfnJtmGAk/Zfe+o9lZkrsZRvx7uFZOJY2oWqPlKLW/BbH9GaT6dGmjden+NXaOXUnkzzMCe3vVXY0rY7+ydHMUl8m0vgc2gDovVfG7tnDqf0MMzUrdvchGp49W/8AKst2kl/DCTNHd0dzah3ZqVmoZ8o8bXBVVDdVUVJ7xqrT3e3Xdt9ZNtswoAkfZ3eepdl5zycThtptSjk4ljarvhF9Oq6wsju+CaT23aaaZu3TfGztPLqUsmebp9u3vV248rYp/wAmyjjUl8VH4HN4A6J1jxw7bw6pfk+GXqd+3uLlSx6d/Tjst9/b2Rg2aL7g7gz+59Su1HULFO63ZKMd1XVXH7lVUeu0I/i3u31ZigBNPDzvy3sjNuc6ZZODlqCyKYNKyMob8F1XF7vFFNpxeykn5rY3JX409m8tT+qzYS235bwruNP5e7vD/rbHM4Ay2sajVPX83UdLndRXLPtysSbXLtr4rXZB7Rb4ZRb6dWbe7Z8dMOdFdPcGNdVfFJSzMSCsqt2/TnTvGdcn5vg4o/JI0WAOmb/Gbsyqtzjm5V8vPl14d/E38v3ihD8ZGqO/vFLM7wr+hxapYGmKSlKuUlK/JlF7xd8o+6oRfVVx3W/VtmvQAAAGX7a7k1HtXUa9Q0+ajZFcFlc93VfU2uKq2PTeL26NdYvqmbz0fxw7ay6o/Xwy9Mv2XFHlSyKd/Xgsq3nt/FBM51AHSGp+NvaeJU3iyzNRt292uuidMW/5Vl/Bwr57Rk/YaP7v7v1HvLUPrMzhrhBOGPjVt8vHrb34Vv1lKXnOb6yfySSI+AM12v3RqXaWoxz8Ca4tuC6me7qyKt93XYls/bGS6xfVG8tJ8b+2MyqLzlmaZdt78JUyvq39eC2neTX8UIs5zAHR2qeNvauHVJ4n1mpW7e7CFEqIb/yrb+HhXwhJ+w0f3b3dqXeOoPNznGMYJwx8avflY9W+/DDfq5PznN9ZP2bIwIA2N4U976R2bPVXqf1P97jjKrkVcz/CdvFxe9Hb762P14r98aP3l+SfyZ9T/dPqubz6eX/jcnh4felv9x7mtwBLPDjuLA7W7iq1HP5308cbIqfJr5k+K2CUfd3j038+pMPE3xH0DuzQq8DTvrOdHNqvfPx+XHghXZF+9xy67yXTY1GAMv2rqWPo+v6XqGTx8jFy67reXHinwQfXhjut37NzcHdvi52xrXb+q6fi/X8/LxJ1VczF4YccttuKXMey9uxogAbH8EP1wX7Py/8AZm3PE/X8ztnRcTU8Nrm0anjbwlvwW1yhap1WbdeGa/B7NdUak8D/ANcF+z8v/Zmx/HJP/wBIx/aWN/8AjaB+tP8AGztTKx4yyrMzBt29+iePZclL1ULKeKMl8m1F/NEQ758Z4alh3aboFd9UL4uu7PvSrs5cukoY9abcOJdHZJqSXkvU06APVpuRDEz8PIs34KMqi2fCt3wV2xlLZer2XRG+tX8aO1M7T8/HqWpczIxciqHFipLjtqlGPE+a9lu+pz2ALhKUHFxbjKOzUotpqS8mmuqafVM3V2l441049eL3DRdOdcVFZ+NFTdiX6V9LcXx/OdbfF58JpQAdOS8ZOyYwc/r75Pb7scHJ437OsEv+sa6768ZLddxLdN0ai3Cxbk4X5Vzisi6t+ddcINqqEl0k+Jya6dDVAAtNppptNdU15prya+Bvntfxv0qeFTRr0MjHy64RhPJpq51N/CtuY4xfMrnLzkuFx38n6GhQBuLxU8QO2u69EqwtPuyb8mrLrvhKWNZXXGKjOE05WbPrGXRKL6ohvYviDqPZN81XBZeDfJSvw5y4feXTm0z68Fu3R9HGS6NeRDwWjpbC8aez8mtStyMzCn61XYtkmn7JUcyD+JjNe8c9ExaZx0ijI1DIafBO6Dx8aL+1LifOml9mMY7/AGkc+AUe7V9Wzdczr9Qz7Xdk5E+Kc30XyUIR8owivdjFdEkeEAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD74+Xk43+BkX0b+fKtsr3+PBJH5uutyJcd1tl0vtWzlOX4ybZ8gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH7qutolxVWWVS8uKucoS2fpvFp7H7ty8m+PDbkX2x334bLrJx3+e0pNbnxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMppOg5OrQuujZj42Nj7c7KyrOXTBy+7DfZuU36RimMyjFgl1+irTu2NQss+kyXLPw/p83HcbIzqcZKca7NlOPvLacHs0/NGPxO2Mi/GpycjL0/ToZHXHWbe653rfbjhFRk1BvynLZF5GBB7NR07K0rKsxcqHLtr23SalGUZLeM4SXSUZLqmjLaDRTbpXcc7K65yqwapVylGMpVyd6TlBtbxe3TdDMEdBmdP7cyM7F+ttyMPAxXN1wvzbeXG2a841RUZTlw+r22XzPPqWiZul5NWPbGFjvUZY9lE1ZVkRm9oyqmvvbvpt5piDHAkk+zMyLspWZptmbXBznp8MjfJXDHilH7nLc4rq4Ke5GxuQAZvB7ZyMvEhm3ZWDp+PbJxonm3Ovnyj58qKjKTin0cnsj39w6RPC0/t/H+nrjlWRyoT5Sg3fJ3pVtWR/wARSi1wPfyYgioJK+ys3jePHM0yedGDk9Phk75PSPE4L3OW7Ev0ePc+vb/buJqOlapkX5OHXdXCCq511sHiSVvDKzIjGLSjNdIb8XX0QmiKgy+n9vZOoyyZQuxasbFnw2511vBip77R4Z8PFNz84pR32Pxqug5OlV1ZDsx8rFubVWXi2cymUo+cG9oyjNfZkkJoxYJDT2hlzjQrczTsTIyYRnRiZOQ4X2Rn9xtKEow4/wBFTktzBZFFuLdbRdFwsqnKE4vzjKL2a/Eg+YMrpeg5OqVW5HNxsTFpko2ZWXZy6lOXVVx6SlObXXhin0K1TQsrSuRKc6MijJ35GVjWcyi3Z7SSlsmpR9YySZYMWCUS7Hzasl4l+dpePe2lTXdkuMsjddHXHl7pN+6nNR3aexHcrFuwsi3Gvg67aZuFkH+jKL6r/wAn6iQfEEq0PSfyp23qSrro58dQxP7xbwQVFKrk7JSul1hWvOXz+W5jdS7cyNPxVmwyMPPxHPlyyMO12QrsflCxOMZRb9G1sxBhwSBdpZSxKMy/M0/FoyMZX1TvucHNvd8mMeDilZ067bxW669TG5el34WJgZdkq3XnQsnUotuUVXPgfGnFJPfy2bEHhBncPtycrtIeTkYlVOox50HZZOK5cLVGVUmobqyzygo7rf1R9e4+3o4esyw9PnRkc7InXTiUWTsup2cVGu7jS2k9/tS6J7sQR0Ejs7MzUrYU5em5WVTFytwsfJ48mKj95KPCozlH1jGTZHBIAM1g9tX5WJDNvy8HT8e2Uo02Zlzg7nHpLlwhGcmk+jk0kerTNFt03ubTMPNrptjZfTNbONtF9Nn3Zxe3DOEl818RBGwerU4xhqGZGKUYxyb0opbJJWySSXokSJ9tYb7bpzVm6fHJlkTbtlfbwygqeNYijwOP1EX5rb+cIImDNYXbV+TiV5t+Xg6dj3OUaZ5tzg7nHpJwhCM5cKfRyaSPXpGi26f3TpmFnV1WRnfVL9G2i+qabjOL+7OEvgII0CU0Y1D0vuybqrcqMjGVUuCO9SeZZFqt7bxTXR7bdDwYPbWRlYsMu/KwtOx7W402Ztzr57i9pcqMYyk4p9HJpIQYUGXl25n16rj6VZyoXZEoKqzj4qJwsW8bY2QUt4P5pb+wrVdBt0euLyMrCle7HCeJVdx31dG1K2KW0U9vLfdbrdEgxIB78vSb8TCwc6Uq7KM1WcDrbbhOqW0q7d4raa89lv0A8APfk6Tfiafh51sq1DMlaqa95c1xqezsceHhUG+ifFu/kfLTtPydVyq8XFr5l1j6LdJJLq5Sk+ijFdW2B5QTjt3tdUanxzyNM1OmujJV8MexX8mfInwOyE4rpxLZTW6UiNaVoeTq0brITox8ejbnZWTZy6a3L7seLZuUn6Rimy8jGAymq6Fk6VXTe7cfKxb3JVZWLZzKZSj5wb2UozX2ZJHvr7OzJcmuzM07Hy74RnVg3ZHDkzU1vBNcDhGU192MpJiaI4DL6b23qGqfWxpVcbMJwV1dsuBpyscH124Eq9nKbk0lFbn0zu2cjExJ5lOVg6hRVJRunhXOzkOXRcyLjF8LfTiW6E0YQHuytLuxMHBzZyrdedzuUot8ceRPglxpxSW78tm+heVpORi4uBlScJxz42SpjDic1y58DUlwrq5eSi2IPACZYnb2pYeJladC/Sa8/NjXx4s8n+/KqKc/porh5UZWbpyXFxPbYj+m6HmanffVHl46xYylk25M+VVjxi+F82TTafF0SSbbEGNBldT0G7TserKjkYmbi2zdayMSxzgrUt3XNSjCcZbdVuuqMUQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlVVVmZ2ZwYsZWSxdVlbl11pylwWU7V2uK3bin039CKnqwdRzdMt52Hk3Y1jWzlVJx3Xyl6NexplwSSGLk4/Y+a7oTrjdqeNOqE04vhUXGU1F9UpSWyfrwmS7iu06b0/JnoU9Rpu0/GjRk15WTCG0IcMqOXVGUYyrlvuvN7kNydY1LNVscnMvvV04TtVk3JTlWtoNry91P3duiP3g67q2lwdeHnZONCT3cK5vh3fqovdJ+1bMvSRke7cjIuysOvIwPydKjBpqhTK7nT5PV1Ocn7yai9tpe98z99u/wCUdz/s+n/UIj9t1uRZO26ydtk3vOycnKUn83J7tn7qysiiu6uq2dcL4qF0YvZWQT3UZ/NJ9SdKkWvUXZeidu5GNCduNTiWY9nLi5KrJVrc1NRT4ZTWzTfmfXUK8rE0ftjE2cNRWTdkUVz2jOuuy2PJU+NrgU5rdKWxH9P1fUdKcvosy/G4/vKubUZe1xe8W/btuefJycjMulfkXWX2ye8rLJOU38ur69PT5CpE3hi43ceq24mo6PlabqU+Zzs3EnPkxtjFt23VTTr4JbdZRns9/Mgc48E5R3UuGTXEvJ7Pbdex+Zk7e49aux3jWalmTpceF1u19Y/Zb+817GzFDdqpZ3Nj3ZeB29lY9c7cVaZXjrlRc415FcnzYSUU+GUnt5+ex7tT0q2+js7Tcux0TtjbVOUvvUqd0NotPylGLUdn5PoyKYGt6ppUZwws3Ixoz6yjXNqLfz4Xuk/aup8Ls/LyY1RuyLrVS5yr45t8ErJcc5RfnvKXvN+e5aJ7oFWFR3NTiYmhZPHj5MlZnZmRfKyChxJ38CjClOX6O+++/QxOl1ysxO8YVxc5OEWoRTcmo5st9orq9jDWdz67aqlPU8ySplGVe9r92Ufuy385NenFuePF1HNwch5ONk3UXvi3trm4yfE95cXz3fVpip6kHJuy+zo1Y0JzniapZZmVQTc1GyraqycEuLhj1jvt0ZUKbMPs3LWXGVazNRoliQsTjKXKg+bbCL2ajt7rl5MwWPq2oYmVPLoy76cixyc7oTalNye8uP0lu+vVH5ztSzdTsVuZk3ZM0tlK2TlsvlFeSXwQq/Uvsn9dk4OFr2h5E8udWPVVnYNslbKlxSqslGKnRZwLq2n0IrrWDHTNTzMONvPjj3zrVvrJL5+30l7T60dya1i46xqdSy66UuFVxte0Y/KL+9FeyLRjG2222231bfVt/NsbtRNsKzEl2jiOemS1SONnZH1Fdd91UqJ2pOu2apTcoyh7qk+i2PJquXJ6Lh0V6LPTMOzP51NlmTO1zsUOGahC1KxRaae/3W0R3B1LN0yx24eTdjTa2cqpuPEvlJeUl8Uxm6nnalarszJuybEtlK2blwr5RXlH8yQpGf7xbfduRu30uxdvZtVVtsebvf8AWTU/+9j/AFUDDX5eRl3yyL7Z23Sabtm95txSUW37Elt8CsnJvzLp35Fk7rZvedk3vKT223b+CFxUo0TGycvtDXK8aMpz+sxZuEOsp1wjxTjFLrLZLi2XXZHz0im3D7a7guyYTqoyI41FCsi483JVvFvXGW27hHq2vIj+NqObhw4MfJupjzYXbVzcf3tf3LOn6UU2kz96hq+o6q4PNy78rg+5zZ7qPwj0in7dtxUjMd1N/Q9tr0/JEen/ALsj66vjX5Xbnbl1FVl0K68umx1wlPgt5+6jJRTabXVbkbvy8jJjTG62dkaK+VUpPdV1p78Efkt/Q9GDrOp6ZCcMPNycaM/vRqslFN/Pby39q6iqk2s0WYdXZ1V8eXOupccZecH9XB8Mvk1v1Xoz2Uf3XxAyncnVzr8uFFk04x5ttLjXKMn0fvNJNfMg2Rm5WVGqN99lsalJVqcnLgU5cUtt+vvS6v2n1y9V1DPhTDKy78iNC2q5s3Ll77fdb6+i9fQdJGb7X0vUsfuXFVlN1MsTIdmTZZGUY111782U5tcPC1uvP3tzA6hZXdm5dlX+HPIulDb7ErJOO35j1ZHcWs5WN9LfqOXbRts65WtppekvWS9kmzGE3VSx6fpul6bpd92n5er3Z9MrltdbXjVe/wAPJjGmLnKzp73VGbz4OHcnZ6ljxxZLFxU8eLk1T+9n+73k3L3fLq99yE4Wvatp1MqMTPyceqW7ddc2o7vzcfPhb9XHY+L1POlbj3PKuduMkqLHNuVSi20oN9Vs22WpF6t/mWd/S8j+tkZuVVlvZePy4Ts4NZuc+CLlwp4y6y232XtZGpzlbOU5tylOTlKT83KT3bftb6nqw9V1DToWwxMq/HhcuG2Fc2ozTW3vR8n0e2/mTFSGen6bpWn6XbZp2VrF2dRzk1fbXjVuUtuTCNMXOU1t73vIzeZBw7r7STojiyWJiJ0Rbaqalb+6Tk3J8H3er3IRha9q2nUPHxM/Jx6Xv+7rsait/Nx+y3/J2Pi9Uz3dj3vKud2NFRotc3x1Rju0oS81tu/xL0kSOj/KO8v6Vi/66wyGrXYEtO0PIno09Sp/J1VMbq8m+uNVte6solCqMoxlxe9u+st/YQlZuVGvIrV1ihlOMr479LpRk5Jz+bUm2vaffT9a1PSlJYWbkY0Z9ZRrm1Fv5uL3jv7dtx0RMK8i63uDtSm3THpkaOBUVzvd1kqJybjx8SVkdnvsp9SHZdF+XqmVVTXZfbZlZHDCuMpzk+ZJvaK3k+nU+b1LNeWs15NzylJTWQ5t2qS8mpPr09Pke7t/VoaXqUs+/jnZGjK5bS3byba5RhKXVdOKTcmLVYiUXFuLTTTaafmmvNMlOgVz1zRtQ0WPW+qyrOw1678Sqvgv5klIiu7fV9W/P4kk7cztO0OM9UllWTz41X1Y+FCmaSnZHgjbbe/ccEm5cK677Ez9Hz7wy67tT+koe+NptMMGnbyfJW1k/jKzi3frsffsjezK1HHraWTk6Vl04vXZu5pPgi/tSinsRmUnJuUnu22236t9W/zl12TqnGyuUoTg1KM4txlFrycWuqa9gv0S7sPT86vVr7JU3U104eVC52QlBcUq2o1e8lvLiW/D5+7ufXSLMaXaU1LTnqf0+pSsyKIXW1ShGypKu+SqTlKK6w8tkR+7uXW8iVcrdSy5yqUlBux+7xx4ZeW3WUW02+ux48LPzNNt52JkW41m23HVNxbXyfo17Hui2CR6lmSfbzpo0OWnYd+dCcL7Mqyze+uD34IXJT2lHo5L3eh757anqGNg67oeTHPsjRV9fg2SjOUeFKu6cEp0TUY7OUoy6bEPz9Uz9VnGeblXZUoraLtm2or5Rj91fmR6au5Nbox1jV6llwpUeFVq19I/Zi/vJexNItIkmj6ZfXjd46diz+osrrhTCUPO5V3z3SXrKUU1svN9EeLtnHuxMHX8rJrsqxfyZbjt2RlCNmRbKKqguLbeae76dUeHRtUpwdM1qqV068jJrxvp3Hj4nOq/jb44/da8920eLP1rU9UhCGbm5GTCHWMbJtxT+1t0TftfUnieszqWNfldrdv2UVWXRonnVWuuEp8Fk71KMZKKbXEvLcyd8Fpa7IWdHlKmU5XRmv8ADTyoy99Pycd05J+XqRHA1jUtLU44WZkY0bPvqqxxUn82vLf2+Z8MjNysuFcL77bo1cfArJOXDzJcU9t+vvS6v5sVU3z3VTr9lUe2L7s15nMqujm5e10nZxQvi+HlqMukt9+GK8zxUahqUtS7gylpVWTj2vbU8B2cagnPb3ZVtTbjNN8UE0vUwVXcmt04/wBLXqWZChR4VWrZdI/ZT+8l7E9jyYefl6fdz8TItx7eq5lc3GTT80/mn8nuKkZ7VdM06zRY6th4+Xp397WPLEybHZCxuHFzMeclGbUdtpb7kYPZn6tqGqSjLNy78lx6R5s21H+GPSK39dkeMm6oACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACwVVAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwBQLAFAsAUCwB//9k=" aria-label="Animación: proyecto completo">
+      <source src="proyecto-completo-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"abl": {"11111": [23700, 21758, 42, 1781], "11110": [66333, 67208, 336, 1], "11101": [42462, 42412, 0, 5655], "11100": [25546, 22440, 63, 1312], "11011": [7504, 57848, 258, 833], "11010": [12996, 64000, 317, 80], "11001": [19050, 63240, 222, 2512], "11000": [6588, 58078, 271, 517], "10111": [23458, 21928, 37, 1937], "10110": [67000, 67622, 338, 3], "10101": [41421, 40118, 0, 5349], "10100": [25008, 22882, 63, 1371], "10011": [8388, 57525, 255, 870], "10010": [12267, 64348, 319, 73], "10001": [20625, 64225, 221, 2670], "10000": [6629, 58125, 270, 550], "01111": [21428, 22070, 40, 1876], "01110": [67394, 68008, 340, 1], "01101": [42461, 42428, 0, 5657], "01100": [23336, 22408, 58, 1441], "01011": [7442, 59810, 268, 828], "01010": [13906, 64595, 319, 106], "01001": [19667, 66960, 234, 2688], "01000": [6037, 59270, 274, 596], "00111": [22223, 20968, 31, 1969], "00110": [66436, 67615, 338, 2], "00101": [42461, 42428, 0, 5657], "00100": [24406, 22880, 58, 1504], "00011": [8065, 59335, 266, 818], "00010": [11411, 64840, 320, 112], "00001": [18853, 66495, 234, 2626], "00000": [6216, 59745, 276, 606], "nunca": 68600}, "prod": {"nada": [{"semana": 60, "coste": 16150, "avisos": 101, "averias": 21, "fn": 1, "fp": 81, "psi": 0.0294, "ks": 0.052, "p_media": 0.0607}, {"semana": 61, "coste": 16150, "avisos": 94, "averias": 14, "fn": 1, "fp": 81, "psi": 0.0769, "ks": 0.0782, "p_media": 0.0508}, {"semana": 62, "coste": 27100, "avisos": 86, "averias": 16, "fn": 4, "fp": 74, "psi": 0.0297, "ks": 0.0731, "p_media": 0.0496}, {"semana": 63, "coste": 17200, "avisos": 100, "averias": 13, "fn": 1, "fp": 88, "psi": 0.0303, "ks": 0.0352, "p_media": 0.0468}, {"semana": 64, "coste": 24000, "avisos": 99, "averias": 22, "fn": 3, "fp": 80, "psi": 0.0436, "ks": 0.0738, "p_media": 0.0538}, {"semana": 65, "coste": 23700, "avisos": 91, "averias": 16, "fn": 3, "fp": 78, "psi": 0.0214, "ks": 0.0403, "p_media": 0.0481}, {"semana": 66, "coste": 15400, "avisos": 93, "averias": 18, "fn": 1, "fp": 76, "psi": 0.0239, "ks": 0.0636, "p_media": 0.0461}, {"semana": 67, "coste": 19550, "avisos": 89, "averias": 14, "fn": 2, "fp": 77, "psi": 0.0274, "ks": 0.0605, "p_media": 0.047}, {"semana": 68, "coste": 20300, "avisos": 99, "averias": 19, "fn": 2, "fp": 82, "psi": 0.0548, "ks": 0.0749, "p_media": 0.0532}, {"semana": 69, "coste": 20900, "avisos": 97, "averias": 13, "fn": 2, "fp": 86, "psi": 0.0091, "ks": 0.024, "p_media": 0.0565}, {"semana": 70, "coste": 17350, "avisos": 102, "averias": 14, "fn": 1, "fp": 89, "psi": 0.0098, "ks": 0.041, "p_media": 0.0548}, {"semana": 71, "coste": 20600, "avisos": 108, "averias": 26, "fn": 2, "fp": 84, "psi": 0.0555, "ks": 0.0611, "p_media": 0.0605}, {"semana": 72, "coste": 21950, "avisos": 108, "averias": 17, "fn": 2, "fp": 93, "psi": 0.0199, "ks": 0.0261, "p_media": 0.0539}, {"semana": 73, "coste": 22400, "avisos": 113, "averias": 19, "fn": 2, "fp": 96, "psi": 0.0256, "ks": 0.0446, "p_media": 0.0618}, {"semana": 74, "coste": 20450, "avisos": 101, "averias": 20, "fn": 2, "fp": 83, "psi": 0.0274, "ks": 0.0365, "p_media": 0.0579}, {"semana": 75, "coste": 16750, "avisos": 97, "averias": 13, "fn": 1, "fp": 85, "psi": 0.0336, "ks": 0.0445, "p_media": 0.0507}, {"semana": 76, "coste": 30100, "avisos": 108, "averias": 18, "fn": 4, "fp": 94, "psi": 0.0421, "ks": 0.0379, "p_media": 0.0532}, {"semana": 77, "coste": 22550, "avisos": 109, "averias": 14, "fn": 2, "fp": 97, "psi": 0.0295, "ks": 0.0537, "p_media": 0.0538}, {"semana": 78, "coste": 25350, "avisos": 102, "averias": 16, "fn": 3, "fp": 89, "psi": 0.0137, "ks": 0.0328, "p_media": 0.0551}, {"semana": 79, "coste": 21800, "avisos": 110, "averias": 20, "fn": 2, "fp": 92, "psi": 0.013, "ks": 0.0289, "p_media": 0.055}, {"semana": 80, "coste": 39950, "avisos": 63, "averias": 18, "fn": 8, "fp": 53, "psi": 0.4659, "ks": 0.2968, "p_media": 0.0409}, {"semana": 81, "coste": 25450, "avisos": 70, "averias": 11, "fn": 4, "fp": 63, "psi": 0.3771, "ks": 0.2629, "p_media": 0.0379}, {"semana": 82, "coste": 27350, "avisos": 64, "averias": 20, "fn": 5, "fp": 49, "psi": 0.3065, "ks": 0.2388, "p_media": 0.0374}, {"semana": 83, "coste": 24700, "avisos": 69, "averias": 15, "fn": 4, "fp": 58, "psi": 0.3158, "ks": 0.2383, "p_media": 0.0388}, {"semana": 84, "coste": 27950, "avisos": 68, "averias": 20, "fn": 5, "fp": 53, "psi": 0.3787, "ks": 0.2712, "p_media": 0.0376}, {"semana": 85, "coste": 25300, "avisos": 71, "averias": 13, "fn": 4, "fp": 62, "psi": 0.4341, "ks": 0.2781, "p_media": 0.0373}, {"semana": 86, "coste": 32550, "avisos": 69, "averias": 18, "fn": 6, "fp": 57, "psi": 0.3491, "ks": 0.2619, "p_media": 0.0398}, {"semana": 87, "coste": 45150, "avisos": 75, "averias": 23, "fn": 9, "fp": 61, "psi": 0.3657, "ks": 0.2537, "p_media": 0.0453}, {"semana": 88, "coste": 28250, "avisos": 69, "averias": 19, "fn": 5, "fp": 55, "psi": 0.4487, "ks": 0.2901, "p_media": 0.0374}, {"semana": 89, "coste": 32250, "avisos": 70, "averias": 21, "fn": 6, "fp": 55, "psi": 0.4625, "ks": 0.2935, "p_media": 0.0404}, {"semana": 90, "coste": 31800, "avisos": 63, "averias": 17, "fn": 6, "fp": 52, "psi": 0.5555, "ks": 0.3127, "p_media": 0.0377}, {"semana": 91, "coste": 27800, "avisos": 59, "averias": 12, "fn": 5, "fp": 52, "psi": 0.4982, "ks": 0.2973, "p_media": 0.0356}, {"semana": 92, "coste": 28100, "avisos": 66, "averias": 17, "fn": 5, "fp": 54, "psi": 0.4944, "ks": 0.2987, "p_media": 0.0339}, {"semana": 93, "coste": 42600, "avisos": 54, "averias": 19, "fn": 9, "fp": 44, "psi": 0.508, "ks": 0.3133, "p_media": 0.0352}, {"semana": 94, "coste": 34600, "avisos": 51, "averias": 14, "fn": 7, "fp": 44, "psi": 0.4497, "ks": 0.2949, "p_media": 0.0326}, {"semana": 95, "coste": 31500, "avisos": 57, "averias": 13, "fn": 6, "fp": 50, "psi": 0.4233, "ks": 0.289, "p_media": 0.0381}, {"semana": 96, "coste": 35500, "avisos": 62, "averias": 19, "fn": 7, "fp": 50, "psi": 0.377, "ks": 0.2401, "p_media": 0.0365}, {"semana": 97, "coste": 51650, "avisos": 60, "averias": 20, "fn": 11, "fp": 51, "psi": 0.3838, "ks": 0.2593, "p_media": 0.0388}, {"semana": 98, "coste": 35650, "avisos": 60, "averias": 16, "fn": 7, "fp": 51, "psi": 0.437, "ks": 0.2933, "p_media": 0.033}, {"semana": 99, "coste": 16250, "avisos": 67, "averias": 14, "fn": 2, "fp": 55, "psi": 0.4715, "ks": 0.2814, "p_media": 0.0369}, {"semana": 100, "coste": 36400, "avisos": 64, "averias": 15, "fn": 7, "fp": 56, "psi": 0.3876, "ks": 0.2595, "p_media": 0.0323}, {"semana": 101, "coste": 45150, "avisos": 67, "averias": 15, "fn": 9, "fp": 61, "psi": 0.3361, "ks": 0.2297, "p_media": 0.0363}, {"semana": 102, "coste": 42200, "avisos": 83, "averias": 23, "fn": 8, "fp": 68, "psi": 0.2897, "ks": 0.2159, "p_media": 0.0438}, {"semana": 103, "coste": 31500, "avisos": 63, "averias": 19, "fn": 6, "fp": 50, "psi": 0.3945, "ks": 0.2616, "p_media": 0.0416}], "reentrenar": [{"semana": 60, "coste": 16150, "avisos": 101, "averias": 21, "fn": 1, "fp": 81, "psi": 0.0294, "ks": 0.052, "p_media": 0.0607}, {"semana": 61, "coste": 16150, "avisos": 94, "averias": 14, "fn": 1, "fp": 81, "psi": 0.0769, "ks": 0.0782, "p_media": 0.0508}, {"semana": 62, "coste": 27100, "avisos": 86, "averias": 16, "fn": 4, "fp": 74, "psi": 0.0297, "ks": 0.0731, "p_media": 0.0496}, {"semana": 63, "coste": 17200, "avisos": 100, "averias": 13, "fn": 1, "fp": 88, "psi": 0.0303, "ks": 0.0352, "p_media": 0.0468}, {"semana": 64, "coste": 24000, "avisos": 99, "averias": 22, "fn": 3, "fp": 80, "psi": 0.0436, "ks": 0.0738, "p_media": 0.0538}, {"semana": 65, "coste": 23700, "avisos": 91, "averias": 16, "fn": 3, "fp": 78, "psi": 0.0214, "ks": 0.0403, "p_media": 0.0481}, {"semana": 66, "coste": 15400, "avisos": 93, "averias": 18, "fn": 1, "fp": 76, "psi": 0.0239, "ks": 0.0636, "p_media": 0.0461}, {"semana": 67, "coste": 19550, "avisos": 89, "averias": 14, "fn": 2, "fp": 77, "psi": 0.0274, "ks": 0.0605, "p_media": 0.047}, {"semana": 68, "coste": 20300, "avisos": 99, "averias": 19, "fn": 2, "fp": 82, "psi": 0.0548, "ks": 0.0749, "p_media": 0.0532}, {"semana": 69, "coste": 20900, "avisos": 97, "averias": 13, "fn": 2, "fp": 86, "psi": 0.0091, "ks": 0.024, "p_media": 0.0565}, {"semana": 70, "coste": 17350, "avisos": 102, "averias": 14, "fn": 1, "fp": 89, "psi": 0.0098, "ks": 0.041, "p_media": 0.0548}, {"semana": 71, "coste": 20600, "avisos": 108, "averias": 26, "fn": 2, "fp": 84, "psi": 0.0555, "ks": 0.0611, "p_media": 0.0605}, {"semana": 72, "coste": 21950, "avisos": 108, "averias": 17, "fn": 2, "fp": 93, "psi": 0.0199, "ks": 0.0261, "p_media": 0.0539}, {"semana": 73, "coste": 22400, "avisos": 113, "averias": 19, "fn": 2, "fp": 96, "psi": 0.0256, "ks": 0.0446, "p_media": 0.0618}, {"semana": 74, "coste": 20450, "avisos": 101, "averias": 20, "fn": 2, "fp": 83, "psi": 0.0274, "ks": 0.0365, "p_media": 0.0579}, {"semana": 75, "coste": 16750, "avisos": 97, "averias": 13, "fn": 1, "fp": 85, "psi": 0.0336, "ks": 0.0445, "p_media": 0.0507}, {"semana": 76, "coste": 30100, "avisos": 108, "averias": 18, "fn": 4, "fp": 94, "psi": 0.0421, "ks": 0.0379, "p_media": 0.0532}, {"semana": 77, "coste": 22550, "avisos": 109, "averias": 14, "fn": 2, "fp": 97, "psi": 0.0295, "ks": 0.0537, "p_media": 0.0538}, {"semana": 78, "coste": 25350, "avisos": 102, "averias": 16, "fn": 3, "fp": 89, "psi": 0.0137, "ks": 0.0328, "p_media": 0.0551}, {"semana": 79, "coste": 21800, "avisos": 110, "averias": 20, "fn": 2, "fp": 92, "psi": 0.013, "ks": 0.0289, "p_media": 0.055}, {"semana": 80, "coste": 39950, "avisos": 63, "averias": 18, "fn": 8, "fp": 53, "psi": 0.4659, "ks": 0.2968, "p_media": 0.0409}, {"semana": 81, "coste": 25450, "avisos": 70, "averias": 11, "fn": 4, "fp": 63, "psi": 0.3771, "ks": 0.2629, "p_media": 0.0379}, {"semana": 82, "coste": 24250, "avisos": 71, "averias": 20, "fn": 4, "fp": 55, "psi": 0.3065, "ks": 0.2388, "p_media": 0.0418}, {"semana": 83, "coste": 26350, "avisos": 80, "averias": 15, "fn": 4, "fp": 69, "psi": 0.3158, "ks": 0.2383, "p_media": 0.0381}, {"semana": 84, "coste": 28400, "avisos": 71, "averias": 20, "fn": 5, "fp": 56, "psi": 0.3787, "ks": 0.2712, "p_media": 0.0385}, {"semana": 85, "coste": 26200, "avisos": 77, "averias": 13, "fn": 4, "fp": 68, "psi": 0.4341, "ks": 0.2781, "p_media": 0.0371}, {"semana": 86, "coste": 23400, "avisos": 91, "averias": 18, "fn": 3, "fp": 76, "psi": 0.3491, "ks": 0.2619, "p_media": 0.0446}, {"semana": 87, "coste": 34800, "avisos": 89, "averias": 23, "fn": 6, "fp": 72, "psi": 0.3657, "ks": 0.2537, "p_media": 0.0483}, {"semana": 88, "coste": 21600, "avisos": 80, "averias": 19, "fn": 3, "fp": 64, "psi": 0.4487, "ks": 0.2901, "p_media": 0.0399}, {"semana": 89, "coste": 29150, "avisos": 77, "averias": 21, "fn": 5, "fp": 61, "psi": 0.4625, "ks": 0.2935, "p_media": 0.045}, {"semana": 90, "coste": 33300, "avisos": 73, "averias": 17, "fn": 6, "fp": 62, "psi": 0.5555, "ks": 0.3127, "p_media": 0.0423}, {"semana": 91, "coste": 22650, "avisos": 80, "averias": 12, "fn": 3, "fp": 71, "psi": 0.4982, "ks": 0.2973, "p_media": 0.0385}, {"semana": 92, "coste": 21600, "avisos": 78, "averias": 17, "fn": 3, "fp": 64, "psi": 0.4944, "ks": 0.2987, "p_media": 0.0375}, {"semana": 93, "coste": 36250, "avisos": 67, "averias": 19, "fn": 7, "fp": 55, "psi": 0.508, "ks": 0.3133, "p_media": 0.0381}, {"semana": 94, "coste": 29300, "avisos": 71, "averias": 14, "fn": 5, "fp": 62, "psi": 0.4497, "ks": 0.2949, "p_media": 0.0365}, {"semana": 95, "coste": 21750, "avisos": 75, "averias": 13, "fn": 3, "fp": 65, "psi": 0.4233, "ks": 0.289, "p_media": 0.0438}, {"semana": 96, "coste": 21450, "avisos": 79, "averias": 19, "fn": 3, "fp": 63, "psi": 0.377, "ks": 0.2401, "p_media": 0.0428}, {"semana": 97, "coste": 42350, "avisos": 81, "averias": 20, "fn": 8, "fp": 69, "psi": 0.3838, "ks": 0.2593, "p_media": 0.0421}, {"semana": 98, "coste": 26650, "avisos": 83, "averias": 16, "fn": 4, "fp": 71, "psi": 0.437, "ks": 0.2933, "p_media": 0.0382}, {"semana": 99, "coste": 19700, "avisos": 90, "averias": 14, "fn": 2, "fp": 78, "psi": 0.4715, "ks": 0.2814, "p_media": 0.0426}, {"semana": 100, "coste": 31550, "avisos": 87, "averias": 15, "fn": 5, "fp": 77, "psi": 0.3876, "ks": 0.2595, "p_media": 0.0377}, {"semana": 101, "coste": 21650, "avisos": 104, "averias": 15, "fn": 2, "fp": 91, "psi": 0.3361, "ks": 0.2297, "p_media": 0.0438}, {"semana": 102, "coste": 30100, "avisos": 113, "averias": 23, "fn": 4, "fp": 94, "psi": 0.2897, "ks": 0.2159, "p_media": 0.0526}, {"semana": 103, "coste": 24000, "avisos": 96, "averias": 19, "fn": 3, "fp": 80, "psi": 0.3945, "ks": 0.2616, "p_media": 0.048}], "arreglar": [{"semana": 60, "coste": 16150, "avisos": 101, "averias": 21, "fn": 1, "fp": 81, "psi": 0.0294, "ks": 0.052, "p_media": 0.0607}, {"semana": 61, "coste": 16150, "avisos": 94, "averias": 14, "fn": 1, "fp": 81, "psi": 0.0769, "ks": 0.0782, "p_media": 0.0508}, {"semana": 62, "coste": 27100, "avisos": 86, "averias": 16, "fn": 4, "fp": 74, "psi": 0.0297, "ks": 0.0731, "p_media": 0.0496}, {"semana": 63, "coste": 17200, "avisos": 100, "averias": 13, "fn": 1, "fp": 88, "psi": 0.0303, "ks": 0.0352, "p_media": 0.0468}, {"semana": 64, "coste": 24000, "avisos": 99, "averias": 22, "fn": 3, "fp": 80, "psi": 0.0436, "ks": 0.0738, "p_media": 0.0538}, {"semana": 65, "coste": 23700, "avisos": 91, "averias": 16, "fn": 3, "fp": 78, "psi": 0.0214, "ks": 0.0403, "p_media": 0.0481}, {"semana": 66, "coste": 15400, "avisos": 93, "averias": 18, "fn": 1, "fp": 76, "psi": 0.0239, "ks": 0.0636, "p_media": 0.0461}, {"semana": 67, "coste": 19550, "avisos": 89, "averias": 14, "fn": 2, "fp": 77, "psi": 0.0274, "ks": 0.0605, "p_media": 0.047}, {"semana": 68, "coste": 20300, "avisos": 99, "averias": 19, "fn": 2, "fp": 82, "psi": 0.0548, "ks": 0.0749, "p_media": 0.0532}, {"semana": 69, "coste": 20900, "avisos": 97, "averias": 13, "fn": 2, "fp": 86, "psi": 0.0091, "ks": 0.024, "p_media": 0.0565}, {"semana": 70, "coste": 17350, "avisos": 102, "averias": 14, "fn": 1, "fp": 89, "psi": 0.0098, "ks": 0.041, "p_media": 0.0548}, {"semana": 71, "coste": 20600, "avisos": 108, "averias": 26, "fn": 2, "fp": 84, "psi": 0.0555, "ks": 0.0611, "p_media": 0.0605}, {"semana": 72, "coste": 21950, "avisos": 108, "averias": 17, "fn": 2, "fp": 93, "psi": 0.0199, "ks": 0.0261, "p_media": 0.0539}, {"semana": 73, "coste": 22400, "avisos": 113, "averias": 19, "fn": 2, "fp": 96, "psi": 0.0256, "ks": 0.0446, "p_media": 0.0618}, {"semana": 74, "coste": 20450, "avisos": 101, "averias": 20, "fn": 2, "fp": 83, "psi": 0.0274, "ks": 0.0365, "p_media": 0.0579}, {"semana": 75, "coste": 16750, "avisos": 97, "averias": 13, "fn": 1, "fp": 85, "psi": 0.0336, "ks": 0.0445, "p_media": 0.0507}, {"semana": 76, "coste": 30100, "avisos": 108, "averias": 18, "fn": 4, "fp": 94, "psi": 0.0421, "ks": 0.0379, "p_media": 0.0532}, {"semana": 77, "coste": 22550, "avisos": 109, "averias": 14, "fn": 2, "fp": 97, "psi": 0.0295, "ks": 0.0537, "p_media": 0.0538}, {"semana": 78, "coste": 25350, "avisos": 102, "averias": 16, "fn": 3, "fp": 89, "psi": 0.0137, "ks": 0.0328, "p_media": 0.0551}, {"semana": 79, "coste": 21800, "avisos": 110, "averias": 20, "fn": 2, "fp": 92, "psi": 0.013, "ks": 0.0289, "p_media": 0.055}, {"semana": 80, "coste": 39950, "avisos": 63, "averias": 18, "fn": 8, "fp": 53, "psi": 0.4659, "ks": 0.2968, "p_media": 0.0409}, {"semana": 81, "coste": 25450, "avisos": 70, "averias": 11, "fn": 4, "fp": 63, "psi": 0.3771, "ks": 0.2629, "p_media": 0.0379}, {"semana": 82, "coste": 27350, "avisos": 64, "averias": 20, "fn": 5, "fp": 49, "psi": 0.3065, "ks": 0.2388, "p_media": 0.0374}, {"semana": 83, "coste": 24700, "avisos": 69, "averias": 15, "fn": 4, "fp": 58, "psi": 0.3158, "ks": 0.2383, "p_media": 0.0388}, {"semana": 84, "coste": 27950, "avisos": 68, "averias": 20, "fn": 5, "fp": 53, "psi": 0.3787, "ks": 0.2712, "p_media": 0.0376}, {"semana": 85, "coste": 23150, "avisos": 112, "averias": 13, "fn": 2, "fp": 101, "psi": 0.1122, "ks": 0.0814, "p_media": 0.0553}, {"semana": 86, "coste": 27000, "avisos": 115, "averias": 18, "fn": 3, "fp": 100, "psi": 0.0786, "ks": 0.0893, "p_media": 0.0562}, {"semana": 87, "coste": 43450, "avisos": 119, "averias": 23, "fn": 7, "fp": 103, "psi": 0.1511, "ks": 0.1248, "p_media": 0.0647}, {"semana": 88, "coste": 26250, "avisos": 111, "averias": 19, "fn": 3, "fp": 95, "psi": 0.1319, "ks": 0.0886, "p_media": 0.0605}, {"semana": 89, "coste": 26550, "avisos": 115, "averias": 21, "fn": 3, "fp": 97, "psi": 0.1418, "ks": 0.0984, "p_media": 0.0595}, {"semana": 90, "coste": 25350, "avisos": 103, "averias": 17, "fn": 3, "fp": 89, "psi": 0.1802, "ks": 0.1112, "p_media": 0.0594}, {"semana": 91, "coste": 26250, "avisos": 104, "averias": 12, "fn": 3, "fp": 95, "psi": 0.1577, "ks": 0.1011, "p_media": 0.0628}, {"semana": 92, "coste": 16600, "avisos": 100, "averias": 17, "fn": 1, "fp": 84, "psi": 0.1691, "ks": 0.1008, "p_media": 0.0654}, {"semana": 93, "coste": 23550, "avisos": 93, "averias": 19, "fn": 3, "fp": 77, "psi": 0.1476, "ks": 0.0943, "p_media": 0.0664}, {"semana": 94, "coste": 31700, "avisos": 87, "averias": 14, "fn": 5, "fp": 78, "psi": 0.0686, "ks": 0.0992, "p_media": 0.0638}, {"semana": 95, "coste": 20150, "avisos": 92, "averias": 13, "fn": 2, "fp": 81, "psi": 0.0758, "ks": 0.0782, "p_media": 0.0679}, {"semana": 96, "coste": 19850, "avisos": 96, "averias": 19, "fn": 2, "fp": 79, "psi": 0.0968, "ks": 0.0819, "p_media": 0.0675}, {"semana": 97, "coste": 28750, "avisos": 101, "averias": 20, "fn": 4, "fp": 85, "psi": 0.1027, "ks": 0.102, "p_media": 0.0682}, {"semana": 98, "coste": 23850, "avisos": 92, "averias": 16, "fn": 3, "fp": 79, "psi": 0.0597, "ks": 0.0536, "p_media": 0.0547}, {"semana": 99, "coste": 17050, "avisos": 100, "averias": 14, "fn": 1, "fp": 87, "psi": 0.1415, "ks": 0.0937, "p_media": 0.0613}, {"semana": 100, "coste": 34550, "avisos": 107, "averias": 15, "fn": 5, "fp": 97, "psi": 0.0719, "ks": 0.0679, "p_media": 0.057}, {"semana": 101, "coste": 33650, "avisos": 101, "averias": 15, "fn": 5, "fp": 91, "psi": 0.0613, "ks": 0.0694, "p_media": 0.0601}, {"semana": 102, "coste": 34700, "avisos": 116, "averias": 23, "fn": 5, "fp": 98, "psi": 0.0869, "ks": 0.0973, "p_media": 0.0687}, {"semana": 103, "coste": 28450, "avisos": 98, "averias": 19, "fn": 4, "fp": 83, "psi": 0.0559, "ks": 0.0635, "p_media": 0.059}], "nunca": [{"semana": 60, "coste": 84000}, {"semana": 61, "coste": 56000}, {"semana": 62, "coste": 64000}, {"semana": 63, "coste": 52000}, {"semana": 64, "coste": 88000}, {"semana": 65, "coste": 64000}, {"semana": 66, "coste": 72000}, {"semana": 67, "coste": 56000}, {"semana": 68, "coste": 76000}, {"semana": 69, "coste": 52000}, {"semana": 70, "coste": 56000}, {"semana": 71, "coste": 104000}, {"semana": 72, "coste": 68000}, {"semana": 73, "coste": 76000}, {"semana": 74, "coste": 80000}, {"semana": 75, "coste": 52000}, {"semana": 76, "coste": 72000}, {"semana": 77, "coste": 56000}, {"semana": 78, "coste": 64000}, {"semana": 79, "coste": 80000}, {"semana": 80, "coste": 72000}, {"semana": 81, "coste": 44000}, {"semana": 82, "coste": 80000}, {"semana": 83, "coste": 60000}, {"semana": 84, "coste": 80000}, {"semana": 85, "coste": 52000}, {"semana": 86, "coste": 72000}, {"semana": 87, "coste": 92000}, {"semana": 88, "coste": 76000}, {"semana": 89, "coste": 84000}, {"semana": 90, "coste": 68000}, {"semana": 91, "coste": 48000}, {"semana": 92, "coste": 68000}, {"semana": 93, "coste": 76000}, {"semana": 94, "coste": 56000}, {"semana": 95, "coste": 52000}, {"semana": 96, "coste": 76000}, {"semana": 97, "coste": 80000}, {"semana": 98, "coste": 64000}, {"semana": 99, "coste": 56000}, {"semana": 100, "coste": 60000}, {"semana": 101, "coste": 60000}, {"semana": 102, "coste": 92000}, {"semana": 103, "coste": 76000}]}, "factor": 0.6931103066637828, "n_nuevos": 122, "edges": [1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.25, 4.5, 4.75, 5.0, 5.25, 5.5, 5.75, 6.0, 6.25, 6.5, 6.75, 7.0, 7.25, 7.5, 7.75, 8.0], "href": [2, 6, 16, 72, 157, 330, 607, 953, 1376, 1723, 1996, 2043, 2081, 1852, 1426, 1050, 634, 387, 150, 69, 24, 11, 2, 0, 0, 0, 0, 0], "hsem": [[0, 1, 1, 3, 1, 8, 9, 22, 27, 20, 29, 34, 36, 24, 27, 15, 13, 7, 6, 1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 6, 6, 16, 18, 15, 33, 37, 31, 41, 32, 19, 10, 5, 3, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 1, 2, 2, 9, 13, 17, 25, 23, 40, 43, 26, 29, 20, 14, 10, 4, 5, 1, 2, 0, 0, 0, 0, 0, 0, 0], [0, 0, 1, 3, 2, 5, 7, 27, 15, 28, 30, 38, 33, 38, 26, 10, 13, 4, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 0, 1, 2, 3, 9, 19, 25, 37, 27, 40, 28, 21, 30, 10, 14, 3, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 3, 5, 13, 16, 29, 24, 40, 29, 31, 33, 24, 18, 6, 5, 6, 1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 1, 2, 3, 3, 13, 17, 23, 33, 35, 40, 33, 27, 20, 19, 9, 5, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 1, 10, 10, 16, 25, 34, 35, 35, 33, 31, 24, 14, 6, 5, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 1, 3, 5, 8, 19, 27, 17, 37, 47, 41, 18, 21, 23, 10, 6, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 1, 1, 2, 6, 10, 20, 24, 27, 27, 38, 35, 32, 25, 10, 10, 5, 4, 3, 2, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 5, 2, 12, 11, 20, 31, 41, 29, 43, 30, 28, 16, 8, 5, 5, 2, 1, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 4, 4, 10, 15, 26, 16, 34, 32, 38, 32, 25, 25, 15, 8, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0], [0, 1, 2, 1, 4, 3, 7, 22, 20, 26, 37, 30, 37, 31, 27, 17, 8, 11, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 1, 5, 5, 11, 14, 29, 21, 32, 29, 29, 31, 28, 15, 10, 10, 3, 1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 1, 1, 3, 6, 11, 14, 28, 31, 32, 26, 32, 31, 20, 22, 10, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 1, 5, 8, 11, 18, 23, 30, 33, 30, 37, 24, 24, 23, 14, 6, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 3, 4, 9, 13, 20, 32, 41, 37, 28, 28, 31, 18, 14, 5, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 1, 1, 5, 10, 15, 26, 33, 31, 28, 34, 31, 26, 22, 13, 5, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 2, 8, 5, 17, 27, 25, 34, 34, 38, 35, 26, 15, 8, 11, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 1, 1, 0, 7, 9, 17, 18, 30, 38, 32, 30, 35, 26, 15, 12, 6, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0], [1, 0, 3, 8, 10, 19, 30, 30, 28, 32, 29, 20, 14, 19, 16, 6, 5, 2, 2, 0, 0, 1, 0, 0, 0, 0, 0, 0], [0, 0, 4, 5, 11, 19, 25, 27, 33, 30, 25, 28, 21, 12, 16, 10, 3, 6, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 2, 9, 9, 20, 25, 28, 32, 24, 31, 30, 20, 19, 18, 8, 5, 3, 2, 2, 1, 1, 0, 0, 0, 0, 0, 0], [0, 2, 4, 6, 14, 12, 22, 24, 33, 31, 32, 20, 21, 23, 11, 7, 8, 2, 3, 1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 3, 2, 7, 13, 15, 28, 31, 27, 35, 26, 23, 23, 14, 10, 16, 4, 4, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 2, 3, 9, 15, 26, 24, 29, 24, 25, 23, 23, 17, 27, 12, 10, 8, 2, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0], [0, 2, 2, 6, 16, 19, 24, 23, 27, 40, 25, 24, 23, 16, 11, 13, 4, 4, 0, 2, 1, 0, 0, 0, 0, 0, 0, 0], [0, 0, 3, 9, 9, 25, 28, 22, 29, 32, 18, 16, 28, 19, 14, 18, 8, 5, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0], [0, 3, 2, 8, 13, 25, 25, 37, 29, 23, 23, 25, 17, 21, 11, 11, 8, 2, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 2, 8, 15, 24, 22, 29, 34, 28, 26, 17, 19, 17, 8, 9, 9, 7, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0], [1, 0, 4, 8, 21, 24, 25, 29, 27, 33, 21, 15, 14, 25, 6, 10, 4, 8, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 4, 10, 12, 17, 38, 26, 32, 29, 24, 23, 15, 17, 17, 8, 3, 2, 1, 2, 1, 0, 0, 0, 0, 0, 0, 0], [0, 1, 3, 6, 17, 22, 29, 29, 33, 22, 26, 21, 18, 18, 8, 11, 9, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0], [2, 1, 1, 5, 20, 15, 30, 30, 32, 39, 28, 17, 12, 20, 11, 9, 7, 3, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0], [0, 0, 2, 6, 12, 20, 40, 35, 26, 29, 23, 26, 16, 21, 16, 10, 5, 1, 1, 2, 1, 0, 0, 0, 0, 0, 0, 0], [0, 0, 1, 11, 8, 20, 22, 37, 36, 32, 32, 17, 12, 23, 11, 10, 3, 6, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 3, 9, 11, 14, 24, 35, 22, 29, 33, 23, 13, 27, 13, 12, 5, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 2, 4, 5, 14, 16, 24, 33, 27, 33, 24, 22, 18, 14, 19, 11, 7, 1, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 3, 8, 10, 24, 21, 37, 37, 23, 23, 21, 29, 19, 9, 6, 10, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 1, 4, 8, 11, 17, 33, 33, 24, 26, 28, 28, 18, 16, 12, 5, 9, 1, 3, 1, 1, 0, 0, 0, 0, 0, 0, 0], [1, 3, 2, 9, 9, 15, 25, 31, 39, 20, 29, 32, 28, 15, 11, 9, 1, 5, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0], [0, 0, 3, 10, 9, 16, 23, 30, 31, 29, 22, 31, 26, 20, 12, 8, 5, 6, 2, 1, 0, 1, 0, 0, 0, 0, 0, 0], [0, 2, 5, 7, 15, 18, 19, 23, 24, 30, 29, 20, 22, 22, 16, 13, 5, 3, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0], [0, 3, 4, 4, 13, 26, 26, 26, 29, 21, 26, 27, 25, 14, 13, 15, 2, 3, 3, 0, 1, 0, 0, 0, 0, 0, 0, 0]]};
+const f1=(v,d)=>v.toFixed(d??1).replace(".",",").replace("-","−");
+const eur=v=>Math.round(v).toLocaleString("es-ES")+" €";
+const seg=(ids,cb)=>{const b=ids.map(i=>document.getElementById(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});};
+const A=D.abl,NUNCA=A.nunca;
+
+/* ---------- héroe ---------- */
+(function(){const S=[1,1,1,1,1],svg=document.getElementById("hero");
+  for(let k=0;k<5;k++)seg([`s${k}-1`,`s${k}-0`],i=>{S[k]=i===0?1:0;draw();});
+  function draw(){const [inf,real]=A[S.join("")],W=900,H=230,L=150,R=W-130,mx=75000,sx=v=>L+v/mx*(R-L);svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    [0,20000,40000,60000].forEach(v=>{el("line",{x1:sx(v),x2:sx(v),y1:14,y2:H-36,class:"g-line"},svg);txt(svg,sx(v),H-16,(v/1000)+" k€",{"text-anchor":"middle","font-size":12});});
+    [[inf,"informe","var(--sample)",50],[real,"de verdad","var(--mean)",130]].forEach(([v,l,c,y])=>{el("rect",{x:L,y:y-24,width:sx(v)-L,height:48,rx:6,fill:c},svg);txt(svg,L-12,y+5,l,{"text-anchor":"end","font-size":15,"font-weight":700,class:"t-ink"});txt(svg,sx(v)+10,y+6,eur(v),{"font-size":15,"font-weight":700,class:"t-ink"});});
+    el("line",{x1:sx(NUNCA),x2:sx(NUNCA),y1:10,y2:H-36,stroke:"var(--ink)","stroke-width":2,"stroke-dasharray":"6 4"},svg);txt(svg,sx(NUNCA)+6,H-40,"no avisar nunca",{"font-size":12});
+    const ah=1-real/NUNCA,gap=(real-inf)/real;
+    document.getElementById("h-big").innerHTML=`<div><b>${eur(inf)}</b><span>coste por semana según el informe</span></div><div><b>${eur(real)}</b><span>coste por semana de verdad (semanas 60-79)</span></div><div><b>${f1(ah*100,0)} %</b><span>ahorro real frente a no avisar (${eur(NUNCA)})</span></div>`;
+    const key=S.join("");let m;
+    if(key==="11111")m=`Todo bien hecho: el informe promete ${eur(inf)} por semana y la realidad da ${eur(real)}. Se parecen, y el modelo evita el <b>${f1(ah*100,0)} %</b> del coste de las averías. Esto es lo que buscamos: un informe que se cumple.`;
+    else if(!S[2])m=`El historial incluye la semana que se quiere predecir: si ese camión se averió, la columna ya lo "sabe". El informe promete <b>${eur(inf)}</b> por semana, un modelo casi perfecto. En la realidad, el lunes esa semana aún no ha pasado, la columna no trae la pista y el coste es <b>${eur(real)}</b>: ${real>NUNCA*0.8?"casi":"bastante"} como no tener modelo. Es una fuga (temas 1 y 7): no da ningún error, solo un informe falso.`;
+    else if(!S[3]&&S[4])m=`Reequilibrar infla los riesgos (cada avería pesó como muchos camiones sanos), y el límite por costes, del 3,6 %, está pensado para riesgos realistas. Resultado: casi todos los camiones pasan del límite y la factura sube a <b>${eur(real)}</b> por semana, casi el doble que haciéndolo bien (${eur(A["11111"][1])}), casi todo en revisiones innecesarias. Si se reequilibra, hay que corregir los riesgos (tema 6).`;
+    else if(!S[3]&&!S[4])m=`Curioso: reequilibrar con el límite del 50 % funciona (${eur(real)} por semana), porque los riesgos inflados compensan un límite demasiado alto. Funciona por casualidad: los riesgos no significan lo que dicen y el límite no se ha elegido con los costes. Basta cambiar uno de los dos para que se rompa.`;
+    else if(!S[4])m=`Con el límite del 50 %, el modelo casi no manda camiones al taller: se escapan casi todas las averías y el coste, ${eur(real)} por semana, es prácticamente el de no avisar nunca. El modelo ordena bien los camiones; el problema es solo dónde se corta (tema 6).`;
+    else{const b=A["11111"][1];m=`Respecto a hacerlo todo bien (${eur(b)} por semana de verdad), esta combinación cuesta <b>${eur(real)}</b>: ${real>b?eur(real-b)+" más cada semana, "+eur((real-b)*52)+" al año":"casi lo mismo"}. ${!S[0]?`Sin limpiar, el informe dice ${eur(inf)}: los mensajes repetidos y las temperaturas imposibles también engañan al examen. `:""}${!S[1]?"Sin la columna de huecos se pierde la pista de que el sensor suele fallar antes de una avería. ":""}Son pasos con menos efecto que una fuga, pero de los que se pagan cada semana.`;}
+    document.getElementById("h-msg").innerHTML=m;}
+  draw();})();
+
+/* ---------- idea 2: vigilancia ---------- */
+(function(){const P=D.prod.nada,N=D.prod.nunca,E=D.edges,iw=document.getElementById("d-w"),svg=document.getElementById("dist");
+  const nr=D.href.reduce((s,v)=>s+v,0),ref=D.href.map(v=>v/nr);
+  const ser=new Plot(document.getElementById("series"),{W:900,H:260,pad:{l:52,r:52,t:16,b:40},x0:59.5,x1:103.5,y0:0,y1:140,xt:[60,70,80,90,100],fx:v=>"sem. "+v,yt:[0,35,70,105,140],fy:v=>v,xl:""});
+  const py=v=>ser.sy(v/0.6*140);
+  P.forEach(r=>el("rect",{x:ser.sx(r.semana-0.38),y:ser.sy(r.avisos),width:ser.sx(0.76)-ser.sx(0),height:ser.sy(0)-ser.sy(r.avisos),fill:"var(--mean)","fill-opacity":.55},ser.g));
+  el("line",{x1:ser.sx(59.5),x2:ser.sx(103.5),y1:py(0.25),y2:py(0.25),stroke:"var(--warn)","stroke-width":1.5,"stroke-dasharray":"4 4"},ser.g);
+  el("path",{d:"M"+P.map(r=>`${ser.sx(r.semana).toFixed(1)} ${py(Math.min(r.psi,0.6)).toFixed(1)}`).join("L"),fill:"none",stroke:"var(--warn)","stroke-width":3},ser.g);
+  [0,0.2,0.4,0.6].forEach(v=>txt(ser.top,900-46,py(v)+4,f1(v,1),{"font-size":12,style:"fill:var(--warn)"}));
+  const mark=el("line",{stroke:"var(--ink)","stroke-width":2},ser.top);
+  function draw(){const w=+iw.value,k=w-60,r=P[k],hs=D.hsem[k],ns=hs.reduce((s,v)=>s+v,0),act=hs.map(v=>v/ns);svg.textContent="";
+    const pl=new Plot(svg,{W:900,H:260,pad:{l:52,r:16,t:16,b:40},x0:1,x1:8,y0:0,y1:0.16,xt:[1,2,3,4,5,6,7,8],fx:v=>v+"",yt:[0,0.05,0.1,0.15],fy:v=>Math.round(v*100)+"%",xl:"vibración medida (mm/s)",yl:"camiones"});
+    let d="M"+pl.sx(E[0])+" "+pl.sy(0);ref.forEach((v,i)=>{d+=`L${pl.sx(E[i])} ${pl.sy(v)}L${pl.sx(E[i+1])} ${pl.sy(v)}`;});d+=`L${pl.sx(E[E.length-1])} ${pl.sy(0)}Z`;el("path",{d,fill:"var(--muted)","fill-opacity":.3},pl.g);
+    let d2="";act.forEach((v,i)=>{d2+=(i?"L":"M")+`${pl.sx(E[i])} ${pl.sy(v)}L${pl.sx(E[i+1])} ${pl.sy(v)}`;});el("path",{d:d2,fill:"none",stroke:"var(--point)","stroke-width":3},pl.g);
+    mark.setAttribute("x1",ser.sx(w));mark.setAttribute("x2",ser.sx(w));mark.setAttribute("y1",ser.sy(140));mark.setAttribute("y2",ser.sy(0));
+    document.getElementById("d-w-o").textContent=w;
+    const prev=P.slice(Math.max(0,k-4),Math.max(0,k-0)).filter(x=>x.semana<w-0),cs=prev.reduce((s,x)=>s+x.coste,0),ns2=N.slice(Math.max(0,k-4),k).reduce((s,x)=>s+x.coste,0),ah=prev.length?1-cs/ns2:null;
+    const base=P.slice(0,20).reduce((s,x)=>s+x.avisos,0)/20;
+    document.getElementById("d-dash").innerHTML=`<div class="${r.psi>0.25?"bad":r.psi>0.1?"":"ok"}"><b>${f1(r.psi,2)}</b><span>índice de cambio de la vibración</span></div><div class="${Math.abs(r.avisos/base-1)>0.25?"bad":"ok"}"><b>${r.avisos}</b><span>camiones al taller (normal: ~${Math.round(base)})</span></div><div><b>${ah==null?"—":f1(ah*100,0)+" %"}</b><span>ahorro en las 4 semanas anteriores</span></div>`;
+    let m;if(w<80)m=`Semana ${w}: la vibración se reparte como en el entrenamiento (índice ${f1(r.psi,2)}, por debajo de 0,1) y el modelo manda unos ${r.avisos} camiones al taller, lo normal. Todo en calma. Mueve el control a la semana 80.`;
+    else if(w<=81)m=`Semana ${w}: la línea naranja se ha ido hacia la izquierda y el índice salta a <b>${f1(r.psi,2)}</b>, muy por encima de 0,25. A la vez, los avisos caen a <b>${r.avisos}</b>. Las averías de esta semana aún no se conocen, pero estas dos señales ya dicen que algo ha cambiado en los datos: la vibración "baja" de golpe en muchos camiones a la vez, y los motores no se arreglan solos.`;
+    else m=`Semana ${w}: el índice sigue alto (${f1(r.psi,2)}) y los avisos, bajos (${r.avisos}). Con el retraso de las averías ya se ve el efecto: el ahorro de las 4 semanas anteriores es del ${ah==null?"—":f1(ah*100,0)+" %"}, frente a un 69 % antes del cambio. Se escapan averías de los camiones con la caja nueva, que parecen más sanos de lo que están.`;
+    document.getElementById("d-msg").innerHTML=m;}
+  iw.addEventListener("input",draw);draw();})();
+
+/* ---------- idea 3: reacciones ---------- */
+(function(){const K=[["No hacer nada","nada"],["Reentrenar cada 4 semanas","reentrenar"],["Arreglar el dato","arreglar"]],N=D.prod.nunca;let cur=0;const box=document.getElementById("r-chips"),bs=[];
+  K.forEach(([lab],i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=lab;b.setAttribute("aria-pressed",String(i===0));b.onclick=()=>{cur=i;bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));draw();};box.appendChild(b);bs.push(b);});
+  const sav=k=>{const X=D.prod[k];return X.map((r,i)=>{const a=Math.max(0,i-3),c=X.slice(a,i+1).reduce((s,x)=>s+x.coste,0),n=N.slice(a,i+1).reduce((s,x)=>s+x.coste,0);return [r.semana,1-c/n];});};
+  const per=(k,a,b)=>{const X=D.prod[k].filter(r=>r.semana>=a&&r.semana<=b),n=N.filter(r=>r.semana>=a&&r.semana<=b);return 1-X.reduce((s,x)=>s+x.coste,0)/n.reduce((s,x)=>s+x.coste,0);};
+  function draw(){const svg=document.getElementById("react");svg.textContent="";const pl=new Plot(svg,{W:900,H:300,pad:{l:52,r:16,t:16,b:40},x0:60,x1:103,y0:0.3,y1:0.85,xt:[60,70,80,90,100],fx:v=>"sem. "+v,yt:[0.3,0.4,0.5,0.6,0.7,0.8],fy:v=>Math.round(v*100)+"%",xl:"",yl:"ahorro frente a no avisar"});
+    el("line",{x1:pl.sx(80),x2:pl.sx(80),y1:pl.sy(0.85),y2:pl.sy(0.3),stroke:"var(--ink)","stroke-width":1.5,"stroke-dasharray":"4 4"},pl.g);
+    el("path",{d:pl.ppath(sav("nada")),fill:"none",stroke:"var(--muted)","stroke-width":3},pl.g);
+    if(cur)el("path",{d:pl.ppath(sav(K[cur][1])),fill:"none",stroke:cur===1?"var(--sample)":"var(--good)","stroke-width":3.5},pl.g);
+    const b0=per("nada",60,79),k=K[cur][1],a1=per(k,80,87),a2=per(k,88,103),n2=per("nada",88,103);
+    document.getElementById("r-msg").innerHTML=[`Sin hacer nada, el ahorro baja del ${f1(b0*100,0)} % antes del cambio al ${f1(per("nada",88,103)*100,0)} % en las semanas 88-103. El modelo sigue funcionando a medias en los camiones de siempre y falla en los de la caja nueva. Nadie recibe un mensaje de error.`,
+      `Reentrenar con los datos nuevos ayuda: ${f1(a2*100,0)} % de ahorro en las semanas 88-103, frente a ${f1(n2*100,0)} % sin hacer nada. Pero el modelo aprende de una mezcla de dos sensores sin saber cuál es cuál, y no vuelve al ${f1(b0*100,0)} % de antes. Reentrenar a ciegas tapa el problema sin entenderlo.`,
+      `Arreglar el dato necesita unas semanas para calcular la corrección (las semanas 80-84 siguen como sin hacer nada), pero luego el ahorro sube al ${f1(a2*100,0)} %, el mejor de los tres. Comparando cada camión con sus propias semanas anteriores se encontraron ${D.n_nuevos} camiones con la caja nueva y un factor de ${f1(D.factor,2)} (el real es 0,70). El mismo modelo vuelve a funcionar porque vuelve a recibir los datos que entiende.`][cur];}
+  draw();})();
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Regresión lineal y polinomial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Serie ML visual · explicado sin fórmulas · <a href="regresion-lineal-polinomial-tecnico-es.html" target="_self">ver la versión técnica</a> · <a href="serie-ml-visual-es.html" target="_self">todos los temas</a> · <a href="linear-and-polynomial-regression-en.html" target="_self">in English</a></p>
+  <h1>Regresión lineal y polinomial</h1>
+  <p class="lede">Cómo encontrar la línea (o la curva) que mejor resume un montón de puntos, y por qué la curva más complicada casi nunca es la mejor.</p>
+</header>
+
+<section class="first" aria-label="Juguete interactivo">
+  <div class="fig"><svg id="hero" role="img" aria-label="Gráfico interactivo: puntos, la curva ajustada y los errores de cada punto"></svg></div>
+  <div class="legend">
+    <span><svg viewBox="0 0 28 14"><circle cx="14" cy="7" r="5" fill="var(--point)"/></svg>Lo que medimos (datos)</span>
+    <span><svg viewBox="0 0 28 14"><path d="M2 7H26" stroke="var(--mean)" stroke-width="3"/></svg>La curva que resume los datos</span>
+    <span><svg viewBox="0 0 28 14"><path d="M14 1V13" stroke="var(--sample)" stroke-width="2.5"/></svg>El error en cada punto</span>
+  </div>
+  <p class="status" id="h-status"></p>
+  <div class="controls">
+    <div class="slider">
+      <label for="h-g">Flexibilidad de la curva (grado) <output id="h-g-o"></output></label>
+      <input type="range" id="h-g" min="1" max="10" step="1" value="2">
+      <div class="ends"><span>recta</span><span>muy flexible</span></div>
+    </div>
+    <div class="btns">
+      <button type="button" id="h-res" aria-pressed="true">Mostrar errores</button>
+      <button type="button" id="h-undo">Quitar el último</button>
+      <button type="button" id="h-clear">Borrar todo</button>
+      <button type="button" id="h-ex">Volver al ejemplo</button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Antes de empezar</p>
+    <h2>Algo que tú ya sabes hacer</h2>
+    <p>Mira estos viajes en taxi. Cada punto es un viaje: cuántos kilómetros recorrió y cuánto costó.</p>
+    <p>Sin hacer ninguna cuenta, ya ves una tendencia: <strong>mientras más lejos, más caro</strong>. Si alguien te pregunta cuánto costaría un viaje de 7 km, mirarías los puntos y dirías <em>"más o menos 11 o 12 dólares"</em>.</p>
+  </div>
+  <figure class="fig">
+    <svg id="taxi" role="img" aria-label="Viajes en taxi: kilómetros contra precio, con una línea trazada a ojo y una pregunta en 7 km"></svg>
+    <figcaption>Trazaste una línea imaginaria entre los puntos y la usaste para responder. Eso es una regresión.</figcaption>
+  </figure>
+  <p class="col note">La regresión hace lo mismo que tu ojo, pero con una regla precisa para decidir <strong>cuál</strong> es la mejor línea. Así dos personas distintas obtienen siempre la misma respuesta.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 5</p>
+    <h2>Una recta tiene solo dos perillas</h2>
+    <p>Cualquier recta se describe con dos números:</p>
+    <ul class="pc">
+      <li><strong>Inclinación:</strong> cuánto sube el precio por cada kilómetro extra.</li>
+      <li><strong>Punto de partida:</strong> cuánto cuesta el viaje antes de moverse (la "bajada de bandera").</li>
+    </ul>
+    <p>Mueve las dos perillas y trata de que la recta pase lo más cerca posible de todos los puntos. Las líneas violetas son los <strong>errores</strong>: la distancia entre lo que dice la recta y lo que pasó de verdad.</p>
+  </div>
+  <div class="lab">
+    <figure class="fig"><svg id="manual" role="img" aria-label="Recta ajustable a mano sobre los viajes en taxi, con los errores dibujados"></svg></figure>
+    <div class="stack">
+      <div class="slider"><label for="m-a">Inclinación <output id="m-a-o"></output></label><input type="range" id="m-a" min="0" max="2.5" step="0.01" value="0.6"><div class="ends"><span>plana</span><span>empinada</span></div></div>
+      <div class="slider"><label for="m-b">Punto de partida <output id="m-b-o"></output></label><input type="range" id="m-b" min="0" max="8" step="0.05" value="5"><div class="ends"><span>$0</span><span>$8</span></div></div>
+      <div class="btns"><button type="button" id="m-sq" aria-pressed="false">Ver errores como cuadrados</button></div>
+      <div class="meter"><span>Tu error total: <b class="num" id="m-err"></b></span><div class="bar"><i id="m-bar"></i></div></div>
+      <div class="meter"><span>El mínimo posible: <b class="num" id="m-best"></b></span><div class="bar best"><i id="m-bbar"></i></div></div>
+      <button type="button" class="primary" id="m-auto">Que lo haga la máquina</button>
+      <p class="status" id="m-msg"></p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 5</p>
+    <h2>"La mejor" significa: errores al cuadrado lo más pequeños posible</h2>
+    <p>Para comparar rectas hay que convertir todos los errores en un solo número. La regla más usada se llama <strong>mínimos cuadrados</strong>:</p>
+    <ol class="steps">
+      <li><div>Mide el error de cada punto (la línea violeta).</div></li>
+      <li><div>Eleva cada error al cuadrado. Literalmente, dibuja un cuadrado con ese lado (activa "Ver errores como cuadrados" arriba).</div></li>
+      <li><div>Suma las áreas de todos los cuadrados. La mejor recta es la que deja <strong>el área total más pequeña</strong>.</div></li>
+    </ol>
+    <p>¿Por qué al cuadrado? Por dos razones sencillas. Un error hacia arriba y otro hacia abajo no se cancelan (los dos cuadrados suman). Y un error grande pesa mucho más que varios pequeños: un error de 4 es un cuadrado de 16, mientras que dos errores de 2 son solo 4 + 4 = 8. La recta prefiere equivocarse un poco en todos que muchísimo en uno.</p>
+    <p class="note">Lo bonito es que la máquina no prueba rectas al azar. Hay una cuenta exacta que da la mejor recta de una sola vez, aunque tengas millones de puntos. Por eso la regresión lineal es tan rápida y tan usada.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 5</p>
+    <h2>Cuando los datos se curvan: la parábola</h2>
+    <p>No todo sigue una recta. La <strong>distancia que necesita un coche para frenar</strong> crece mucho más rápido que la velocidad: a 120 km/h necesitas casi el doble que a 80, no un 50 % más.</p>
+    <p>Si le pones una recta a esos datos, la recta se equivoca <em>de forma ordenada</em>: por arriba en los extremos y por abajo en el medio. Cuando los errores forman un patrón (aquí, una "sonrisa"), es la señal de que la forma está mal elegida.</p>
+  </div>
+  <div class="grid2">
+    <figure class="fig"><svg id="brakeA" role="img" aria-label="Recta ajustada a distancias de frenado: los errores forman un patrón"></svg><figcaption><strong>Recta.</strong> Los errores siguen un patrón: falla sistemáticamente.</figcaption></figure>
+    <figure class="fig"><svg id="brakeB" role="img" aria-label="Parábola ajustada a distancias de frenado: los errores son pequeños y sin patrón"></svg><figcaption><strong>Parábola (grado 2).</strong> Los errores son pequeños y sin orden.</figcaption></figure>
+  </div>
+  <p class="col">La parábola es una recta con una perilla extra: <strong>cuánto se dobla</strong>. Con tres perillas puede seguir una curva en forma de U o de arco. La forma de encontrarla es exactamente la misma: mínimos cuadrados.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 de 5</p>
+    <h2>Más perillas, más flexible: la regresión polinomial</h2>
+    <p>Puedes seguir añadiendo perillas. Cada una permite una "vuelta" más en la curva. A esto se le llama el <strong>grado</strong>: grado 1 es una recta, grado 2 una parábola, grado 3 una curva con forma de S, y así sucesivamente.</p>
+  </div>
+  <div class="grid4" id="degs"></div>
+  <p class="col">Con suficientes perillas, la curva puede pasar <strong>exactamente</strong> por todos los puntos. Parece perfecto, ¿verdad? Mira la siguiente idea.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 de 5</p>
+    <h2>La trampa: memorizar no es aprender</h2>
+    <p>Imagina un estudiante que se aprende de memoria las respuestas del examen de práctica. En ese examen saca 10. En el examen real, con preguntas nuevas, suspende.</p>
+    <p>Una curva demasiado flexible hace lo mismo: se dobla para tocar cada punto, incluido el ruido (los pequeños errores de medición). Con <strong>datos nuevos</strong> (los círculos huecos), falla. A esto se le llama <strong>sobreajuste</strong>.</p>
+  </div>
+  <div class="lab">
+    <figure class="fig"><svg id="over" role="img" aria-label="Curva ajustada con datos de entrenamiento y datos nuevos"></svg></figure>
+    <figure class="fig"><svg id="overerr" role="img" aria-label="Error con datos conocidos y con datos nuevos según el grado"></svg>
+      <figcaption id="over-cap"></figcaption></figure>
+  </div>
+  <div class="slider col"><label for="o-g">Grado <output id="o-g-o"></output></label><input type="range" id="o-g" min="1" max="12" step="1" value="2"><div class="ends"><span>1</span><span>12</span></div></div>
+  <div class="legend">
+    <span><svg viewBox="0 0 28 14"><circle cx="14" cy="7" r="5" fill="var(--point)"/></svg>Datos para aprender</span>
+    <span><svg viewBox="0 0 28 14"><circle cx="14" cy="7" r="4.5" fill="var(--surface)" stroke="var(--sample)" stroke-width="2.5"/></svg>Datos nuevos (el examen real)</span>
+  </div>
+  <p class="col note"><strong>La regla de oro:</strong> nunca juzgues un modelo con los mismos datos que usó para aprender. Guarda una parte aparte y mira cómo le va con ella. Elige el grado donde el error con datos nuevos es más bajo, no donde la curva se ve más "perfecta".</p>
+  <div class="col stack">
+    <h3>Y cuidado fuera de los datos</h3>
+    <p>Las curvas de grado alto se vuelven locas fuera de la zona donde hay datos. Aquí las tres curvas se parecen entre 2 y 6, pero fuera de ese tramo cada una dice algo muy distinto. Usar la curva para adivinar fuera de lo medido se llama <strong>extrapolar</strong>, y es peligroso.</p>
+  </div>
+  <figure class="fig"><svg id="extra" role="img" aria-label="Tres curvas de distinto grado que coinciden en los datos y divergen fuera de ellos"></svg>
+    <figcaption>Recta (azul), parábola (violeta discontinua) y grado 6 (naranja). La zona sombreada es donde había datos.</figcaption></figure>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta completa</h2>
+    <ol class="steps">
+      <li><div><strong>Dibuja los datos.</strong> Antes de nada, mira si la tendencia es recta o curva.</div></li>
+      <li><div><strong>Separa un grupo de datos de prueba.</strong> No los toques hasta el final.</div></li>
+      <li><div><strong>Empieza simple:</strong> una recta. Ajústala con mínimos cuadrados.</div></li>
+      <li><div><strong>Mira los errores.</strong> Si forman un patrón, sube el grado (2, luego 3).</div></li>
+      <li><div><strong>Compara con los datos de prueba</strong> y quédate con el grado más simple que funcione bien.</div></li>
+      <li><div><strong>Úsala solo dentro del rango de tus datos.</strong></div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>¿Para qué se usa?</h2>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 32 20 8l14 24Z"/><path d="M14 32v-8h12v8"/></svg>
+      <h3>Precio de una vivienda</h3>
+      <p>Cuánto sube el precio por cada metro cuadrado extra. Es el ejemplo clásico de regresión lineal y la base de muchos tasadores automáticos.</p>
+    </div>
+    <div class="card">
+      <svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M5 12c6 22 24 22 30 0"/><circle cx="20" cy="27" r="2.5"/></svg>
+      <h3>Consumo de combustible según la velocidad</h3>
+      <p>Un camión gasta mucho a muy baja velocidad y también a muy alta. La curva tiene forma de U y una parábola encuentra la velocidad más eficiente. La versión técnica resuelve este caso paso a paso.</p>
+    </div>
+    <div class="card">
+      <svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="8" y="6" width="24" height="28" rx="3"/><path d="M14 26l5-6 4 3 5-8"/></svg>
+      <h3>Calibrar sensores</h3>
+      <p>Un sensor barato mide un poco mal y de forma predecible. Se compara con uno de referencia y una regresión (a veces de grado 2 o 3) corrige sus lecturas.</p>
+    </div>
+    <div class="card">
+      <svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M5 33h30"/><path d="M8 28l7-6 6 3 11-12"/><path d="M27 13h5v5"/></svg>
+      <h3>Tendencias y planificación</h3>
+      <p>Cuántas ventas, viajes o kilómetros esperar el mes que viene si la tendencia sigue igual. Útil como primera aproximación, siempre recordando el peligro de extrapolar.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo bueno y lo no tan bueno</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Lo bueno</h3><ul class="pc">
+      <li>Muy <strong>rápida</strong>: la mejor curva sale de una cuenta exacta, sin prueba y error.</li>
+      <li>Muy <strong>fácil de explicar</strong>: "por cada km extra, el precio sube 1.20 dólares".</li>
+      <li>Funciona bien con pocos datos si la forma elegida es la correcta.</li>
+      <li>Es la base de muchos modelos más avanzados.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Lo no tan bueno</h3><ul class="pc">
+      <li>Tú eliges la forma (recta, parábola…). Si eliges mal, se equivoca de forma sistemática.</li>
+      <li>Los grados altos <strong>sobreajustan</strong> y se vuelven locos fuera de los datos.</li>
+      <li>Un solo punto muy raro (un dato mal medido) puede torcer toda la recta, porque los errores grandes pesan al cuadrado.</li>
+      <li>Encuentra relaciones, no causas: que dos cosas suban juntas no significa que una provoque la otra.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Regresión</dt><dd>Encontrar una línea o curva que resume cómo cambia un número cuando cambia otro.</dd>
+      <dt>Pendiente</dt><dd>La inclinación de la recta: cuánto sube la salida por cada unidad que sube la entrada.</dd>
+      <dt>Intercepto</dt><dd>El punto de partida: el valor de la recta cuando la entrada es cero.</dd>
+      <dt>Residuo</dt><dd>El error en un punto: lo medido menos lo que dice la curva.</dd>
+      <dt>Mínimos cuadrados</dt><dd>La regla que elige la curva con la menor suma de errores al cuadrado.</dd>
+      <dt>Grado</dt><dd>Cuántas vueltas puede dar la curva. 1 = recta, 2 = parábola.</dd>
+      <dt>Sobreajuste</dt><dd>Cuando la curva memoriza los datos (incluido el ruido) y falla con datos nuevos.</dd>
+      <dt>R²</dt><dd>Un número entre 0 y 1 que dice qué parte de la variación de los datos explica la curva. 1 es perfecto.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: las fórmulas detrás de todo</summary>
+    <p style="padding-top:10px">No hacen falta para entender la idea:</p>
+    <div class="formula">recta:      y = a·x + b
+parábola:   y = a·x² + b·x + c
+grado d:    y = c₀ + c₁·x + c₂·x² + … + c_d·xᵈ
+
+mínimos cuadrados: elegir los coeficientes que minimizan
+            Σ (yᵢ − curva(xᵢ))²</div>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2>Todo en 40 segundos</h2>
+    <p>Un repaso animado: la recta que busca su mejor posición, los errores al cuadrado, la parábola y la trampa del sobreajuste. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABIqoEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgP//Z" aria-label="Animación: regresión lineal y polinomial">
+      <source src="regresion-lineal-polinomial-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+const NS="http://www.w3.org/2000/svg";
+let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+
+/* mínimos cuadrados polinomiales (x escalado a [-1,1], ecuaciones normales + Cholesky) */
+function polyfit(xs,ys,deg,lam){
+  const n=xs.length;if(!n)return x=>0;
+  const lo=Math.min(...xs),hi=Math.max(...xs),cx=(lo+hi)/2,s=Math.max((hi-lo)/2,1e-6);
+  const my=ys.reduce((a,b)=>a+b,0)/n,p=deg+1,A=new Float64Array(p*p),b=new Float64Array(p);
+  for(let i=0;i<n;i++){const u=(xs[i]-cx)/s,pw=[1];for(let j=1;j<p;j++)pw.push(pw[j-1]*u);for(let j=0;j<p;j++){b[j]+=pw[j]*(ys[i]-my);for(let k=0;k<p;k++)A[j*p+k]+=pw[j]*pw[k];}}
+  for(let j=0;j<p;j++)A[j*p+j]+=(lam||0)+1e-9;
+  const L=new Float64Array(p*p);
+  for(let i=0;i<p;i++)for(let j=0;j<=i;j++){let t=A[i*p+j];for(let k=0;k<j;k++)t-=L[i*p+k]*L[j*p+k];if(i===j)L[i*p+i]=Math.sqrt(Math.max(t,1e-14));else L[i*p+j]=t/L[j*p+j];}
+  const z=new Float64Array(p);for(let i=0;i<p;i++){let t=b[i];for(let k=0;k<i;k++)t-=L[i*p+k]*z[k];z[i]=t/L[i*p+i];}
+  const c=new Float64Array(p);for(let i=p-1;i>=0;i--){let t=z[i];for(let k=i+1;k<p;k++)t-=L[k*p+i]*c[k];c[i]=t/L[i*p+i];}
+  return x=>{const u=(x-cx)/s;let v=0;for(let j=p-1;j>=0;j--)v=v*u+c[j];return my+v;};
+}
+const rmse=(f,P)=>Math.sqrt(P.reduce((a,p)=>a+(p[1]-f(p[0]))**2,0)/Math.max(P.length,1));
+
+/* lienzo con escala */
+class Plot{
+  constructor(svg,o){
+    this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:44,r:16,t:16,b:34},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fmtx:v=>v,fmty:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+    const id="c"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-8,this.sy(v)+4,this.o.fmty(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+20,this.o.fmtx(v),{"text-anchor":"middle","font-size":12});
+    el("line",{x1:pad.l,x2:W-pad.r,y1:H-pad.b,y2:H-pad.b,class:"g-axis"},this.gGrid);
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-4,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});
+    if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":`url(#${id})`},svg);this.top=el("g",null,svg);
+  }
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||200;const span=this.o.y1-this.o.y0;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;let y=f(x);y=Math.max(this.o.y0-span*3,Math.min(this.o.y1+span*3,y));d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(y).toFixed(1);}return d;}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+function residuals(pl,g,f,P,squares){
+  for(const [x,y] of P){const X=pl.sx(x),Y=pl.sy(y),Yf=pl.sy(f(x));
+    if(squares){const s=Math.abs(Y-Yf),right=X+s<pl.o.W-pl.o.pad.r;el("rect",{x:right?X:X-s,y:Math.min(Y,Yf),width:s,height:s,class:"p-sq"},g);}
+    el("line",{x1:X,x2:X,y1:Y,y2:Yf,class:"p-res"},g);}
+}
+function dots(pl,g,P,cls,r){for(const [x,y] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||7,class:cls||"p-point"},g);}
+const gname=d=>d===1?"recta":d===2?"parábola":d===3?"cúbica":"grado "+d;
+
+/* ---------- héroe ---------- */
+(function(){
+  const EX=[[0.6,4.8],[1.4,3.9],[2.3,3.1],[3.1,3.0],[4.0,2.6],[4.8,3.2],[5.7,3.4],[6.5,4.3],[7.4,5.2],[8.2,6.6],[9.1,7.9]];
+  let P=EX.map(p=>p.slice()),showRes=true;
+  const svg=document.getElementById("hero");
+  const pl=new Plot(svg,{W:900,H:400,pad:{l:16,r:16,t:16,b:16},yt:[2,4,6,8]});
+  const gRes=el("g",null,pl.g),fit=el("path",{class:"p-fit"},pl.g);
+  el("rect",{class:"hit",x:16,y:16,width:868,height:368},svg);const gP=el("g",null,svg);
+  const ig=document.getElementById("h-g");
+  function draw(){
+    const d=+ig.value;document.getElementById("h-g-o").textContent=d+" · "+gname(d);
+    gRes.textContent="";gP.textContent="";
+    const f=P.length?polyfit(P.map(p=>p[0]),P.map(p=>p[1]),d):null;
+    fit.setAttribute("d",f?pl.fpath(f):"");
+    if(f&&showRes)residuals(pl,gRes,f,P,false);dots(pl,gP,P);
+    const st=document.getElementById("h-status");
+    if(!P.length){st.innerHTML="<b>Sin puntos.</b> Toca el gráfico para añadir datos.";return;}
+    const e=rmse(f,P);
+    st.innerHTML=`<b>${P.length} puntos · ${gname(d)}.</b> En promedio la curva se equivoca por <b>±${e.toFixed(2)}</b>. `+(d===1?"Fíjate: los errores forman un patrón. Prueba con grado 2.":d>=7?"La curva se retuerce para tocar cada punto. ¿De verdad crees que los datos tienen esa forma?":"Toca el gráfico para añadir puntos o toca uno para quitarlo.");
+  }
+  svg.addEventListener("click",e=>{const p=pl.toSvg(e);if(!p)return;for(let i=0;i<P.length;i++){if(Math.hypot(pl.sx(P[i][0])-p.x,pl.sy(P[i][1])-p.y)<16){P.splice(i,1);draw();return;}}const x=pl.ix(p.x),y=pl.iy(p.y);if(x<0||x>10||y<0||y>10)return;P.push([x,y]);draw();});
+  svg.style.cursor="crosshair";
+  ig.addEventListener("input",draw);
+  const rb=document.getElementById("h-res");rb.onclick=()=>{showRes=!showRes;rb.setAttribute("aria-pressed",String(showRes));draw();};
+  document.getElementById("h-undo").onclick=()=>{P.pop();draw();};
+  document.getElementById("h-clear").onclick=()=>{P=[];draw();};
+  document.getElementById("h-ex").onclick=()=>{P=EX.map(p=>p.slice());ig.value=2;draw();};
+  draw();
+})();
+
+/* ---------- taxi ---------- */
+const TAXI=[[1,4.4],[2,5.1],[3,6.9],[4.5,8.0],[5,9.5],[6,9.8],[8,13.2],[8.5,12.6],[9.5,14.9]];
+(function(){
+  const pl=new Plot(document.getElementById("taxi"),{W:900,H:330,x0:0,x1:10.5,y0:0,y1:18,xt:[0,2,4,6,8,10],yt:[5,10,15],fmtx:v=>v+" km",fmty:v=>"$"+v,yl:"precio"});
+  el("path",{d:pl.fpath(x=>3.1+1.2*x),class:"p-fit2"},pl.g);
+  const X=pl.sx(7),Y=pl.sy(3.1+8.4);
+  el("line",{x1:X,x2:X,y1:pl.sy(0),y2:Y,stroke:"var(--muted)","stroke-dasharray":"4 4"},pl.top);
+  el("circle",{cx:X,cy:Y,r:9,fill:"var(--surface)",stroke:"var(--mean)","stroke-width":3},pl.top);
+  txt(pl.top,X-14,Y-14,"¿7 km? ≈ $11.5",{"text-anchor":"end","font-size":15,class:"t-ink"});
+  dots(pl,pl.top,TAXI);
+})();
+
+/* ---------- ajuste manual ---------- */
+(function(){
+  const pl=new Plot(document.getElementById("manual"),{W:620,H:400,x0:0,x1:10.5,y0:0,y1:18,xt:[0,2,4,6,8,10],yt:[5,10,15],fmtx:v=>v+" km",fmty:v=>"$"+v});
+  const gR=el("g",null,pl.g),line=el("path",{class:"p-fit"},pl.g);dots(pl,pl.top,TAXI);
+  const xs=TAXI.map(p=>p[0]),ys=TAXI.map(p=>p[1]),n=xs.length,mx=xs.reduce((a,b)=>a+b)/n,my=ys.reduce((a,b)=>a+b)/n;
+  let sxy=0,sxx=0;for(let i=0;i<n;i++){sxy+=(xs[i]-mx)*(ys[i]-my);sxx+=(xs[i]-mx)**2;}
+  const A=sxy/sxx,B=my-A*mx,sse=(a,b)=>TAXI.reduce((s,[x,y])=>s+(y-(a*x+b))**2,0),best=sse(A,B);
+  const ia=document.getElementById("m-a"),ib=document.getElementById("m-b");let sq=false,anim=null;
+  function draw(){
+    const a=+ia.value,b=+ib.value,f=x=>a*x+b;
+    line.setAttribute("d",pl.fpath(f));gR.textContent="";residuals(pl,gR,f,TAXI,sq);
+    const e=sse(a,b),top=Math.max(e,best*6);
+    document.getElementById("m-a-o").textContent="+$"+a.toFixed(2)+" por km";document.getElementById("m-b-o").textContent="$"+b.toFixed(2);
+    document.getElementById("m-err").textContent=e.toFixed(1);document.getElementById("m-best").textContent=best.toFixed(1);
+    document.getElementById("m-bar").style.width=Math.min(100,e/top*100)+"%";document.getElementById("m-bbar").style.width=(best/top*100)+"%";
+    const r=e/best;document.getElementById("m-msg").textContent=r<1.02?`¡Perfecto! Esa es la mejor recta: $${b.toFixed(2)} de bajada de bandera y $${a.toFixed(2)} por km.`:r<1.3?"Muy cerca. Afina un poco más.":"Sigue probando: mira dónde están las líneas violetas más largas.";
+  }
+  ia.addEventListener("input",draw);ib.addEventListener("input",draw);
+  const sb=document.getElementById("m-sq");sb.onclick=()=>{sq=!sq;sb.setAttribute("aria-pressed",String(sq));draw();};
+  document.getElementById("m-auto").onclick=()=>{
+    if(anim)cancelAnimationFrame(anim);const a0=+ia.value,b0=+ib.value,t0=performance.now(),D=matchMedia("(prefers-reduced-motion: reduce)").matches?1:900;
+    const step=t=>{const k=Math.min(1,(t-t0)/D),e=1-Math.pow(1-k,3);ia.value=a0+(A-a0)*e;ib.value=b0+(B-b0)*e;draw();if(k<1)anim=requestAnimationFrame(step);else{ia.value=A;ib.value=B;draw();}};anim=requestAnimationFrame(step);};
+  draw();
+})();
+
+/* ---------- frenado ---------- */
+(function(){
+  const r=mulberry32(4),V=[20,30,40,50,60,70,80,90,100,110,120],B=V.map(v=>[v,0.278*v+v*v/(254*0.7)+gauss(r)*2.2]);
+  for(const [id,d] of [["brakeA",1],["brakeB",2]]){
+    const pl=new Plot(document.getElementById(id),{W:460,H:320,x0:10,x1:130,y0:-5,y1:125,xt:[20,60,100],yt:[0,40,80,120],fmtx:v=>v+" km/h",fmty:v=>v+" m",yl:"distancia de frenado"});
+    const f=polyfit(B.map(p=>p[0]),B.map(p=>p[1]),d);
+    residuals(pl,pl.g,f,B,false);el("path",{d:pl.fpath(f),class:"p-fit"},pl.g);dots(pl,pl.top,B,"p-point",6);
+    if(d===1){txt(pl.top,pl.sx(20),pl.sy(100),"errores: + en los extremos,",{"font-size":12,class:"t-ink"});txt(pl.top,pl.sx(20),pl.sy(92),"− en el medio",{"font-size":12,class:"t-ink"});}
+  }
+})();
+
+/* ---------- grados ---------- */
+const r0=mulberry32(21),BASE=[];for(let i=0;i<12;i++){const x=0.5+i*0.8+r0()*0.3;BASE.push([x,5+2.2*Math.sin(x*0.7)+gauss(r0)*0.55]);}
+(function(){
+  const box=document.getElementById("degs");
+  for(const d of [1,2,3,11]){
+    const fig=document.createElement("figure");fig.className="fig";const svg=document.createElementNS(NS,"svg");svg.setAttribute("role","img");svg.setAttribute("aria-label","Ajuste de "+gname(d));fig.appendChild(svg);
+    const cap=document.createElement("figcaption");cap.innerHTML=`<strong>${d===11?"Grado 11":gname(d)[0].toUpperCase()+gname(d).slice(1)}</strong>`+(d===11?" · pasa por todos":d===1?" · 2 perillas":d===2?" · 3 perillas":" · 4 perillas");fig.appendChild(cap);box.appendChild(fig);
+    const pl=new Plot(svg,{W:300,H:230,pad:{l:10,r:10,t:10,b:10},y0:0,y1:10});
+    const f=polyfit(BASE.map(p=>p[0]),BASE.map(p=>p[1]),d);el("path",{d:pl.fpath(f,0,10,300),class:"p-fit"},pl.g);dots(pl,pl.top,BASE,"p-point",6);
+  }
+})();
+
+/* ---------- sobreajuste ---------- */
+(function(){
+  const r=mulberry32(77),truth=x=>5+2.2*Math.sin(x*0.7),TR=[],TE=[];
+  for(let i=0;i<14;i++){const x=0.3+i*0.68+r()*0.25;TR.push([x,truth(x)+gauss(r)*0.6]);}
+  for(let i=0;i<14;i++){const x=0.6+r()*8.6;TE.push([x,truth(x)+gauss(r)*0.6]);}
+  const pl=new Plot(document.getElementById("over"),{W:600,H:360,pad:{l:14,r:14,t:14,b:14},y0:0,y1:10});
+  const fit=el("path",{class:"p-fit"},pl.g);dots(pl,pl.top,TE,"p-new",6);dots(pl,pl.top,TR,"p-point",6);
+  const D=[...Array(12)].map((_,i)=>i+1),eTr=[],eTe=[];
+  for(const d of D){const f=polyfit(TR.map(p=>p[0]),TR.map(p=>p[1]),d);eTr.push(rmse(f,TR));eTe.push(rmse(f,TE));}
+  const ymax=Math.min(Math.max(...eTe),3)*1.1;
+  const pe=new Plot(document.getElementById("overerr"),{W:360,H:360,pad:{l:40,r:14,t:30,b:40},x0:0.5,x1:12.5,y0:0,y1:ymax,xt:[1,4,8,12],yt:[0,0.5,1,1.5,2,2.5].filter(v=>v<ymax),xl:"grado",yl:"error típico"});
+  const pth=(arr,attrs)=>{let d="";arr.forEach((v,i)=>{d+=(i?"L":"M")+pe.sx(D[i]).toFixed(1)+" "+pe.sy(Math.min(v,ymax*1.2)).toFixed(1);});el("path",Object.assign({d,fill:"none","stroke-width":3},attrs),pe.g);};
+  pth(eTr,{stroke:"var(--point)"});pth(eTe,{stroke:"var(--sample)","stroke-dasharray":"7 5"});
+  let best=0;eTe.forEach((v,i)=>{if(v<eTe[best])best=i;});
+  txt(pe.top,pe.sx(12),pe.sy(eTr[11])-8,"datos para aprender",{"text-anchor":"end","font-size":11,style:"fill:var(--point)"});
+  txt(pe.top,pe.sx(D[best]),pe.sy(eTe[best])+22,"datos nuevos",{"text-anchor":"middle","font-size":11,style:"fill:var(--sample)"});
+  const mk=el("line",{class:"g-axis","stroke-dasharray":"4 4"},pe.top),m1=el("circle",{r:6,fill:"var(--point)"},pe.top),m2=el("circle",{r:6,fill:"var(--surface)",stroke:"var(--sample)","stroke-width":2.5},pe.top);
+  const ig=document.getElementById("o-g");
+  function draw(){
+    const d=+ig.value,f=polyfit(TR.map(p=>p[0]),TR.map(p=>p[1]),d);fit.setAttribute("d",pl.fpath(f,0,10,300));
+    const X=pe.sx(d);mk.setAttribute("x1",X);mk.setAttribute("x2",X);mk.setAttribute("y1",pe.o.pad.t);mk.setAttribute("y2",pe.o.H-pe.o.pad.b);
+    m1.setAttribute("cx",X);m1.setAttribute("cy",pe.sy(eTr[d-1]));m2.setAttribute("cx",X);m2.setAttribute("cy",pe.sy(Math.min(eTe[d-1],ymax)));
+    document.getElementById("o-g-o").textContent=d+" · "+gname(d);
+    document.getElementById("over-cap").textContent=`Grado ${d}: error ±${eTr[d-1].toFixed(2)} con datos para aprender y ±${eTe[d-1].toFixed(2)} con datos nuevos. `+(d-1===best?"Este es el mejor grado para datos nuevos.":d-1>best?"Demasiado flexible: memoriza el ruido.":"Demasiado rígido: no sigue la forma.");
+  }
+  ig.addEventListener("input",draw);draw();
+})();
+
+/* ---------- extrapolación ---------- */
+(function(){
+  const r=mulberry32(9),P=[];for(let i=0;i<9;i++){const x=2+i*0.5;P.push([x,4+0.6*(x-4)+0.15*(x-4)**2+gauss(r)*0.3]);}
+  const pl=new Plot(document.getElementById("extra"),{W:900,H:340,x0:0,x1:10,y0:-4,y1:14,xt:[0,2,4,6,8,10],yt:[0,5,10]});
+  el("rect",{x:pl.sx(2),y:pl.o.pad.t,width:pl.sx(6)-pl.sx(2),height:pl.o.H-pl.o.pad.t-pl.o.pad.b,fill:"var(--muted)","fill-opacity":.09},pl.gGrid);
+  txt(pl.gGrid,pl.sx(4),pl.o.pad.t+16,"zona con datos",{"text-anchor":"middle","font-size":12,class:"t-ink"});
+  const xs=P.map(p=>p[0]),ys=P.map(p=>p[1]);
+  el("path",{d:pl.fpath(polyfit(xs,ys,1)),class:"p-fit"},pl.g);
+  el("path",{d:pl.fpath(polyfit(xs,ys,2)),class:"p-fit2"},pl.g);
+  el("path",{d:pl.fpath(polyfit(xs,ys,6),0,10,400),fill:"none",stroke:"var(--point)","stroke-width":2.4},pl.g);
+  dots(pl,pl.top,P,"p-point",6);
+})();
+})();
+</script>
+</body>
+</html>

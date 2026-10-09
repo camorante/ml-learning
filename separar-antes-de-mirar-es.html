@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Separar antes de mirar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.segs{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.segs .lab{font-size:.9rem;color:var(--muted)}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.meter2{display:grid;gap:6px}
+.meter2 .row{display:grid;grid-template-columns:210px minmax(0,1fr) 72px;gap:10px;align-items:center;font-size:.92rem}
+.meter2 .bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden}
+.meter2 .bar i{display:block;height:100%;border-radius:7px;transition:width .35s}
+.meter2 .num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:520px){.meter2 .row{grid-template-columns:118px minmax(0,1fr) 58px;font-size:.84rem}}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.verdict{display:inline-block;border-radius:999px;padding:2px 10px;font-size:.85rem;font-weight:600}
+.verdict.ok{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.verdict.no{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.verdict.mid{background:color-mix(in srgb,var(--sample) 18%,transparent);color:var(--sample)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.situ h3{font-size:1.1rem}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec ul{margin:0;padding-left:18px;font-size:.93rem;color:var(--muted);display:grid;gap:4px}
+.dec ul b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Preparar los datos · tema 1 · explicado sin fórmulas · <a href="separar-antes-de-mirar-tecnico-es.html" target="_self">ver la versión técnica</a> · <a href="preparar-los-datos-es.html" target="_self">todos los temas</a> · <a href="split-before-you-look-en.html" target="_self">in English</a></p>
+  <h1>Separar antes de mirar</h1>
+  <p class="lede">Para saber si un modelo funcionará, se le pone un examen con datos que no ha visto. Ese trozo de datos hay que apartarlo lo primero de todo y elegirlo bien. Si se aparta mal, el examen dirá que el modelo es excelente y fallará el primer día de uso real.</p>
+</header>
+
+<section class="first" aria-label="Juguete interactivo">
+  <div class="situ col">
+    <p class="eyebrow">La situación del juguete</p>
+    <p>Tenemos una flota de <strong>60 camiones</strong> y una tabla con <strong>330 días</strong> de historia: cada fila es un camión en un día, con sus kilómetros, la carga, el tiempo en ralentí (motor encendido y parado), la pendiente de la ruta, la temperatura, el odómetro (el cuentakilómetros total) y lo que gastó ese día.</p>
+    <p>Queremos un <strong>modelo</strong>, un programa que aprende de esa tabla, para que <strong>cada mañana</strong> diga cuántos litros cada 100 km gastará cada camión ese día. Un camión típico gasta unos 35.</p>
+    <p>Antes de usarlo de verdad hay que saber cuánto se equivoca. Para eso se le hace un <strong>examen</strong>: se esconde una parte de los días, el modelo aprende solo con el resto y luego predice los días escondidos sin verlos. El error medio en esos días es lo que el examen <strong>promete</strong>. Después lo usamos de verdad los 70 días siguientes y medimos lo que <strong>pasa</strong>. Un buen examen promete lo mismo que luego pasa.</p>
+  </div>
+  <figure class="fig"><svg id="hero" role="img" aria-label="Error prometido por el examen frente a error real en el uso de verdad"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> La franja de arriba son los 400 días, de izquierda a derecha. <b style="color:var(--mean)">Azul</b>: días con los que el modelo aprende. <b style="color:var(--sample)">Violeta</b>: días escondidos para el examen. <b style="color:var(--point)">Naranja</b>: los días en que se usa de verdad, que hoy todavía no han pasado. Debajo, dos barras: el error que promete el examen y el que hay de verdad. Cuanto más corta la barra, menos se equivoca.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>Decisión 1: ¿qué días escondemos para el examen?</h3>
+      <div class="seg" role="group" aria-label="Qué días esconder para el examen"><button type="button" id="h-azar" aria-pressed="true">Días sueltos al azar</button><button type="button" id="h-tiempo" aria-pressed="false">Los últimos 60 días</button></div>
+      <ul>
+        <li><b>Días sueltos al azar</b>: se elige 1 de cada 5 días por sorteo, repartidos por toda la historia. Es lo que se hace por defecto en muchos tutoriales.</li>
+        <li><b>Los últimos 60 días</b>: se esconden los días más recientes (del 270 al 329) y el modelo aprende solo con los anteriores.</li>
+      </ul>
+    </div>
+    <div class="dec">
+      <h3>Decisión 2: ¿le damos la columna "litros que cargará mañana"?</h3>
+      <div class="seg" role="group" aria-label="Dar o no la columna de litros de mañana"><button type="button" id="h-l0" aria-pressed="true">No dársela</button><button type="button" id="h-l1" aria-pressed="false">Dársela</button></div>
+      <p>En la tabla histórica hay una columna con los litros que cada camión repostó <em>al día siguiente</em>. Como lo que gasta hoy es lo que hay que reponer mañana, esa columna casi lleva la respuesta. El problema: la mañana en que el modelo predice, mañana todavía no ha llegado y esa columna está vacía.</p>
+    </div>
+  </div>
+  <div class="col stack">
+    <p><strong>Prueba en este orden</strong> y lee el mensaje de abajo cada vez:</p>
+    <ol class="try">
+      <li>Días sueltos al azar · No dársela: el examen promete un error algo menor que el real.</li>
+      <li>Los últimos 60 días · No dársela: el examen promete casi exactamente el error real.</li>
+      <li>Cualquiera de las dos · Dársela: el examen promete casi perfección y luego el modelo falla mucho.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="h-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Lo que acabas de ver</p>
+    <h2>El examen tiene que parecerse al uso real y no puede traer las respuestas</h2>
+    <p>A ese trozo escondido se le llama <strong>conjunto de prueba</strong>, y a la parte con la que aprende, <strong>conjunto de entrenamiento</strong>. Funciona como un examen en el colegio: la nota sirve si las preguntas se parecen a lo que vendrá <em>y</em> si el alumno no ha visto las respuestas antes. El juguete rompe esas dos condiciones:</p>
+    <ul>
+      <li><strong>Días sueltos al azar</strong>: cada día escondido tiene a su lado días que el modelo sí vio, del mismo camión. Para adivinar el martes, ya conoce el lunes y el miércoles, y el consumo de un día se parece mucho al de los días de al lado. En el uso real no tendrá "el miércoles": predice siempre hacia delante. Por eso el examen es más fácil que la realidad y promete de más.</li>
+      <li><strong>Litros de mañana</strong>: en el examen la columna está rellena y el modelo aprende a copiarla. En el uso real está vacía y el modelo se queda sin su "chuleta". A esto se le llama una <strong>fuga de datos</strong>: información que no existirá en el momento de predecir y que se cuela al aprender o al examinar.</li>
+    </ul>
+    <p>El título del tema, "separar antes de mirar", viene de aquí: el trozo para el examen se aparta lo primero de todo, antes de explorar o limpiar los datos, y se aparta de forma que se parezca al uso real.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 5</p>
+    <h2>Un examen corto da una nota con mucho ruido</h2>
+    <p>Aquí cambiamos de ejemplo para verlo más fácil: un modelo que responde sí o no, por ejemplo "¿este camión necesitará ir al taller este mes?". Imagina que de verdad acierta 9 de cada 10 veces (un 90 %). Su <strong>nota en el examen</strong> es el porcentaje de casos del examen que acierta.</p>
+    <p>Esa nota no sale siempre 90 %: depende de qué casos le toquen, igual que al tirar una moneda 10 veces no siempre salen 5 caras. Con pocos casos, la suerte pesa mucho.</p>
+  </div>
+  <figure class="fig"><svg id="noise" role="img" aria-label="Notas de 60 exámenes del mismo modelo según el tamaño de la prueba"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada punto es el mismo modelo examinado otra vez, con otros casos elegidos al azar (60 exámenes en total). Su posición es la nota que sacó. La línea verde es su acierto de verdad, 90 %. La banda azul marca dónde caen casi todas las notas. Mueve el control para cambiar cuántos casos tiene cada examen: con más casos, los puntos se juntan alrededor de la línea verde.</p>
+  <div class="slider col"><label for="n-s">Casos en cada examen <output id="n-s-o"></output></label><input type="range" id="n-s" min="0" max="7" step="1" value="1"><div class="ends"><span>10</span><span>5 000</span></div></div>
+  <p class="qcard col" id="n-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 5</p>
+    <h2>Si el futuro es lo que vas a predecir, examina con el futuro</h2>
+    <p>Es la decisión 1 del juguete de arriba, vista de cerca con un solo camión. Su consumo cambia poco a poco: se desgastan los neumáticos, cambia el conductor, llega el invierno. Por eso el consumo de un día se parece mucho al del día anterior y al del siguiente.</p>
+    <p>Con días sueltos al azar, cada día del examen queda rodeado de días que el modelo ya vio, y solo tiene que "rellenar el hueco" entre dos valores conocidos. Escondiendo los últimos días, el examen se parece al uso real: predecir días que vienen <em>después</em> de todo lo que se ha visto.</p>
+  </div>
+  <figure class="fig"><svg id="time" role="img" aria-label="Consumo diario de un camión con los días de entrenamiento y de prueba marcados"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada punto es el consumo de este camión en un día (eje horizontal: el día, del 0 al 329; eje vertical: litros cada 100 km). Puntos <b style="color:var(--mean)">azules pequeños</b>: días con los que aprende. Puntos <b style="color:var(--sample)">violeta grandes</b>: días escondidos para el examen. Las barras de debajo son el error medio de toda la flota (60 camiones) en cada caso, y la naranja, el error en el uso real.</p>
+  <div class="seg" role="group" aria-label="Qué días esconder"><button type="button" id="t-azar" aria-pressed="true">Días sueltos al azar</button><button type="button" id="t-tiempo" aria-pressed="false">Los últimos 60 días</button></div>
+  <div class="meter2 col" id="t-bars"></div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 5</p>
+    <h2>Si vendrán camiones nuevos, examina con camiones nuevos</h2>
+    <p>Otra situación distinta: la empresa va a comprar camiones y el modelo tendrá que predecir camiones que nunca ha visto. Cada camión tiene sus manías: este gasta 2 L más que la media por su motor, aquel menos.</p>
+    <p>Si escondes días sueltos al azar, cada camión del examen también aparece entre los días con los que aprende, así que el modelo ya conoce sus manías y acierta más. Con un camión nuevo no conocerá ninguna. Para que el examen se parezca a eso, hay que esconder <strong>camiones enteros</strong>: todos sus días.</p>
+  </div>
+  <figure class="fig"><svg id="grp" role="img" aria-label="Cuadrícula de camiones por días con entrenamiento y prueba"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada fila es un camión y cada cuadro, uno de sus días (se muestran 16 camiones y 40 días). <b style="color:var(--mean)">Azul</b>: días para aprender. <b style="color:var(--sample)">Violeta</b>: días del examen. Las tres filas <b style="color:var(--point)">naranjas</b> de abajo son camiones que se comprarán más adelante. Las barras comparan lo que promete cada examen con el error real en esos camiones nuevos.</p>
+  <div class="seg" role="group" aria-label="Qué esconder para el examen"><button type="button" id="g-azar" aria-pressed="true">Días sueltos al azar</button><button type="button" id="g-cam" aria-pressed="false">Camiones enteros</button></div>
+  <div class="meter2 col" id="g-bars"></div>
+  <p class="qcard col" id="g-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 de 5</p>
+    <h2>La pregunta que lo arregla casi todo: ¿lo sabría en ese momento?</h2>
+    <p>Cada columna de la tabla es un dato que el modelo puede usar. Antes de dársela, imagina el momento exacto en que el modelo hace su predicción: por la mañana, antes de que el camión salga. ¿Ese dato ya existe a esa hora? Si no existe, es una <strong>fuga de datos</strong> (ver arriba). Las más peligrosas son columnas que en la tabla histórica parecen normales, pero que se rellenaron <em>después</em>.</p>
+  </div>
+  <p class="howto col"><b>Cómo usarlo.</b> Elige una columna para añadírsela al modelo básico (el que solo tiene km, carga, ralentí, pendiente, temperatura y odómetro). Las dos barras <b>grises</b> son el modelo básico: lo que promete el examen y lo que pasa en el uso real. Las de color son el modelo con la columna añadida: <b style="color:var(--mean)">azul</b>, lo que promete el examen; <b style="color:var(--point)">naranja</b>, lo que pasa de verdad. Una columna buena acorta las dos barras de color. Una fuga acorta la azul y alarga la naranja. En todos los casos el examen son los últimos 60 días.</p>
+  <div class="chips col" id="c-chips" role="group" aria-label="Columna añadida"></div>
+  <div class="meter2 col" id="c-bars"></div>
+  <p class="qcard col" id="c-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 de 5</p>
+    <h2>Mirar todos los datos para decidir también es hacer trampa</h2>
+    <p>Antes de entrenar, es habitual quedarse solo con las columnas que parecen útiles. Ese paso también "aprende" de los datos, y si mira los días del examen, hace trampa aunque el modelo nunca los vea.</p>
+    <p>Un caso extremo para verlo: 100 viajes, cada uno con 2 000 columnas de números al azar (sin ninguna relación con nada), y una respuesta sí/no decidida a cara o cruz. Nada puede predecir una moneda: lo honesto es acertar el 50 %. Pero con 2 000 columnas, alguna se parecerá a la moneda por pura casualidad, también en los viajes del examen.</p>
+  </div>
+  <figure class="fig"><svg id="sel" role="img" aria-label="Aciertos medidos con la selección de columnas fuera y dentro de la prueba"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada punto es un experimento completo con datos nuevos al azar (40 en total), y su posición es la nota en el examen. La línea vertical marca la media. Los botones cambian <b>con qué viajes se eligen las 20 columnas</b> que luego usa el modelo: con todos los viajes (incluidos los del examen) o solo con los viajes para aprender.</p>
+  <div class="seg" role="group" aria-label="Con qué viajes se eligen las columnas"><button type="button" id="s-fuera" aria-pressed="true">Elegir mirando todos los viajes</button><button type="button" id="s-dentro" aria-pressed="false">Elegir solo con los de aprender</button></div>
+  <p class="qcard col" id="s-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta completa</h2>
+    <ol class="steps">
+      <li><div><strong>Separa primero</strong>, antes de explorar, limpiar o elegir nada. Lo que mires de la prueba ya no es prueba.</div></li>
+      <li><div><strong>Imita el uso real</strong>: si predecirás el futuro, la prueba son los últimos días; si llegarán camiones nuevos, la prueba son camiones enteros.</div></li>
+      <li><div><strong>Revisa cada columna</strong> con la pregunta "¿existe en el momento de predecir?".</div></li>
+      <li><div><strong>Aprende todo con el entrenamiento</strong>: medias para rellenar huecos, escalas, columnas elegidas. La prueba solo se usa al final.</div></li>
+      <li><div><strong>Usa una prueba suficientemente grande</strong> o repite la división varias veces para saber cuánto ruido tiene la nota.</div></li>
+      <li><div><strong>Desconfía de los resultados demasiado buenos</strong>: casi siempre son una fuga.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>Dónde aparece en la telemetría de flota</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 30h28M10 30V18M18 30V12M26 30V20M34 30V8"/></svg><h3>Pronósticos</h3><p>Consumo, kilómetros, horas de motor: siempre división por fecha, con un hueco entre entrenamiento y prueba si las variables usan ventanas de varios días.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="12" width="20" height="14" rx="2"/><path d="M25 16h6l4 5v5H25"/><circle cx="12" cy="29" r="3"/><circle cx="30" cy="29" r="3"/></svg><h3>Clientes y camiones nuevos</h3><p>Un modelo que se venderá a flotas nuevas se prueba con flotas enteras apartadas, no con viajes mezclados.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6L34 32H6Z"/><path d="M20 16v8M20 28v1"/></svg><h3>Predicción de averías</h3><p>Los registros de taller se cierran días después de la avería. Usar "fecha de cierre" o "piezas cambiadas" como variable es dejar la respuesta en el examen.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13"/><path d="M20 12v8l6 4"/></svg><h3>Datos que llegan tarde</h3><p>Lecturas reenviadas horas después: la tabla final las tiene, pero a la hora de predecir no habían llegado.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Conexiones</p>
+    <h2>Con los modelos de la serie ML</h2>
+    <p>En este tema el modelo es un conjunto de árboles con boosting, como <a href="xgboost-es.html" target="_self">XGBoost</a>, pero todo vale igual para cualquier otro: la <a href="regresion-lineal-polinomial-es.html" target="_self">regresión lineal</a>, <a href="k-vecinos-mas-cercanos-es.html" target="_self">los vecinos más cercanos</a> (que son los que más se aprovechan de los días vecinos) o los <a href="procesos-gaussianos-es.html" target="_self">procesos gaussianos</a>. Los modelos más flexibles sacan más partido de una fuga, así que con ellos el cuidado debe ser mayor.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo que cuesta y lo que se gana</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Lo que se gana</h3><ul class="pc">
+      <li>Una cifra de error en la que se puede confiar antes de poner nada en marcha.</li>
+      <li>Se detectan las fugas antes de que el modelo se use de verdad.</li>
+      <li>Permite comparar modelos de forma justa.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Lo que cuesta</h3><ul class="pc">
+      <li>Se entrena con menos datos (se compensa reentrenando con todo al final).</li>
+      <li>La división por fecha o por camión suele dar errores peores: no es el modelo, es la verdad.</li>
+      <li>Hay que pensar cómo se usará el modelo antes de tocar los datos.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Entrenamiento (train)</dt><dd>La parte de los datos con la que el modelo aprende.</dd>
+      <dt>Validación</dt><dd>Una parte apartada para elegir entre modelos y ajustes. Como se usa muchas veces, acaba "gastada".</dd>
+      <dt>Prueba (test)</dt><dd>La parte que solo se mira una vez, al final, para dar la cifra de error.</dd>
+      <dt>Modelo</dt><dd>Programa que aprende de una tabla de ejemplos para hacer predicciones sobre casos nuevos.</dd>
+      <dt>Producción (uso real)</dt><dd>Cuando el modelo ya está en marcha y predice con datos de verdad, que no existían al entrenarlo.</dd>
+      <dt>Fuga de datos (leakage)</dt><dd>Cuando información que no existirá al predecir se cuela en el entrenamiento o en la evaluación.</dd>
+      <dt>División temporal</dt><dd>Entrenar con el pasado y probar con lo que vino después.</dd>
+      <dt>División por grupos</dt><dd>Todos los datos de un camión (o flota, o conductor) van juntos al entrenamiento o a la prueba.</dd>
+      <dt>Validación cruzada</dt><dd>Repetir la división varias veces con trozos distintos y promediar, para que la nota tenga menos ruido.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: las cuentas detrás de todo</summary>
+    <p style="padding-top:10px">No hacen falta para entender la idea:</p>
+    <div class="formula">ruido de una nota de aciertos medida con n casos:
+   margen ≈ 2 × √( p × (1 − p) / n )
+   p = 0,9 y n = 100  →  ± 6 puntos
+   p = 0,9 y n = 1 000 → ± 2 puntos
+
+regla de la fuga: una columna x vale si
+   momento en que se conoce x  ≤  momento de predecir</div>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2>Todo en un minuto</h2>
+    <p>Un repaso animado: el modelo que promete y falla, el examen con días sueltos al azar frente a los últimos días, los camiones nuevos y la columna que viene del futuro, y por qué elegir columnas mirando todos los datos también es hacer trampa. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJFVAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkB//2Q==" aria-label="Animación: separar antes de mirar">
+      <source src="separar-antes-de-mirar-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"hero": {"azar|False": [2.18, 2.6], "azar|True": [0.81, 5.41], "tiempo|False": [2.45, 2.6], "tiempo|True": [0.83, 5.42]}, "ideas": {"grupos": {"azar": 2.17, "camion": 2.38, "nuevos": 2.43}, "grupos_sin_odo": {"azar": 2.28, "nuevos": 2.22}, "candidatas": {"ninguna": [2.45, 2.6], "consumo_ayer": [2.0, 2.05], "media_7_pasado": [1.49, 1.48], "media_semana": [1.27, 1.52], "litros_manana": [0.83, 5.41]}, "seleccion": {"fuera": [0.87, 0.83, 0.83, 0.9, 0.85, 0.86, 0.87, 0.82, 0.86, 0.82, 0.84, 0.82, 0.87, 0.84, 0.86, 0.83, 0.87, 0.83, 0.84, 0.9, 0.8, 0.92, 0.84, 0.86, 0.82, 0.86, 0.85, 0.83, 0.82, 0.89, 0.79, 0.81, 0.87, 0.87, 0.82, 0.83, 0.86, 0.83, 0.84, 0.87], "dentro": [0.51, 0.5, 0.54, 0.56, 0.52, 0.53, 0.47, 0.57, 0.43, 0.54, 0.48, 0.51, 0.51, 0.48, 0.43, 0.48, 0.48, 0.55, 0.47, 0.49, 0.54, 0.49, 0.5, 0.43, 0.55, 0.52, 0.45, 0.62, 0.49, 0.49, 0.53, 0.57, 0.36, 0.48, 0.49, 0.38, 0.43, 0.49, 0.48, 0.46]}}};
+const bars=(id,rows,mx)=>{document.getElementById(id).innerHTML=rows.map(([lab,v,col,t])=>`<div class="row"><span>${lab}</span><span class="bar"><i style="width:${Math.max(0.5,Math.min(1,v/mx)*100).toFixed(1)}%;background:${col}"></i></span><span class="num">${t}</span></div>`).join("");};
+const f2=v=>v.toFixed(2).replace(".",",");
+const pct=(v,d)=>(v*100).toFixed(d??0).replace(".",",")+" %";
+const seg=(ids,cb)=>{const b=ids.map(i=>document.getElementById(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});};
+
+/* ---------- héroe ---------- */
+(function(){const svg=document.getElementById("hero"),nw=(svg.clientWidth||900)<600,W=nw?440:900,H=nw?400:380;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  let sp=0,lk=0;
+  function draw(){svg.textContent="";
+    /* línea de tiempo */
+    const x0=nw?10:40,x1=W-(nw?10:40),days=400,sx=d=>x0+d/days*(x1-x0),y=40,h=26,r=mulberry32(5);
+    txt(svg,x0,22,"Los 400 días de la flota",{"font-size":13,"font-weight":600,class:"t-ink"});
+    for(let d=0;d<days;d+=2){let c;if(d>=330)c="var(--point)";else if(sp===1)c=d>=270?"var(--sample)":"var(--mean)";else c=r()<0.2?"var(--sample)":"var(--mean)";
+      el("rect",{x:sx(d),y,width:sx(2)-sx(0)-0.6,height:h,fill:c,"fill-opacity":d>=330?.55:.85},svg);}
+    el("line",{x1:sx(330),x2:sx(330),y1:y-8,y2:y+h+8,stroke:"var(--ink)","stroke-width":2},svg);
+    txt(svg,sx(165),y+h+20,nw?"historia (330 días)":"historia disponible hoy (330 días)",{"text-anchor":"middle","font-size":12});
+    txt(svg,sx(nw?378:365),y+h+20,"uso real",{"text-anchor":"middle","font-size":12,style:"fill:var(--point)","font-weight":600});
+    [[nw?"aprende":"días para aprender","var(--mean)"],[nw?"examen":"días del examen","var(--sample)"],[nw?"uso real":"uso real (aún no han pasado)","var(--point)"]].forEach(([t,c],i)=>{const lx=x0+i*(nw?140:190);el("rect",{x:lx,y:y+h+32,width:12,height:12,rx:2,fill:c},svg);txt(svg,lx+18,y+h+43,t,{"font-size":12});});
+    /* barras */
+    const [et,ep]=D.hero[(sp?"tiempo":"azar")+"|"+(lk?"True":"False")],mx=6,bx=nw?10:250,bw=W-bx-(nw?80:90),by=nw?160:170,bh=nw?44:56;
+    const row=(yy,lab,sub,v,c)=>{if(nw){yy+=24;txt(svg,bx,yy-8,lab+" · "+sub,{"font-size":14,"font-weight":600,class:"t-ink"});}else{txt(svg,bx-14,yy+bh/2-2,lab,{"text-anchor":"end","font-size":15,"font-weight":600,class:"t-ink"});txt(svg,bx-14,yy+bh/2+16,sub,{"text-anchor":"end","font-size":12});}
+      el("rect",{x:bx,y:yy,width:bw,height:bh,rx:10,fill:"var(--line)","fill-opacity":.5},svg);el("rect",{x:bx,y:yy,width:bw*v/mx,height:bh,rx:10,fill:c},svg);
+      txt(svg,bx+bw*v/mx+10,yy+bh/2+7,f2(v)+" L",{"font-size":20,"font-weight":700,class:"t-ink"});};
+    row(by,"Lo que promete","error en el examen",et,"var(--sample)");row(by+bh+(nw?50:26),"Lo que pasa","error en el uso real",ep,"var(--point)");
+    txt(svg,bx,H-14,nw?"error medio, L/100 km (consumo típico: 35 L)":"error medio en litros cada 100 km (menos es mejor) · consumo típico: 35 L",{"font-size":12});
+    const gap=ep/et;
+    let m;
+    const sl=sp?"los últimos 60 días":"días sueltos al azar";
+    if(lk)m=`Con la columna de mañana, el examen (${sl}) promete equivocarse solo <b>${f2(et)} L</b> cada 100 km: casi perfecto. En el uso real se equivoca <b>${f2(ep)} L</b>, ${gap.toFixed(1).replace(".",",")} veces más, y peor incluso que sin esa columna (2,60 L). En el examen el modelo copiaba los litros de mañana; en el uso real esa columna está vacía y no sabe qué hacer. ${sp?"Esconder los últimos días no lo arregla: el problema es la columna, no los días elegidos.":"Prueba también con los últimos 60 días: verás que tampoco se arregla."}`;
+    else if(!sp)m=`El examen con días sueltos al azar promete que el modelo se equivocará <b>${f2(et)} L</b> cada 100 km (sobre unos 35). En el uso real se equivoca <b>${f2(ep)} L</b>: un ${Math.round((ep/et-1)*100)} % más de lo prometido. No es un desastre, pero el examen era más fácil que la realidad: cada día escondido tenía al lado días que el modelo sí había visto. Ahora prueba "Los últimos 60 días".`;
+    else m=`Escondiendo los últimos 60 días, el examen promete <b>${f2(et)} L</b> y en el uso real salen <b>${f2(ep)} L</b>. Casi lo mismo: la promesa es honesta, porque el examen se hizo igual que el uso real, prediciendo días que vienen después de todo lo que el modelo vio. La nota es peor que con días al azar, pero es verdad. Ahora prueba "Dársela" en la decisión 2.`;
+    document.getElementById("h-msg").innerHTML=m;}
+  seg(["h-azar","h-tiempo"],i=>{sp=i;draw();});seg(["h-l0","h-l1"],i=>{lk=i;draw();});draw();})();
+
+/* ---------- idea 1: ruido de la nota ---------- */
+(function(){const NS=[10,30,100,300,1000,2000,3000,5000],P=0.9,K=60;
+  const pl=new Plot(document.getElementById("noise"),{W:900,H:300,pad:{l:16,r:16,t:20,b:40},x0:0.6,x1:1,y0:0,y1:1,xt:[0.6,0.7,0.8,0.9,1],fx:v=>Math.round(v*100)+"%",yt:[],xl:"nota sacada en el examen (porcentaje de aciertos)"});
+  el("line",{x1:pl.sx(P),x2:pl.sx(P),y1:pl.sy(0),y2:pl.sy(1),stroke:"var(--good)","stroke-width":2,"stroke-dasharray":"6 4"},pl.g);
+  txt(pl.g,pl.sx(P)+6,pl.sy(0.96),"acierto de verdad: 90 %",{"font-size":12,style:"fill:var(--good)"});
+  const g=el("g",null,pl.g),is=document.getElementById("n-s");
+  function draw(){const n=NS[+is.value],r=mulberry32(77+n),v=[];
+    for(let k=0;k<K;k++){let c=0;if(n<=300){for(let i=0;i<n;i++)if(r()<P)c++;}else c=Math.round(n*P+Math.sqrt(n*P*(1-P))*gauss(r));v.push(Math.min(1,c/n));}
+    g.textContent="";const sd=Math.sqrt(P*(1-P)/n);
+    el("rect",{x:pl.sx(Math.max(0.6,P-2*sd)),y:pl.sy(0.88),width:pl.sx(Math.min(1,P+2*sd))-pl.sx(Math.max(0.6,P-2*sd)),height:pl.sy(0.12)-pl.sy(0.88),fill:"var(--band)",rx:6},g);
+    const cnt={};v.forEach((x,k)=>{const key=Math.round(x*400);cnt[key]=(cnt[key]||0)+1;el("circle",{cx:pl.sx(Math.max(0.6,x)),cy:pl.sy(0.16+0.7*((k*0.618)%1)),r:5.5,fill:"var(--sample)","fill-opacity":.8},g);});
+    const lo=Math.min(...v),hi=Math.max(...v);
+    document.getElementById("n-s-o").textContent=n.toLocaleString("es-ES");
+    document.getElementById("n-msg").innerHTML=`Con exámenes de <b>${n.toLocaleString("es-ES")}</b> casos, los 60 exámenes del mismo modelo dan notas entre <b>${pct(lo)}</b> y <b>${pct(hi)}</b>. Casi todas caen dentro de ±${(2*sd*100).toFixed(1).replace(".",",")} puntos. ${n<=100?"Si comparas dos modelos que se diferencian en 3 puntos, con un examen así no sabrías cuál es mejor: la suerte pesa más que la diferencia.":n>=2000?"Ahora la nota es fiable al punto. Si no tienes tantos datos, se puede repetir el examen varias veces con trozos distintos y promediar las notas (a eso se le llama validación cruzada).":"Ya se distingue un modelo bueno de uno malo, pero no dos parecidos."}`;}
+  is.addEventListener("input",draw);draw();})();
+
+/* ---------- idea 2: azar vs tiempo ---------- */
+(function(){const N=330,r=mulberry32(12);let s=0;const y=[];for(let d=0;d<N;d++){s=0.97*s+gauss(r)*0.45;y.push(33+s+1.1*gauss(r)+0.006*d+1.2*Math.sin(2*Math.PI*(d-100)/365));}
+  const isTest=[];const r2=mulberry32(3);for(let d=0;d<N;d++)isTest.push(r2()<0.2);
+  const pl=new Plot(document.getElementById("time"),{W:900,H:300,pad:{l:46,r:16,t:16,b:40},x0:0,x1:N,y0:27,y1:41,xt:[0,60,120,180,240,300],yt:[28,32,36,40],xl:"día",yl:"L/100 km"});
+  el("path",{d:pl.ppath(y.map((v,d)=>[d,v])),fill:"none",stroke:"var(--muted)","stroke-width":1,"stroke-opacity":.5},pl.g);
+  const g=el("g",null,pl.g);let mode=0;
+  function draw(){g.textContent="";
+    if(mode===1){el("rect",{x:pl.sx(270),y:pl.sy(41),width:pl.sx(N)-pl.sx(270),height:pl.sy(27)-pl.sy(41),fill:"var(--sample)","fill-opacity":.08},g);txt(g,pl.sx(300),pl.sy(40.3),"examen",{"text-anchor":"middle","font-size":12,style:"fill:var(--sample)","font-weight":600});}
+    y.forEach((v,d)=>{const t=mode?d>=270:isTest[d];el("circle",{cx:pl.sx(d),cy:pl.sy(v),r:t?4.6:2.2,fill:t?"var(--sample)":"var(--mean)","fill-opacity":t?1:.55},g);});
+    const H=D.hero,a=H["azar|False"][0],t=H["tiempo|False"][0],p=H["tiempo|False"][1];
+    bars("t-bars",[["Examen: días sueltos al azar",a,mode===0?"var(--sample)":"var(--line)",f2(a)+" L"],["Examen: los últimos 60 días",t,mode===1?"var(--sample)":"var(--line)",f2(t)+" L"],["Uso real",p,"var(--point)",f2(p)+" L"]],3);
+    document.getElementById("t-msg").innerHTML=mode===0?`Fíjate en un punto violeta: casi siempre tiene un azul justo antes y otro justo después. El modelo no recibe la fecha, pero sí el odómetro, que solo crece día a día y por eso le dice en qué momento está. Así reconoce "estoy entre estos dos días que ya vi" y copia su consumo. El examen es más fácil que la realidad: promete <b>${f2(a)} L</b> y en el uso real salen <b>${f2(p)} L</b>.`:`Ahora el examen son los días 270 a 329, todos después de los días con los que aprendió. Promete <b>${f2(t)} L</b>, muy cerca de los <b>${f2(p)} L</b> del uso real. Peor número, pero verdadero.`;}
+  seg(["t-azar","t-tiempo"],i=>{mode=i;draw();});draw();})();
+
+/* ---------- idea 3: grupos ---------- */
+(function(){const svg=document.getElementById("grp"),W=900,H=372,NC=16,ND=40,x0=110,y0=14,cw=(W-x0-20)/ND,ch=16;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const r=mulberry32(8),rnd=[...Array(NC*ND)].map(()=>r()<0.2),testTruck=new Set([2,7,11]);let mode=0;
+  function draw(){svg.textContent="";
+    for(let c=0;c<NC;c++){txt(svg,x0-10,y0+c*ch+ch*0.72,"camión "+(c+1),{"text-anchor":"end","font-size":11});
+      for(let d=0;d<ND;d++){const t=mode?testTruck.has(c):rnd[c*ND+d];el("rect",{x:x0+d*cw+0.8,y:y0+c*ch+1.5,width:cw-1.6,height:ch-3,rx:2,fill:t?"var(--sample)":"var(--mean)","fill-opacity":t?1:.55},svg);}}
+    for(let c=0;c<3;c++){const yy=y0+NC*ch+14+c*ch;txt(svg,x0-10,yy+ch*0.72,"nuevo "+(c+1),{"text-anchor":"end","font-size":11,style:"fill:var(--point)"});
+      for(let d=0;d<ND;d++)el("rect",{x:x0+d*cw+0.8,y:yy+1.5,width:cw-1.6,height:ch-3,rx:2,fill:"var(--point)","fill-opacity":.45},svg);}
+    txt(svg,x0,H-6,"cada cuadro es un día de un camión · azul: aprender · violeta: examen · naranja: camiones que llegarán",{"font-size":12});
+    const G=D.ideas.grupos;
+    bars("g-bars",[["Examen: días sueltos al azar",G.azar,mode===0?"var(--sample)":"var(--line)",f2(G.azar)+" L"],["Examen: camiones enteros",G.camion,mode===1?"var(--sample)":"var(--line)",f2(G.camion)+" L"],["Uso real: camiones nuevos",G.nuevos,"var(--point)",f2(G.nuevos)+" L"]],3);
+    const S=D.ideas.grupos_sin_odo;
+    document.getElementById("g-msg").innerHTML=mode===0?`Cada camión aparece a la vez entre los días para aprender y en el examen. El examen promete <b>${f2(G.azar)} L</b>, pero con 12 camiones nuevos el error real es <b>${f2(G.nuevos)} L</b>. ¿Cómo reconoce el modelo a cada camión si no le damos su número? Por el odómetro: cada camión lleva una cantidad de kilómetros acumulados distinta, y eso funciona como su "huella". Sin esa columna, el examen al azar da ${f2(S.azar)} L y los camiones nuevos ${f2(S.nuevos)} L: el odómetro servía para reconocer al camión, no para predecir.`:`Con camiones enteros escondidos, el examen promete <b>${f2(G.camion)} L</b> y la realidad con camiones nuevos es <b>${f2(G.nuevos)} L</b>. El modelo no puede usar las manías de camiones que nunca vio, igual que pasará con los nuevos.`;}
+  seg(["g-azar","g-cam"],i=>{mode=i;draw();});draw();})();
+
+/* ---------- idea 4: candidatas ---------- */
+(function(){const C=D.ideas.candidatas,base=C.ninguna;
+  const L=[["consumo_ayer","Consumo de ayer","ok","Sí: ayer ya pasó, así que el dato existe. Mejora el examen y el uso real por igual. Una columna sana."],
+    ["media_7_pasado","Media de los 7 días anteriores","ok","Sí: solo usa días que ya terminaron. Es la mejor columna honesta de las cuatro."],
+    ["media_semana","Media de la semana (3 días antes, hoy y 3 después)","mid","Solo en parte: mezcla tres días pasados con hoy y tres días futuros, que por la mañana aún no existen. En el examen parece la mejor, y por eso la elegirías antes que la media de los 7 días anteriores. En el uso real hay que calcularla sin esos días y sale peor. La fuga te habría hecho elegir mal."],
+    ["litros_manana","Litros que cargará mañana","no","No: es información del futuro. Gana por goleada en el examen y se hunde en el uso real."]];
+  const chips=document.getElementById("c-chips");let cur=0;const bs=[];
+  L.forEach(([k,n],i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=n;b.setAttribute("aria-pressed",String(i===cur));b.onclick=()=>{cur=i;bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));draw();};chips.appendChild(b);bs.push(b);});
+  function draw(){const [k,n,v,why]=L[cur],[et,ep]=C[k];
+    bars("c-bars",[["Básico · examen",base[0],"var(--line)",f2(base[0])+" L"],["Básico · uso real",base[1],"var(--line)",f2(base[1])+" L"],["Con la columna · examen",et,"var(--mean)",f2(et)+" L"],["Con la columna · uso real",ep,"var(--point)",f2(ep)+" L"]],6);
+    document.getElementById("c-msg").innerHTML=`<span class="verdict ${v}">${v==="ok"?"se sabe":v==="no"?"no se sabe":"a medias"}</span> ¿Se sabe por la mañana, antes de salir? ${why}`;}
+  draw();})();
+
+/* ---------- idea 5: selección con todos los datos ---------- */
+(function(){const S=D.ideas.seleccion;
+  const pl=new Plot(document.getElementById("sel"),{W:900,H:260,pad:{l:16,r:16,t:20,b:40},x0:0.3,x1:1,y0:0,y1:1,xt:[0.3,0.4,0.5,0.6,0.7,0.8,0.9,1],fx:v=>Math.round(v*100)+"%",yt:[],xl:"nota en el examen (porcentaje de aciertos)"});
+  el("line",{x1:pl.sx(0.5),x2:pl.sx(0.5),y1:pl.sy(0),y2:pl.sy(1),stroke:"var(--good)","stroke-width":2,"stroke-dasharray":"6 4"},pl.g);txt(pl.g,pl.sx(0.5)-6,pl.sy(0.95),"lo honesto: 50 % (cara o cruz)",{"font-size":12,style:"fill:var(--good)","text-anchor":"end"});
+  const g=el("g",null,pl.g);let mode=0;
+  function draw(){g.textContent="";const v=mode?S.dentro:S.fuera;
+    v.forEach((x,k)=>el("circle",{cx:pl.sx(x),cy:pl.sy(0.08+0.7*((k*0.618)%1)),r:6,fill:mode?"var(--mean)":"var(--warn)","fill-opacity":.8},g));
+    const m=v.reduce((a,b)=>a+b,0)/v.length;el("line",{x1:pl.sx(m),x2:pl.sx(m),y1:pl.sy(0.05),y2:pl.sy(0.86),stroke:"var(--ink)","stroke-width":2.5},g);txt(g,pl.sx(m)+8,pl.sy(0.9),"media "+pct(m),{"font-size":13,"font-weight":700,class:"t-ink"});
+    document.getElementById("s-msg").innerHTML=mode?`Eligiendo las columnas solo con los viajes para aprender, sin mirar los del examen, la nota baja a <b>${pct(m)}</b>, lo que corresponde a ruido. Es la respuesta correcta: no hay nada que aprender.`:`Las 20 columnas se eligieron porque, por casualidad, se parecían a la moneda en todos los viajes, incluidos los del examen. Es como elegir las preguntas del examen después de ver las respuestas. Resultado: <b>${pct(m)}</b> de aciertos con datos que no contienen ninguna información.`;}
+  seg(["s-fuera","s-dentro"],i=>{mode=i;draw();});draw();})();
+})();
+</script>
+
+</body>
+</html>

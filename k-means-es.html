@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>K-means</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+:root{--c5:#C2457A;--c6:#7A6A1F;--c7:#2A8A8A}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--c5:#F07BB0;--c6:#E2C860;--c7:#5FD0D0}}
+:root[data-theme="dark"]{--c5:#F07BB0;--c6:#E2C860;--c7:#5FD0D0}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.kpis{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:var(--f-mono);font-size:.88rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.kpis b{color:var(--ink);font-weight:500}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.hist{display:flex;flex-wrap:wrap;gap:6px;font-family:var(--f-mono);font-size:.82rem}
+.hist span{border:1px solid var(--line);border-radius:999px;padding:2px 10px}
+.hist span.bad{border-color:var(--warn);color:var(--warn)}
+.hist span.ok{border-color:var(--good);color:var(--good)}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Serie ML visual · explicado sin fórmulas · <a href="k-means-tecnico-es.html" target="_self">ver la versión técnica</a> · <a href="serie-ml-visual-es.html" target="_self">todos los temas</a> · <a href="k-means-en.html" target="_self">in English</a></p>
+  <h1>K-means</h1>
+  <p class="lede">Agrupar datos sin que nadie te diga los grupos: pon unos centros, que cada punto se vaya con el más cercano, mueve cada centro al medio de los suyos y repite hasta que nada cambie.</p>
+</header>
+
+<section class="first" aria-label="Juguete interactivo">
+  <figure class="fig"><svg id="hero" role="img" aria-label="Puntos que se agrupan alrededor de centros que se mueven"></svg></figure>
+  <div class="kpis" id="h-kpi"></div>
+  <p class="qcard col" id="h-msg"></p>
+  <div class="controls">
+    <div class="btns"><button type="button" class="primary" id="h-step">Un paso</button><button type="button" id="h-run">Hasta el final</button><button type="button" id="h-new">Otros centros iniciales</button><button type="button" id="h-data">Otros datos</button></div>
+    <div class="slider"><label for="h-k">Número de grupos (K) <output id="h-k-o"></output></label><input type="range" id="h-k" min="2" max="7" step="1" value="4"><div class="ends"><span>2</span><span>7</span></div></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Antes de empezar</p>
+    <h2>¿Dónde poner las bodegas?</h2>
+    <p>Una empresa reparte a cientos de clientes y quiere abrir 3 bodegas. ¿Dónde ponerlas para que los camiones viajen lo menos posible? Un método muy natural: pon las 3 bodegas en cualquier sitio; cada cliente se asigna a la bodega más cercana; luego mueve cada bodega al <strong>centro</strong> de sus clientes. Ahora algunos clientes tienen otra bodega más cerca: reasígnalos y vuelve a mover. Al cabo de unas vueltas, nada cambia.</p>
+    <p>Eso es K-means. "K" es el número de grupos que pides y "means" (medias) son los centros, que siempre son el promedio de su grupo. Nadie le dice al algoritmo qué grupos hay: los encuentra solo. Por eso se llama aprendizaje <strong>no supervisado</strong>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 5</p>
+    <h2>Dos pasos que se repiten: asignar y mover</h2>
+    <p>Ocho clientes y dos bodegas. Empezamos con las bodegas mal puestas a propósito: las dos al oeste, sobre los clientes A y B. Pulsa "Siguiente" y mira cómo se arreglan solas.</p>
+  </div>
+  <figure class="fig"><svg id="dep" role="img" aria-label="Ocho clientes y dos bodegas que se mueven paso a paso"></svg></figure>
+  <p class="col qcard" id="dep-q"></p>
+  <div class="btns"><button type="button" class="primary" id="dep-next">Siguiente</button><button type="button" id="dep-reset">Empezar de nuevo</button></div>
+  <p class="col note">Cada vuelta hace que la suma de distancias al cuadrado de los clientes a su bodega (la <strong>inercia</strong>) baje o se quede igual: asignar a la bodega más cercana nunca la sube, y el promedio es justo el punto que la hace mínima. Por eso K-means siempre termina.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 5</p>
+    <h2>¿Cuántos grupos? Busca el codo</h2>
+    <p>K-means no sabe cuántos grupos hay: se lo dices tú. Con más grupos la inercia siempre baja (con un grupo por punto llegaría a cero), así que "la menor inercia" no sirve para elegir. Lo que se busca es el <strong>codo</strong>: el K a partir del cual añadir otro grupo ya apenas mejora.</p>
+  </div>
+  <div class="lab">
+    <figure class="fig"><svg id="elb" role="img" aria-label="Agrupación con el K elegido"></svg></figure>
+    <figure class="fig"><svg id="elbE" role="img" aria-label="Inercia según el número de grupos"></svg><figcaption id="elb-c"></figcaption></figure>
+  </div>
+  <div class="slider col"><label for="elb-k">K <output id="elb-k-o"></output></label><input type="range" id="elb-k" min="1" max="8" step="1" value="2"><div class="ends"><span>1</span><span>8</span></div></div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 5</p>
+    <h2>El resultado depende de dónde empiezas</h2>
+    <p>K-means siempre llega a un sitio donde nada cambia, pero no siempre al <strong>mejor</strong>. Si dos centros empiezan en el mismo grupo, pueden quedarse repartiéndoselo mientras otros dos grupos comparten un solo centro. Se queda atascado en una solución "buena para él" pero mala.</p>
+    <p>Dos remedios que se usan siempre: empezar con centros <strong>separados entre sí</strong> (el método k-means++, que elige cada centro nuevo lejos de los anteriores) y repetir varias veces quedándose con la de menor inercia.</p>
+  </div>
+  <figure class="fig"><svg id="loc" role="img" aria-label="Resultado de K-means desde un arranque concreto"></svg></figure>
+  <div class="btns"><button type="button" id="loc-rand">Arrancar al azar</button><button type="button" class="primary" id="loc-pp">Arrancar con k-means++</button></div>
+  <p class="col qcard" id="loc-q"></p>
+  <div class="hist col" id="loc-h"></div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 de 5</p>
+    <h2>Solo ve grupos redondos</h2>
+    <p>Como cada punto va al centro más cercano, la frontera entre dos grupos es siempre una recta a mitad de camino entre sus centros. Eso funciona con nubes redondas y parecidas, pero falla con formas alargadas, curvas o grupos de tamaños muy distintos.</p>
+  </div>
+  <figure class="fig"><svg id="shp" role="img" aria-label="K-means sobre distintas formas de datos"></svg></figure>
+  <div class="seg" role="group" aria-label="Forma de los datos"><button type="button" data-s="blobs" aria-pressed="true">Nubes redondas</button><button type="button" data-s="long" aria-pressed="false">Alargadas</button><button type="button" data-s="moons" aria-pressed="false">Lunas</button><button type="button" data-s="sizes" aria-pressed="false">Tamaños distintos</button></div>
+  <p class="col qcard" id="shp-q"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 de 5</p>
+    <h2>Los grupos no traen nombre (y cuidado con las unidades)</h2>
+    <p>600 viajes de una flota, con su velocidad media y sus kilómetros. K-means devuelve "grupo 1, grupo 2, grupo 3": somos nosotros quienes miramos los centros y les ponemos nombre. Y como mide distancias, le pasa lo mismo que a KNN: si no escalas, los kilómetros (cientos) aplastan a la velocidad (decenas) y los grupos salen cortados solo por distancia.</p>
+  </div>
+  <figure class="fig"><svg id="trips" role="img" aria-label="Viajes agrupados por velocidad media y kilómetros"></svg></figure>
+  <div class="seg" role="group" aria-label="Escala"><button type="button" id="tr-raw" aria-pressed="false">Sin escalar</button><button type="button" id="tr-std" aria-pressed="true">Escalado</button></div>
+  <p class="col qcard" id="tr-q"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta completa</h2>
+    <ol class="steps">
+      <li><div><strong>Escala las variables</strong> para que todas pesen parecido.</div></li>
+      <li><div><strong>Elige K</strong>, el número de grupos.</div></li>
+      <li><div><strong>Pon K centros iniciales</strong> separados entre sí (k-means++).</div></li>
+      <li><div><strong>Asigna</strong> cada punto al centro más cercano.</div></li>
+      <li><div><strong>Mueve</strong> cada centro al promedio de sus puntos.</div></li>
+      <li><div><strong>Repite</strong> 4 y 5 hasta que nada cambie; haz varios arranques y quédate con el de menor inercia.</div></li>
+      <li><div><strong>Mira los centros y ponles nombre.</strong> Prueba varios K y elige con el codo y con sentido común.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>¿Para qué se usa?</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="12" cy="14" r="3"/><circle cx="28" cy="12" r="3"/><circle cx="20" cy="28" r="3"/><path d="M4 34h32"/></svg><h3>Ubicar bodegas y zonas</h3><p>Dividir clientes o puntos de entrega en zonas de reparto, o decidir dónde poner depósitos y estaciones de carga.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 30c6-12 10-12 14-4s8 8 14-6"/></svg><h3>Perfiles de conducción y viajes</h3><p>Agrupar viajes o conductores por velocidad, frenadas, paradas y horarios para descubrir patrones sin etiquetarlos a mano.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="14" cy="16" r="6"/><circle cx="26" cy="16" r="6"/><path d="M6 34c2-6 6-8 8-8s6 2 6 8M20 34c2-6 6-8 6-8s6 2 8 8"/></svg><h3>Segmentar clientes</h3><p>Grupos de clientes con hábitos parecidos para ofrecer a cada uno lo que necesita.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="8" width="28" height="24" rx="3"/><path d="M6 24l8-8 6 6 4-4 10 10"/></svg><h3>Comprimir imágenes</h3><p>Reducir millones de colores a 16: cada píxel toma el color del centro más cercano. Es K-means sobre colores.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo bueno y lo no tan bueno</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Lo bueno</h3><ul class="pc">
+      <li>Muy sencillo y muy rápido, incluso con millones de puntos.</li>
+      <li>Los centros son fáciles de interpretar: "el viaje típico de este grupo".</li>
+      <li>No necesita respuestas: descubre estructura en datos sin etiquetar.</li>
+      <li>Sirve como primer paso para otros modelos (resumir, comprimir).</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Lo no tan bueno</h3><ul class="pc">
+      <li>Hay que decirle K de antemano.</li>
+      <li>Puede quedarse atascado según el arranque.</li>
+      <li>Supone grupos redondos y de tamaño parecido.</li>
+      <li>Sensible a las unidades y a los valores extremos (un punto rarísimo arrastra su centro).</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Grupo (clúster)</dt><dd>Un conjunto de puntos que se parecen entre sí más que a los demás.</dd>
+      <dt>Centro (centroide)</dt><dd>El promedio de los puntos de un grupo: su "punto típico".</dd>
+      <dt>K</dt><dd>Cuántos grupos pides.</dd>
+      <dt>Inercia</dt><dd>La suma de las distancias al cuadrado de cada punto a su centro. Cuanto menor, más apretados los grupos.</dd>
+      <dt>Codo</dt><dd>El K a partir del cual añadir grupos casi no reduce la inercia.</dd>
+      <dt>k-means++</dt><dd>Una forma de elegir los centros iniciales lejos unos de otros.</dd>
+      <dt>No supervisado</dt><dd>Aprender sin respuestas correctas: el algoritmo busca estructura por su cuenta.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: las fórmulas detrás de todo</summary>
+    <p style="padding-top:10px">No hacen falta para entender la idea:</p>
+    <div class="formula">inercia = suma, para cada punto, de (distancia a su centro)²
+
+repetir:
+  asignar: cada punto → el centro más cercano
+  mover:   cada centro → promedio de sus puntos
+hasta que ningún punto cambie de grupo</div>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2>Todo en un minuto</h2>
+    <p>Un repaso animado: asignar y mover, el codo, los arranques que se atascan y las formas que K-means no ve. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACxVULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAULAf/2Q==" aria-label="Animación: K-means">
+      <source src="k-means-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+
+const COL=["var(--point)","var(--sample)","var(--mean)","var(--good)","var(--c5)","var(--c6)","var(--c7)"];
+const d2=(a,b)=>(a[0]-b[0])**2+(a[1]-b[1])**2;
+const assign=(P,C)=>P.map(p=>{let b=0,bd=Infinity;C.forEach((c,k)=>{const d=d2(p,c);if(d<bd){bd=d;b=k;}});return b;});
+const moveC=(P,L,C)=>C.map((c,k)=>{const S=P.filter((_,i)=>L[i]===k);return S.length?[S.reduce((a,p)=>a+p[0],0)/S.length,S.reduce((a,p)=>a+p[1],0)/S.length]:c.slice();});
+const inertia=(P,L,C)=>P.reduce((a,p,i)=>a+d2(p,C[L[i]]),0);
+function kpp(P,K,r){const C=[P[Math.floor(r()*P.length)].slice()];while(C.length<K){const D=P.map(p=>Math.min(...C.map(c=>d2(p,c))));const s=D.reduce((a,b)=>a+b,0);let u=r()*s,i=0;while(u>D[i]&&i<P.length-1){u-=D[i];i++;}C.push(P[i].slice());}return C;}
+function randInit(P,K,r){const idx=new Set();while(idx.size<K)idx.add(Math.floor(r()*P.length));return [...idx].map(i=>P[i].slice());}
+function run(P,C){let L=assign(P,C);for(let it=0;it<100;it++){const N=moveC(P,L,C);const L2=assign(P,N);C=N;if(L2.every((v,i)=>v===L[i])){L=L2;break;}L=L2;}return {C,L,J:inertia(P,L,C)};}
+function best(P,K,r,n){let B=null;for(let t=0;t<n;t++){const R=run(P,kpp(P,K,r));if(!B||R.J<B.J)B=R;}return B;}
+function blobs(r,centers,n,s){const P=[];centers.forEach(([cx,cy,sx,sy])=>{for(let i=0;i<n;i++)P.push([cx+(sx||s)*gauss(r),cy+(sy||s)*gauss(r)]);});return P;}
+const cross=(pl,g,c,col,s,hollow)=>{s=s||11;const x=pl.sx(c[0]),y=pl.sy(c[1]);el("circle",{cx:x,cy:y,r:s+3,fill:hollow?"none":"var(--surface)",stroke:col,"stroke-width":hollow?2:3,"stroke-dasharray":hollow?"3 3":""},g);if(!hollow)el("path",{d:`M${x-s*0.6} ${y-s*0.6}L${x+s*0.6} ${y+s*0.6}M${x+s*0.6} ${y-s*0.6}L${x-s*0.6} ${y+s*0.6}`,stroke:col,"stroke-width":3.5,"stroke-linecap":"round"},g);};
+const pts=(pl,g,P,L,r,op)=>P.forEach((p,i)=>el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:r||4.5,fill:L?COL[L[i]]:"var(--muted)","fill-opacity":op||0.85},g));
+
+/* ---------- héroe ---------- */
+(function(){const svg=document.getElementById("hero"),pl=new Plot(svg,{W:900,H:440,pad:{l:10,r:10,t:10,b:10},x0:0,x1:20.45,y0:0,y1:10});
+  const gL=el("g",null,pl.g),gP=el("g",null,pl.g),gC=el("g",null,pl.top);let seed=4,P,C,L,phase,steps,timer=null;const ik=document.getElementById("h-k");
+  function data(){const r=mulberry32(seed);const n=3+Math.floor(r()*3);const cs=[...Array(n)].map(()=>[2.5+r()*15.5,2+r()*6,0.6+r()*0.8]);P=blobs(r,cs,Math.floor(300/n),1);P=P.filter(p=>p[0]>0.2&&p[0]<20.2&&p[1]>0.2&&p[1]<9.8);}
+  function init(){const r=mulberry32(seed*7+(+ik.value)*3+Date.now()%97);C=randInit(P,+ik.value,r);L=null;phase="assign";steps=0;draw();}
+  function step(){if(phase==="done")return;if(phase==="assign"){const L2=assign(P,C);if(L&&L2.every((v,i)=>v===L[i])){phase="done";}else{L=L2;phase="move";}}else{C=moveC(P,L,C);phase="assign";}steps++;draw();}
+  function draw(){gP.textContent="";gC.textContent="";gL.textContent="";pts(pl,gP,P,L,4.5);C.forEach((c,k)=>cross(pl,gC,c,COL[k]));
+    const J=L?inertia(P,L,C):null;document.getElementById("h-k-o").textContent=ik.value;
+    document.getElementById("h-kpi").innerHTML=`<span>pasos: <b>${steps}</b></span><span>inercia: <b>${J===null?"—":J.toFixed(0)}</b></span>`;
+    document.getElementById("h-msg").innerHTML=phase==="done"?"<b>Terminado:</b> ningún punto cambió de grupo. Prueba con otros centros iniciales: ¿sale siempre lo mismo?":L===null?"Los centros (✕) empiezan en puntos al azar. Pulsa <b>Un paso</b>: cada punto se pintará del color de su centro más cercano.":phase==="move"?"<b>Asignar:</b> cada punto tomó el color del centro más cercano. Siguiente paso: cada centro se mueve al promedio de sus puntos.":"<b>Mover:</b> cada centro saltó al medio de su grupo. Siguiente paso: reasignar, porque ahora algunos puntos tienen otro centro más cerca.";}
+  document.getElementById("h-step").onclick=step;
+  document.getElementById("h-run").onclick=()=>{clearInterval(timer);timer=setInterval(()=>{step();if(phase==="done")clearInterval(timer);},380);};
+  document.getElementById("h-new").onclick=()=>{clearInterval(timer);init();};document.getElementById("h-data").onclick=()=>{clearInterval(timer);seed+=1;data();init();};
+  ik.addEventListener("input",()=>{clearInterval(timer);init();});data();init();})();
+
+/* ---------- bodegas paso a paso ---------- */
+(function(){const N="ABCDEFGH",P=[[1,1],[2,1],[1,3],[3,2],[6,5],[7,4],[8,6],[7,7]];
+  const pl=new Plot(document.getElementById("dep"),{W:900,H:400,pad:{l:40,r:16,t:16,b:36},x0:0,x1:9.5,y0:0,y1:8,xt:[0,2,4,6,8],yt:[0,2,4,6,8],fx:v=>v+" km",fy:v=>v+" km"});
+  const gL=el("g",null,pl.g),gP=el("g",null,pl.top),gC=el("g",null,pl.top);
+  const S=[];let C=[[1,1],[2,1]],L=null;S.push({C,L,t:"Inicio: las bodegas (✕) están sobre los clientes A y B, las dos al oeste. Ningún cliente asignado aún."});
+  for(let it=0;it<3;it++){const L2=assign(P,C);const J=inertia(P,L2,C);const same=L&&L2.every((v,i)=>v===L[i]);L=L2;
+    S.push({C,L,t:same?`<b>Asignar otra vez:</b> nadie cambia de bodega. <b>Terminado.</b> Inercia final: ${J.toFixed(1)}. Cada bodega quedó en el centro de su zona.`:`<b>Asignar:</b> cada cliente va a la bodega más cercana. `+(it===0?`La bodega de B se queda con todo el este (6 clientes). Inercia: ${J.toFixed(1)}.`:`Ahora los 4 del oeste van con una y los 4 del este con la otra. Inercia: ${J.toFixed(1)}.`)});
+    if(same)break;const C2=moveC(P,L,C);C=C2;S.push({C,L,t:`<b>Mover:</b> cada bodega salta al promedio de sus clientes: (${C[0].map(v=>+v.toFixed(2)).join(", ")}) y (${C[1].map(v=>+v.toFixed(2)).join(", ")}).`});}
+  let k=0;function draw(){const s=S[k];gL.textContent="";gP.textContent="";gC.textContent="";
+    if(s.L)P.forEach((p,i)=>el("line",{x1:pl.sx(p[0]),y1:pl.sy(p[1]),x2:pl.sx(s.C[s.L[i]][0]),y2:pl.sy(s.C[s.L[i]][1]),stroke:COL[s.L[i]],"stroke-width":2,"stroke-opacity":.6},gL));
+    P.forEach((p,i)=>{el("circle",{cx:pl.sx(p[0]),cy:pl.sy(p[1]),r:9,fill:s.L?COL[s.L[i]]:"var(--muted)",stroke:"var(--point-ring)","stroke-width":2},gP);txt(gP,pl.sx(p[0])+12,pl.sy(p[1])-8,N[i],{"font-size":14,class:"t-ink"});});
+    s.C.forEach((c,j)=>cross(pl,gC,c,COL[j],12));document.getElementById("dep-q").innerHTML=`Paso ${k} de ${S.length-1}. `+s.t;document.getElementById("dep-next").disabled=k>=S.length-1;}
+  document.getElementById("dep-next").onclick=()=>{k=Math.min(S.length-1,k+1);draw();};document.getElementById("dep-reset").onclick=()=>{k=0;draw();};draw();})();
+
+/* ---------- codo ---------- */
+(function(){const r=mulberry32(21),P=blobs(r,[[2.5,7,0.8],[7.5,7.5,0.9],[3,2.5,0.9],[7.5,3,0.7]],60,1);
+  const R=[null];for(let K=1;K<=8;K++)R.push(best(P,K,r,6));
+  const pl=new Plot(document.getElementById("elb"),{W:500,H:420,pad:{l:8,r:8,t:8,b:8},x0:0,x1:10,y0:0,y1:10});const gP=el("g",null,pl.g),gC=el("g",null,pl.top);
+  const pe=new Plot(document.getElementById("elbE"),{W:380,H:420,pad:{l:52,r:12,t:24,b:40},x0:0.5,x1:8.5,y0:0,y1:R[1].J*1.05,xt:[1,2,3,4,5,6,7,8],yt:[0,R[1].J/2,R[1].J].map(v=>Math.round(v)),xl:"K",yl:"inercia"});
+  el("path",{d:pe.ppath(R.slice(1).map((x,i)=>[i+1,x.J])),fill:"none",stroke:"var(--mean)","stroke-width":3},pe.g);R.slice(1).forEach((x,i)=>el("circle",{cx:pe.sx(i+1),cy:pe.sy(x.J),r:4,fill:"var(--mean)"},pe.g));
+  const mk=el("circle",{r:8,fill:"none",stroke:"var(--point)","stroke-width":3},pe.top);const ik=document.getElementById("elb-k");
+  function draw(){const K=+ik.value,x=R[K];gP.textContent="";gC.textContent="";pts(pl,gP,P,x.L,4.5);x.C.forEach((c,k)=>cross(pl,gC,c,COL[k%7],9));mk.setAttribute("cx",pe.sx(K));mk.setAttribute("cy",pe.sy(x.J));document.getElementById("elb-k-o").textContent=K;
+    const gain=K>1?(1-x.J/R[K-1].J)*100:0;document.getElementById("elb-c").textContent=`K = ${K}: inercia ${x.J.toFixed(0)}`+(K>1?` (${gain.toFixed(0)} % menos que con ${K-1}). `:". ")+(K<4?"Cada grupo nuevo aún separa nubes distintas: gran mejora.":K===4?"El codo: a partir de aquí la curva se aplana.":"Ya estamos partiendo nubes reales en trozos: mejora poco.");}
+  ik.addEventListener("input",draw);draw();})();
+
+/* ---------- arranques ---------- */
+(function(){const r0=mulberry32(33),P=blobs(r0,[[2,7.5,0.55],[7.8,7.6,0.55],[2.2,2.3,0.55],[8,2.4,0.55]],45,1);
+  const pl=new Plot(document.getElementById("loc"),{W:900,H:420,pad:{l:10,r:10,t:10,b:10},x0:-1.4,x1:11.4,y0:0,y1:10});const gP=el("g",null,pl.g),gC=el("g",null,pl.top);
+  const opt=best(P,4,mulberry32(5),10).J;let seed=2;const H=[];
+  function go(pp){const r=mulberry32(seed++*31+7);const C0=pp?kpp(P,4,r):randInit(P,4,r),R=run(P,C0);gP.textContent="";gC.textContent="";pts(pl,gP,P,R.L,5);
+    C0.forEach((c,k)=>cross(pl,gC,c,COL[k],9,true));R.C.forEach((c,k)=>cross(pl,gC,c,COL[k],11));
+    const ok=R.J<opt*1.01;H.unshift({ok,pp});if(H.length>12)H.pop();
+    document.getElementById("loc-q").innerHTML=`${pp?"k-means++":"Al azar"}: inercia final <b>${R.J.toFixed(0)}</b> (la mejor posible es ${opt.toFixed(0)}). `+(ok?"Encontró los 4 grupos.":"<b>Atascado:</b> un centro se reparte una nube con otro mientras dos nubes comparten centro.")+" Los círculos punteados marcan dónde empezó cada centro.";
+    document.getElementById("loc-h").innerHTML=H.map(h=>`<span class="${h.ok?"ok":"bad"}">${h.pp?"++":"azar"} ${h.ok?"✓":"✗"}</span>`).join("");}
+  document.getElementById("loc-rand").onclick=()=>go(false);document.getElementById("loc-pp").onclick=()=>go(true);
+  for(let t=1;t<60;t++){const R=run(P,randInit(P,4,mulberry32(t*31+7)));if(R.J>opt*1.05){seed=t;break;}}go(false);})();
+
+/* ---------- formas ---------- */
+(function(){const pl=new Plot(document.getElementById("shp"),{W:900,H:400,pad:{l:10,r:10,t:10,b:10},x0:-1,x1:11,y0:0,y1:10});const gP=el("g",null,pl.g),gC=el("g",null,pl.top);
+  const sets={blobs:()=>{const r=mulberry32(2);return {P:blobs(r,[[2.5,7,0.8],[8,6.5,0.8],[5,2.5,0.8]],70,1),K:3,t:"Tres nubes redondas y parecidas: K-means acierta de lleno. Es su caso ideal."};},
+    long:()=>{const r=mulberry32(3);const P=[];for(const cy of [2.6,5,7.4])for(let i=0;i<70;i++)P.push([1+r()*9,cy+0.35*gauss(r)]);return {P,K:3,t:"Tres franjas horizontales: K-means prefiere cortar en vertical en tres bloques \"redondos\" antes que seguir las franjas. Ve distancias, no formas."};},
+    moons:()=>{const r=mulberry32(4);const P=[];for(let i=0;i<110;i++){const t=Math.PI*r();P.push([3+2.8*Math.cos(t)+0.25*gauss(r),4.3+2.8*Math.sin(t)+0.25*gauss(r)]);P.push([5.8-2.8*Math.cos(t)+0.25*gauss(r),5.7-2.8*Math.sin(t)+0.25*gauss(r)]);}return {P,K:2,t:"Dos lunas entrelazadas: cualquier recta las corta mal. Para estas formas se usan otros métodos (DBSCAN, clustering espectral)."};},
+    sizes:()=>{const r=mulberry32(5);return {P:blobs(r,[[3.2,5,1.6,1.6]],220,1).concat(blobs(r,[[8.6,7.6,0.35,0.35],[8.6,2.4,0.35,0.35]],20,1)),K:3,t:"Una nube grande y dos pequeñas: K-means parte la grande y junta o descuida las pequeñas, porque le compensa repartir los centros donde hay más puntos."};}};
+  const btns=[...document.querySelectorAll("[data-s]")];
+  function draw(name){const {P,K,t}=sets[name](),R=best(P,K,mulberry32(9),8);gP.textContent="";gC.textContent="";pts(pl,gP,P,R.L,4.5);R.C.forEach((c,k)=>cross(pl,gC,c,COL[k],10));document.getElementById("shp-q").innerHTML=t;btns.forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.s===name)));}
+  btns.forEach(b=>b.onclick=()=>draw(b.dataset.s));draw("blobs");})();
+
+/* ---------- viajes ---------- */
+(function(){const r=mulberry32(12),T=[];const tipos=[[22,40,"reparto urbano"],[52,140,"regional"],[78,430,"larga distancia"]];
+  tipos.forEach(([v,k])=>{for(let i=0;i<200;i++)T.push([Math.max(5,v+v*0.18*gauss(r)),Math.max(5,k+k*0.25*gauss(r))]);});
+  const pl=new Plot(document.getElementById("trips"),{W:900,H:400,pad:{l:56,r:16,t:16,b:42},x0:0,x1:110,y0:0,y1:700,xt:[0,20,40,60,80,100],yt:[0,200,400,600],fx:v=>v+" km/h",fy:v=>v+" km",xl:"velocidad media",yl:"km del viaje"});
+  const gP=el("g",null,pl.g),gC=el("g",null,pl.top);
+  const mean=a=>a.reduce((x,y)=>x+y,0)/a.length,sd=a=>{const m=mean(a);return Math.sqrt(mean(a.map(x=>(x-m)**2)));};
+  const mv=mean(T.map(t=>t[0])),sv=sd(T.map(t=>t[0])),mk=mean(T.map(t=>t[1])),sk=sd(T.map(t=>t[1]));
+  function draw(std){const Z=std?T.map(([v,k])=>[(v-mv)/sv,(k-mk)/sk]):T;const R=best(Z,3,mulberry32(3),8);
+    const C=R.C.map(c=>std?[c[0]*sv+mv,c[1]*sk+mk]:c);gP.textContent="";gC.textContent="";pts(pl,gP,T,R.L,4,0.75);C.forEach((c,k)=>cross(pl,gC,c,COL[k],11));
+    const order=C.map((c,k)=>[c[0],k]).sort((a,b)=>a[0]-b[0]);
+    document.getElementById("tr-q").innerHTML=(std?"<strong>Escalado:</strong> los tres grupos coinciden con tres tipos de viaje. Mirando los centros les ponemos nombre: ":"<strong>Sin escalar:</strong> los grupos son franjas horizontales: solo cuentan los kilómetros. Centros: ")+order.map(([v,k],j)=>`<b style="color:${COL[k]}">${std?tipos[j][2]+" ":""}(${C[k][0].toFixed(0)} km/h, ${C[k][1].toFixed(0)} km)</b>`).join(", ")+".";
+    document.getElementById("tr-raw").setAttribute("aria-pressed",String(!std));document.getElementById("tr-std").setAttribute("aria-pressed",String(std));}
+  document.getElementById("tr-raw").onclick=()=>draw(false);document.getElementById("tr-std").onclick=()=>draw(true);draw(true);})();
+})();
+</script>
+
+</body>
+</html>

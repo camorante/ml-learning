@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Visual ML series</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: índice de la serie. Cabecera con el progreso y una ruta numerada de temas (el orden es la ruta de aprendizaje). Misma paleta que las páginas */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9; --soft:#E8EDF5;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --point:#DD6A26; --point-ring:#FFFFFF; --good:#1C8A5A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545; --soft:#1C2533;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --point:#FF9A55; --point-ring:#0E131B; --good:#4CC38A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545; --soft:#1C2533;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --point:#FF9A55; --point-ring:#0E131B; --good:#4CC38A;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.55;padding-inline:20px;padding-block:0 72px}
+.wrap{max-width:1060px;margin:0 auto}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;margin:0;text-wrap:balance}
+p{margin:0}
+.eyebrow{font-family:var(--f-mono);font-size:.76rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+header.top{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:28px;align-items:center;padding-block:56px 36px}
+header.top>*{min-width:0}
+h1{font-size:clamp(2.6rem,7vw,4.8rem);font-weight:800;letter-spacing:-.025em}
+.lede{font-size:1.18rem;color:var(--muted);max-width:44ch;margin-top:14px}
+.heroart{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:10px}
+.heroart svg{display:block;width:100%;height:auto}
+@media (max-width:760px){header.top{grid-template-columns:1fr;padding-top:40px}}
+
+.stats{display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:22px}
+.stat{display:grid}
+.stat b{font-family:var(--f-display);font-size:1.9rem;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.stat span{font-size:.85rem;color:var(--muted)}
+.progress{margin-top:18px;height:8px;border-radius:4px;background:var(--soft);overflow:hidden;max-width:420px}
+.progress i{display:block;height:100%;background:var(--mean);border-radius:4px}
+
+.bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding-block:8px 18px;border-top:1px solid var(--line);padding-top:22px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:inherit;font-size:.9rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 14px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.chip:hover{border-color:var(--mean)}
+.search{font:inherit;font-size:.95rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 16px;min-width:0;width:240px;max-width:100%}
+:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:grid;grid-template-rows:auto 1fr;transition:transform .15s,border-color .15s,box-shadow .15s}
+.card.ready:hover{transform:translateY(-2px);border-color:var(--band-edge);box-shadow:0 10px 30px -18px rgba(20,40,80,.45)}
+.card .art{background:var(--soft);border-bottom:1px solid var(--line);aspect-ratio:16/8;position:relative}
+.card .art svg{position:absolute;inset:0;width:100%;height:100%}
+.card .num{position:absolute;top:10px;left:12px;font-family:var(--f-mono);font-size:.78rem;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:2px 9px}
+.card .tag{position:absolute;top:10px;right:12px;font-family:var(--f-mono);font-size:.72rem;letter-spacing:.04em;border-radius:999px;padding:3px 9px}
+.tag.ok{background:var(--good);color:var(--surface)}
+.tag.soon{background:var(--surface);color:var(--muted);border:1px dashed var(--line)}
+.card .body{padding:16px 18px 18px;display:grid;gap:10px;align-content:start}
+.card h3{font-size:1.25rem;font-weight:700}
+.card .fam{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mean)}
+.card p.d{font-size:.95rem;color:var(--muted)}
+.links{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.links a{display:inline-flex;align-items:center;gap:7px;font-size:.9rem;text-decoration:none;border-radius:999px;padding:6px 13px;border:1px solid var(--line);color:var(--ink);background:var(--surface)}
+.links a.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+.links a:hover{border-color:var(--mean)}
+.links svg{width:15px;height:15px;flex:none}
+.meta{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.8rem;color:var(--muted);font-family:var(--f-mono)}
+.meta span{display:inline-flex;align-items:center;gap:5px}
+.card.soon .art svg{opacity:.45;filter:grayscale(.6)}
+.card.soon h3{color:var(--muted)}
+.empty{color:var(--muted);padding:30px 0}
+footer{margin-top:44px;padding-top:22px;border-top:1px solid var(--line);color:var(--muted);font-size:.9rem;display:grid;gap:6px}
+@media (prefers-reduced-motion: reduce){.card{transition:none}.card.ready:hover{transform:none}}
+.xseries{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 20px;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--point);border-radius:14px;padding:16px 20px;margin-bottom:26px}
+.xseries h2{font-size:1.3rem;font-weight:700;margin-top:4px}
+.xseries p.d{color:var(--muted);font-size:.95rem;margin-top:4px;max-width:60ch}
+.xseries a{display:inline-flex;align-items:center;gap:7px;font-size:.95rem;font-weight:700;text-decoration:none;border-radius:999px;padding:8px 16px;background:var(--point);color:var(--surface);white-space:nowrap}
+</style>
+</head>
+<body>
+
+<main class="wrap">
+  <header class="top">
+    <div>
+      <p class="eyebrow">Collection · interactive explainers · <a href="serie-ml-visual-es.html" id="eshub" target="_blank" rel="noopener" style="color:inherit">en español</a></p>
+      <h1>Visual ML series</h1>
+      <p class="lede">Machine learning algorithms explained twice: a simple version, without formulas and with a short video, and a technical version for programmers with the math, verified code and an example worked out by hand.</p>
+      <div class="stats" id="stats"></div>
+      <div class="progress" aria-hidden="true"><i id="prog"></i></div>
+    </div>
+    <div class="heroart"><svg id="heroart" viewBox="0 0 480 300" role="img" aria-label="Illustration: data, a fitted curve and its uncertainty band"></svg></div>
+  </header>
+
+  <aside class="xseries" aria-label="Related collection">
+    <div><p class="eyebrow">Sister collection · before the model</p><h2>Preparing the data</h2><p class="d">Setting the test data aside, exploring, cleaning logging errors, outliers, gaps and rare classes, and preparing features without leakage. What you have to do before using any of these algorithms.</p></div>
+    <a id="datahub" href="preparing-the-data-en.html" target="_self">See the collection →</a>
+  </aside>
+
+  <div class="bar">
+    <div class="chips" role="group" aria-label="Filter topics">
+      <button class="chip" type="button" data-f="all" aria-pressed="true">All</button>
+      <button class="chip" type="button" data-f="ready" aria-pressed="false">Available</button>
+      <button class="chip" type="button" data-f="soon" aria-pressed="false">Coming soon</button>
+    </div>
+    <input class="search" id="q" type="search" placeholder="Search a topic…" aria-label="Search a topic">
+  </div>
+
+  <p class="eyebrow" style="margin-bottom:14px">Suggested path: each topic builds on the previous ones</p>
+  <div class="grid" id="grid"></div>
+  <p class="empty" id="empty" hidden>No topic matches your search.</p>
+
+  <footer>
+    <p>Each topic includes a simple page with interactive charts and a short video with music, and a technical page with equations, widgets, verified Python code and a realistic example worked out step by step.</p>
+    <p>Neural networks are not part of this series: given their size, they will get a collection of their own.</p>
+    <p id="mode"></p>
+  </footer>
+</main>
+
+<script>
+(function(){
+"use strict";
+/* Catálogo. Para añadir un tema: rellenar simple/tech (archivo local y artifact) y poner ready:true. */
+const TOPICS=[
+  {n:1,id:"regresion",title:"Linear and polynomial regression",fam:"Basics",ready:true,video:true,
+   d:"The line that best summarizes the data, least squares, the parabola and the overfitting trap.",
+   simple:{file:"linear-and-polynomial-regression-en.html",url:"https://claude.ai/artifact/8i8komvA4E6vKdU6yTj9jf"},
+   tech:{file:"linear-and-polynomial-regression-technical-en.html",url:"https://claude.ai/artifact/U3bna3mbch4xbTLp5BoGMk"},
+   example:"A truck's most efficient speed",kw:"linear quadratic polynomial least squares ridge overfitting"},
+  {n:2,id:"logistica",title:"Logistic regression",fam:"Basics",ready:true,video:true,
+   d:"From predicting numbers to predicting probabilities: the S curve, surprise, the threshold and the decision boundary.",
+   simple:{file:"logistic-regression-en.html",url:"https://claude.ai/artifact/ABsmHU4K3HfjLnnHi9qL2w"},
+   tech:{file:"logistic-regression-technical-en.html",url:"https://claude.ai/artifact/2QCoDeh2CduEUjzPEBpSk3"},
+   example:"When to send a truck to the shop",kw:"classification sigmoid probability threshold roc newton irls softmax"},
+  {n:3,id:"gradiente",title:"Gradient descent",fam:"Basics",ready:true,video:true,
+   d:"How almost all of machine learning learns: the mountain in the fog, the step size, the zigzag, the false holes and SGD.",
+   simple:{file:"gradient-descent-en.html",url:"https://claude.ai/artifact/Fzb3g38o8zrsBVZRJTx8hC"},
+   tech:{file:"gradient-descent-technical-en.html",url:"https://claude.ai/artifact/1oPYPzt4rWUS4VKYCAMV9h"},
+   example:"Scaling the load: from 6,789 iterations to 7",kw:"optimization learning rate sgd adam momentum nesterov convergence"},
+  {n:4,id:"arbol",title:"Decision trees",fam:"Trees",ready:true,video:true,
+   d:"Splitting the space with yes/no questions: purity, overfitting, pruning and why a single tree is unstable.",
+   simple:{file:"decision-trees-en.html",url:"https://claude.ai/artifact/LCi2aHcEpz3so4MmCywMmQ"},
+   tech:{file:"decision-trees-technical-en.html",url:"https://claude.ai/artifact/CUGqjJiEt9rXRJmYfYrUEB"},
+   example:"Will the delivery be late?",kw:"tree decision gini entropy cart pruning importance"},
+  {n:5,id:"ensamble",title:"Random forest and boosting",fam:"Trees",ready:true,video:true,
+   d:"Many trees voting at once, or small trees in a row fixing the previous one's mistakes: bootstrap, OOB, gradient boosting and early stopping.",
+   simple:{file:"random-forest-and-boosting-en.html",url:"https://claude.ai/artifact/2mnK1h6wSZWWPLS4C79cSy"},
+   tech:{file:"random-forest-and-boosting-technical-en.html",url:"https://claude.ai/artifact/84wgDNi2XtC76EGZNdgE6p"},
+   example:"How many minutes late?",kw:"forest random forest bagging bootstrap oob boosting gradient xgboost lightgbm adaboost ensemble"},
+  {n:6,id:"xgboost",title:"XGBoost",fam:"Trees",ready:true,video:true,
+   d:"Boosting in production: a penalty for complexity, stopping in time, empty values without filling them in, and SHAP to explain each prediction.",
+   simple:{file:"xgboost-en.html",url:"https://claude.ai/artifact/JDgFjqZ8qwaWnRDFzVGS1Z"},
+   tech:{file:"xgboost-technical-en.html",url:"https://claude.ai/artifact/AuXh2GJrx3c2oxYffgx2ak"},
+   example:"XGBoost's first tree, by hand",kw:"xgboost lightgbm catboost boosting shap gradient hessian early stopping missing monotone tabular"},
+  {n:7,id:"knn",title:"k-nearest neighbors",fam:"Distances",ready:true,video:true,
+   d:"Deciding by copying the most similar cases: how many neighbors, why you must scale and the curse of dimensionality.",
+   simple:{file:"k-nearest-neighbors-en.html",url:"https://claude.ai/artifact/BujXWaoCemcxBaKw2JypjG"},
+   tech:{file:"k-nearest-neighbors-technical-en.html",url:"https://claude.ai/artifact/3x4XbNNsXV4KhRaeDds84m"},
+   example:"Is this truck going to break down?",kw:"knn neighbors distance scaling kd-tree hnsw dimension"},
+  {n:8,id:"kmeans",title:"K-means",fam:"Unsupervised",ready:true,video:true,
+   d:"Grouping data without labels: assigning and moving centers, the elbow, starts that get stuck and the shapes it can't see.",
+   simple:{file:"k-means-en.html",url:"https://claude.ai/artifact/JFaaMATa6j5LGpGCf3J83Z"},
+   tech:{file:"k-means-technical-en.html",url:"https://claude.ai/artifact/2NpKGHRmivnCdS4rHE4B16"},
+   example:"Where to put 2 warehouses?",kw:"clustering groups centroids kmeans++ elbow silhouette lloyd"},
+  {n:9,id:"pca",title:"PCA",fam:"Unsupervised",ready:true,video:true,
+   d:"Rotating the point cloud to keep the directions that matter most: the best shadow, compressing, reconstructing and its limits.",
+   simple:{file:"pca-en.html",url:"https://claude.ai/artifact/LNpNbQzGz9qyKjGnGoRBTu"},
+   tech:{file:"pca-technical-en.html",url:"https://claude.ai/artifact/DhwRKY5XJ1gekADQzZGgwp"},
+   example:"Summarizing each truck in a single number",kw:"principal components dimensionality svd eigenvectors explained variance"},
+  {n:10,id:"svm",title:"Support vector machines",fam:"Distances",ready:true,video:true,
+   d:"The widest street between two groups: support vectors, a soft margin with a fine and the kernel trick for curved boundaries.",
+   simple:{file:"support-vector-machines-en.html",url:"https://claude.ai/artifact/MhxtMP4tW9UJvS3DLkCEhe"},
+   tech:{file:"support-vector-machines-technical-en.html",url:"https://claude.ai/artifact/S1JitAxLWk8NLmjgGm3XV9"},
+   example:"Harsh or normal braking?",kw:"svm margin kernel rbf support vectors smo hinge dual"},
+  {n:11,id:"bayes",title:"Bayes",fam:"Probabilistic",ready:true,video:true,
+   d:"Changing your mind in order: the base rate, clues that chain together, proportions with little data and the Naive Bayes classifier.",
+   simple:{file:"bayes-en.html",url:"https://claude.ai/artifact/93eJbJ8bF98UHeGQsEkZzi"},
+   tech:{file:"bayes-technical-en.html",url:"https://claude.ai/artifact/FNkArSR52cyqHry1adMdoK"},
+   example:"Is the breakdown alert real?",kw:"bayes theorem prior posterior naive bayes beta binomial base rate calibration odds"},
+  {n:12,id:"gp",title:"Gaussian processes",fam:"Probabilistic",ready:true,video:true,
+   d:"Guessing a whole curve from a few points and saying how unsure it is at each place.",
+   simple:{file:"gaussian-processes-en.html",url:"https://claude.ai/artifact/MEnBE9eiK4AtGUHkt5moqD"},
+   tech:{file:"gaussian-processes-technical-en.html",url:"https://claude.ai/artifact/WU6MgnCU5zjw6JNYXPZQ3L"},
+   example:"A truck enters a tunnel",kw:"gp gaussian kernel uncertainty bayesian"},
+  {n:13,id:"markov",title:"Markov chains",fam:"Probabilistic",ready:true,video:true,
+   d:"States that jump with fixed probabilities: the table of changes, the long-run mix, waiting times and the hidden model that guesses what you can't see.",
+   simple:{file:"markov-chains-en.html",url:"https://claude.ai/artifact/8uy6dVPcTQnn1bshX9rdPG"},
+   tech:{file:"markov-chains-technical-en.html",url:"https://claude.ai/artifact/Nqu3sDv9uYxDwT42asJDUi"},
+   example:"Where will the truck be in 2 hours?",kw:"markov hmm hidden viterbi forward stationary transition states"},
+  {n:14,id:"kalman",title:"Kalman filter",fam:"Probabilistic",ready:true,video:true,
+   d:"Predict, measure and correct: turning a noisy GPS into a clean track, crossing tunnels and estimating speed without measuring it.",
+   simple:{file:"kalman-filter-en.html",url:"https://claude.ai/artifact/7qaFCDVmayDAZ7ag8EykhF"},
+   tech:{file:"kalman-filter-technical-en.html",url:"https://claude.ai/artifact/MPzqcizFwZhcx3BR3qJkVw"},
+   example:"Where is the truck? Four seconds by hand",kw:"kalman gps time series rts smoothing nis sensor fusion"}
+];
+const LOCAL=location.protocol==="file:";
+const href=o=>o?(LOCAL?o.file:o.url):"#";
+const NS="http://www.w3.org/2000/svg";
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a||{})e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const path=(pts)=>pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join("");
+
+/* mini ilustraciones (viewBox 320x160) */
+const ART={
+  regresion(s){const r=mulberry32(3);const P=[];for(let i=0;i<10;i++){const x=30+i*28;P.push([x,128-0.32*(x-30)+(r()-0.5)*44]);}
+    const f=x=>128-0.32*(x-30);P.forEach(([x,y])=>el("line",{x1:x,x2:x,y1:y,y2:f(x),stroke:"var(--sample)","stroke-width":2},s));
+    el("path",{d:path([[20,f(20)],[300,f(300)]]),stroke:"var(--mean)","stroke-width":3.5,fill:"none","stroke-linecap":"round"},s);
+    P.forEach(([x,y])=>el("circle",{cx:x,cy:y,r:5.5,fill:"var(--point)",stroke:"var(--point-ring)","stroke-width":2},s));},
+  gp(s){const xs=[...Array(81)].map((_,i)=>10+i*3.75),m=x=>80-30*Math.sin(x/45),sd=x=>4+24*(1-Math.max(...[70,160,250].map(d=>Math.exp(-((x-d)**2)/(2*28*28)))));
+    const up=xs.map(x=>[x,m(x)-2*sd(x)/1.6]),lo=xs.map(x=>[x,m(x)+2*sd(x)/1.6]).reverse();
+    el("path",{d:path(up)+path(lo).replace("M","L")+"Z",fill:"var(--band)",stroke:"var(--band-edge)","stroke-dasharray":"3 3"},s);
+    el("path",{d:path(xs.map(x=>[x,m(x)])),stroke:"var(--mean)","stroke-width":3.5,fill:"none"},s);
+    [70,160,250].forEach(x=>el("circle",{cx:x,cy:m(x),r:5.5,fill:"var(--point)",stroke:"var(--point-ring)","stroke-width":2},s));},
+  logistica(s){const xs=[...Array(81)].map((_,i)=>10+i*3.75);el("path",{d:path(xs.map(x=>[x,135-105/(1+Math.exp(-(x-160)/22))])),stroke:"var(--mean)","stroke-width":3.5,fill:"none"},s);
+    const r=mulberry32(5);for(let i=0;i<12;i++){const x=20+r()*280,c=x+(r()-.5)*70>160;el("circle",{cx:x,cy:c?30:135,r:5,fill:c?"var(--point)":"var(--sample)"},s);}},
+  gradiente(s){for(let k=1;k<=5;k++)el("ellipse",{cx:200,cy:85,rx:28*k,ry:12*k,fill:"none",stroke:"var(--band-edge)"},s);
+    el("path",{d:"M40 30 L95 120 L130 50 L165 108 L182 68 L195 92 L200 85",stroke:"var(--point)","stroke-width":2.5,fill:"none"},s);el("circle",{cx:200,cy:85,r:5,fill:"var(--good)"},s);},
+  arbol(s){el("rect",{x:20,y:15,width:280,height:130,fill:"none",stroke:"var(--line)"},s);el("line",{x1:150,x2:150,y1:15,y2:145,stroke:"var(--mean)","stroke-width":3},s);el("line",{x1:20,x2:150,y1:80,y2:80,stroke:"var(--mean)","stroke-width":3},s);el("line",{x1:150,x2:300,y1:105,y2:105,stroke:"var(--mean)","stroke-width":3},s);
+    const r=mulberry32(8);for(let i=0;i<22;i++){const x=28+r()*265,y=22+r()*118,c=(x<150&&y<80)||(x>=150&&y>105);el("circle",{cx:x,cy:y,r:4.5,fill:c?"var(--point)":"var(--sample)"},s);}},
+  ensamble(s){for(let t=0;t<3;t++){const ox=55+t*105;el("circle",{cx:ox,cy:35,r:7,fill:"var(--mean)"},s);[[-28,85],[28,85]].forEach(([dx,y])=>{el("line",{x1:ox,y1:35,x2:ox+dx,y2:y,stroke:"var(--muted)","stroke-width":2},s);el("circle",{cx:ox+dx,cy:y,r:6,fill:t%2?"var(--point)":"var(--sample)"},s);});}
+    el("path",{d:"M55 112 Q160 150 265 112",stroke:"var(--good)","stroke-width":2.5,fill:"none","stroke-dasharray":"5 4"},s);},
+  knn(s){const r=mulberry32(4);for(let i=0;i<24;i++){const x=25+r()*270,y=18+r()*125;el("circle",{cx:x,cy:y,r:4.5,fill:x+y*0.6>200?"var(--point)":"var(--sample)"},s);}
+    el("circle",{cx:165,cy:80,r:38,fill:"var(--band)",stroke:"var(--band-edge)"},s);el("circle",{cx:165,cy:80,r:6,fill:"var(--ink)"},s);},
+  kmeans(s){const r=mulberry32(9),C=[[80,55,"var(--point)"],[220,50,"var(--sample)"],[160,120,"var(--mean)"]];C.forEach(([cx,cy,c])=>{for(let i=0;i<9;i++)el("circle",{cx:cx+(r()-.5)*70,cy:cy+(r()-.5)*45,r:4.5,fill:c,"fill-opacity":.75},s);el("path",{d:`M${cx-8} ${cy}h16M${cx} ${cy-8}v16`,stroke:"var(--ink)","stroke-width":3},s);});},
+  pca(s){const r=mulberry32(2);for(let i=0;i<40;i++){const t=(r()-.5)*230,u=(r()-.5)*40;el("circle",{cx:160+t*0.92-u*0.38,cy:80-t*0.38*0.9-u*0.92,r:3.5,fill:"var(--sample)","fill-opacity":.7},s);}
+    el("line",{x1:50,y1:125,x2:270,y2:35,stroke:"var(--mean)","stroke-width":3.5},s);el("line",{x1:145,y1:55,x2:175,y2:105,stroke:"var(--point)","stroke-width":3},s);},
+  svm(s){el("line",{x1:60,y1:150,x2:260,y2:10,stroke:"var(--mean)","stroke-width":3.5},s);["-34","34"].forEach(o=>el("line",{x1:60+ +o,y1:150,x2:260+ +o,y2:10,stroke:"var(--mean)","stroke-width":1.5,"stroke-dasharray":"5 4"},s));
+    const r=mulberry32(6);for(let i=0;i<16;i++){const a=r(),b=r(),side=i%2;const x=side?190+a*110:20+a*100,y=side?60+b*90:10+b*90;el("circle",{cx:x,cy:y,r:4.5,fill:side?"var(--point)":"var(--sample)"},s);}},
+  markov(s){const C=[[100,85],[240,38],[240,125]],col=["var(--mean)","var(--sample)","var(--point)"];
+    [[0,1],[1,0],[0,2],[2,0],[1,2],[2,1]].forEach(([a,b],k)=>{const p=C[a],q=C[b],mx=(p[0]+q[0])/2,my=(p[1]+q[1])/2,dx=q[0]-p[0],dy=q[1]-p[1],l=Math.hypot(dx,dy),nx=-dy/l*14,ny=dx/l*14;el("path",{d:`M${p[0]} ${p[1]}Q${mx+nx} ${my+ny} ${q[0]} ${q[1]}`,stroke:"var(--muted)","stroke-width":2,fill:"none"},s);});
+    C.forEach((c,i)=>el("circle",{cx:c[0],cy:c[1],r:20,fill:"var(--surface)",stroke:col[i],"stroke-width":4},s));},
+  xgboost(s){const P=[[20,120],[70,120],[70,92],[125,92],[125,70],[180,70],[180,58],[235,58],[235,40],[300,40]];el("path",{d:"M"+P.map(p=>p.join(" ")).join("L"),stroke:"var(--mean)","stroke-width":3.5,fill:"none"},s);
+    const r=mulberry32(8);for(let i=0;i<16;i++){const x=25+i*17,y=125-x*0.28+(r()-.5)*26;el("circle",{cx:x,cy:y,r:4,fill:"var(--point)","fill-opacity":.8},s);}},
+  bayes(s){el("rect",{x:60,y:30,width:44,height:110,rx:6,fill:"var(--line)"},s);el("rect",{x:60,y:134,width:44,height:6,rx:3,fill:"var(--point)"},s);
+    el("rect",{x:216,y:30,width:44,height:110,rx:6,fill:"var(--line)"},s);el("rect",{x:216,y:100,width:44,height:40,rx:6,fill:"var(--point)"},s);
+    el("path",{d:"M118 85H200",stroke:"var(--muted)","stroke-width":3,fill:"none"},s);el("path",{d:"M200 85l-10-6v12z",fill:"var(--muted)"},s);},
+  kalman(s){const r=mulberry32(12);let d="",m="";for(let i=0;i<=20;i++){const x=15+i*14.5,y=110-60*Math.sin(i/7);d+=(i?"L":"M")+x+" "+y;const yy=y+(r()-.5)*36;el("circle",{cx:x,cy:yy,r:3.5,fill:"var(--point)","fill-opacity":.75},s);}
+    el("path",{d,stroke:"var(--mean)","stroke-width":3.5,fill:"none"},s);},
+  nn(s){const L=[[2,40],[3,30],[3,30],[1,0]],X=[50,130,210,285];const pos=L.map(([k],li)=>[...Array(k)].map((_,j)=>[X[li],80+(j-(k-1)/2)*42]));
+    for(let i=0;i<pos.length-1;i++)pos[i].forEach(a=>pos[i+1].forEach(b=>el("line",{x1:a[0],y1:a[1],x2:b[0],y2:b[1],stroke:"var(--band-edge)","stroke-width":1.5},s)));
+    pos.flat().forEach(([x,y])=>el("circle",{cx:x,cy:y,r:10,fill:"var(--surface)",stroke:"var(--mean)","stroke-width":2.5},s));}
+};
+const ICON={
+  play:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>',
+  sigma:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.5 3H3.5l5 5-5 5h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>'
+};
+
+/* cabecera */
+const ready=TOPICS.filter(t=>t.ready).length;
+document.getElementById("stats").innerHTML=`<div class="stat"><b>${ready}</b><span>topics ready</span></div><div class="stat"><b>${ready*2}</b><span>pages</span></div><div class="stat"><b>${TOPICS.filter(t=>t.video).length}</b><span>videos</span></div><div class="stat"><b>${TOPICS.length-ready}</b><span>on the way</span></div>`;
+document.getElementById("prog").style.width=(ready/TOPICS.length*100)+"%";
+if(LOCAL){const m=document.getElementById("datahub");m.href="preparing-the-data-en.html";m.target="_self";const e=document.getElementById("eshub");e.href="serie-ml-visual-es.html";e.target="_self";}
+document.getElementById("mode").textContent=LOCAL?"Opened from your folder: links go to the local HTML files (videos must be in the same folder).":"Opened online: links go to the published pages.";
+(function(){const s=document.getElementById("heroart"),r=mulberry32(7);
+  for(let y=50;y<=250;y+=50)el("line",{x1:20,x2:460,y1:y,y2:y,stroke:"var(--line)"},s);
+  const xs=[...Array(111)].map((_,i)=>20+i*4),m=x=>150-70*Math.sin((x-20)/80)+0.0008*(x-240)**2,D=[60,130,215,330,400];
+  const sd=x=>5+40*(1-Math.max(...D.map(d=>Math.exp(-((x-d)**2)/(2*32*32)))));
+  el("path",{d:path(xs.map(x=>[x,m(x)-sd(x)]))+path(xs.map(x=>[x,m(x)+sd(x)]).reverse()).replace("M","L")+"Z",fill:"var(--band)",stroke:"var(--band-edge)","stroke-dasharray":"3 3"},s);
+  for(let k=0;k<3;k++){const ph=r()*6;el("path",{d:path(xs.map(x=>[x,m(x)+sd(x)*0.8*Math.sin(x/37+ph)])),stroke:"var(--sample)","stroke-width":1.4,fill:"none",opacity:.55},s);}
+  el("path",{d:path(xs.map(x=>[x,m(x)])),stroke:"var(--mean)","stroke-width":4,fill:"none","stroke-linecap":"round"},s);
+  D.forEach(x=>el("circle",{cx:x,cy:m(x)+(r()-.5)*8,r:7,fill:"var(--point)",stroke:"var(--point-ring)","stroke-width":2.5},s));
+})();
+
+/* tarjetas */
+const grid=document.getElementById("grid");
+for(const t of TOPICS){
+  const c=document.createElement("article");c.className="card "+(t.ready?"ready":"soon");c.dataset.state=t.ready?"ready":"soon";
+  c.dataset.text=(t.title+" "+t.fam+" "+t.d+" "+(t.kw||"")).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+  c.innerHTML=`<div class="art"><svg viewBox="0 0 320 160" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg><span class="num">${String(t.n).padStart(2,"0")}</span><span class="tag ${t.ready?"ok":"soon"}">${t.ready?"Available":"Coming soon"}</span></div>
+  <div class="body"><p class="fam">${t.fam}</p><h3>${t.title}</h3><p class="d">${t.d}</p>
+  ${t.ready?`<div class="meta">${t.video?"<span>▶ video included</span>":""}${t.example?`<span>example: ${t.example}</span>`:""}</div>
+  <div class="links"><a class="primary" href="${href(t.simple)}" target="${LOCAL?"_self":"_blank"}" rel="noopener">${ICON.play}Simple version</a><a href="${href(t.tech)}" target="${LOCAL?"_self":"_blank"}" rel="noopener">${ICON.sigma}Technical version</a></div>`:""}</div>`;
+  grid.appendChild(c);ART[t.id](c.querySelector("svg"));
+}
+/* filtros */
+let F="all";const q=document.getElementById("q");
+function apply(){const s=q.value.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim();let n=0;
+  grid.querySelectorAll(".card").forEach(c=>{const ok=(F==="all"||c.dataset.state===F)&&(!s||c.dataset.text.includes(s));c.hidden=!ok;if(ok)n++;});
+  document.getElementById("empty").hidden=n>0;}
+document.querySelectorAll(".chip").forEach(b=>b.addEventListener("click",()=>{F=b.dataset.f;document.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));apply();}));
+q.addEventListener("input",apply);
+})();
+</script>
+</body>
+</html>
