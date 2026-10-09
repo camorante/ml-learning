@@ -145,7 +145,7 @@ const TOPICS=[
   {"n": 15, "id": "ent", "title": "Entropía y entropía cruzada", "fam": "Información", "ready": false, "video": false, "d": "Medir la sorpresa: la pérdida de la clasificación y de las redes neuronales.", "kw": "entropia entropia cruzada kl informacion log loss"},
   {"n": 16, "id": "calc", "title": "Derivadas, gradiente y regla de la cadena", "fam": "Cálculo", "ready": false, "video": false, "d": "Lo mínimo de cálculo para entender cómo aprende un modelo y cómo funciona backpropagation.", "kw": "derivada gradiente regla de la cadena backpropagation"}
 ];
-const LOCAL=location.protocol==="file:";
+const LOCAL=true; /* copia para carpeta y GitHub Pages: enlaces a los archivos de esta carpeta */
 const href=o=>o?(LOCAL?o.file:o.url):"#";
 const NS="http://www.w3.org/2000/svg";
 function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a||{})e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
@@ -182,7 +182,7 @@ const ready=TOPICS.filter(t=>t.ready).length;
 document.getElementById("stats").innerHTML=`<div class="stat"><b>${ready}</b><span>temas listos</span></div><div class="stat"><b>${ready*2}</b><span>páginas</span></div><div class="stat"><b>${TOPICS.filter(t=>t.video).length}</b><span>videos</span></div><div class="stat"><b>${TOPICS.length-ready}</b><span>en camino</span></div>`;
 document.getElementById("prog").style.width=(ready/TOPICS.length*100)+"%";
 if(LOCAL){const m=document.getElementById("mlhub");m.href="serie-ml-visual-es.html";m.target="_self";const e=document.getElementById("enhub");e.href="math-under-ml-en.html";e.target="_self";}
-document.getElementById("mode").textContent=LOCAL?"Abierto desde tu carpeta: los enlaces llevan a los archivos HTML locales (los videos deben estar en la misma carpeta).":"Abierto en línea: los enlaces llevan a las páginas publicadas.";
+document.getElementById("mode").textContent=LOCAL?"Los enlaces llevan a las páginas de esta misma carpeta (los videos deben estar junto a ellas).":"Abierto en línea: los enlaces llevan a las páginas publicadas.";
 (function(){const s=document.getElementById("heroart");
   for(let i=0;i<=8;i++){el("path",{d:`M${40+i*50} 20V280`,stroke:"var(--line)","stroke-width":1.5},s);}for(let i=0;i<=5;i++){el("path",{d:`M40 ${30+i*50}H440`,stroke:"var(--line)","stroke-width":1.5},s);}
   let d="";for(let i=0;i<=200;i++){const x=40+i*2,z=(i-100)/32;d+=(i?"L":"M")+x+" "+(270-190*Math.exp(-z*z/2));}el("path",{d,stroke:"var(--sample)","stroke-width":3,fill:"var(--band)"},s);

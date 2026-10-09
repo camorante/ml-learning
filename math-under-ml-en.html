@@ -145,7 +145,7 @@ const TOPICS=[
   {"n": 15, "id": "ent", "title": "Entropy and cross-entropy", "fam": "Information", "ready": false, "video": false, "d": "Measuring surprise: the loss of classification and of neural networks.", "kw": "entropia entropia cruzada kl informacion log loss"},
   {"n": 16, "id": "calc", "title": "Derivatives, gradient and the chain rule", "fam": "Calculus", "ready": false, "video": false, "d": "The minimum calculus to understand how a model learns and how backpropagation works.", "kw": "derivada gradiente regla de la cadena backpropagation"}
 ];
-const LOCAL=location.protocol==="file:";
+const LOCAL=true; /* copia para carpeta y GitHub Pages: enlaces a los archivos de esta carpeta */
 const href=o=>o?(LOCAL?o.file:o.url):"#";
 const NS="http://www.w3.org/2000/svg";
 function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a||{})e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
@@ -182,7 +182,7 @@ const ready=TOPICS.filter(t=>t.ready).length;
 document.getElementById("stats").innerHTML=`<div class="stat"><b>${ready}</b><span>topics ready</span></div><div class="stat"><b>${ready*2}</b><span>pages</span></div><div class="stat"><b>${TOPICS.filter(t=>t.video).length}</b><span>videos</span></div><div class="stat"><b>${TOPICS.length-ready}</b><span>on the way</span></div>`;
 document.getElementById("prog").style.width=(ready/TOPICS.length*100)+"%";
 if(LOCAL){const m=document.getElementById("mlhub");m.href="visual-ml-series-en.html";m.target="_self";const e=document.getElementById("eshub");e.href="matematicas-del-ml-es.html";e.target="_self";}
-document.getElementById("mode").textContent=LOCAL?"Opened from your folder: links go to the local HTML files (videos must be in the same folder).":"Opened online: links go to the published pages.";
+document.getElementById("mode").textContent=LOCAL?"Links go to the pages in this same folder (videos must sit next to them).":"Opened online: links go to the published pages.";
 (function(){const s=document.getElementById("heroart");
   for(let i=0;i<=8;i++){el("path",{d:`M${40+i*50} 20V280`,stroke:"var(--line)","stroke-width":1.5},s);}for(let i=0;i<=5;i++){el("path",{d:`M40 ${30+i*50}H440`,stroke:"var(--line)","stroke-width":1.5},s);}
   let d="";for(let i=0;i<=200;i++){const x=40+i*2,z=(i-100)/32;d+=(i?"L":"M")+x+" "+(270-190*Math.exp(-z*z/2));}el("path",{d,stroke:"var(--sample)","stroke-width":3,fill:"var(--band)"},s);

@@ -208,7 +208,7 @@ const TOPICS=[
    tech:{file:"filtro-de-kalman-tecnico-es.html",url:"https://claude.ai/artifact/UsVjijP49LcfqFtSrZJfbF"},
    example:"¿Dónde está el camión? Cuatro segundos a mano",kw:"kalman gps series tiempo rts suavizado nis fusion sensores"}
 ];
-const LOCAL=location.protocol==="file:";
+const LOCAL=true; /* copia para carpeta y GitHub Pages: enlaces a los archivos de esta carpeta */
 const href=o=>o?(LOCAL?o.file:o.url):"#";
 const NS="http://www.w3.org/2000/svg";
 function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a||{})e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
@@ -265,7 +265,7 @@ const ready=TOPICS.filter(t=>t.ready).length;
 document.getElementById("stats").innerHTML=`<div class="stat"><b>${ready}</b><span>temas listos</span></div><div class="stat"><b>${ready*2}</b><span>páginas</span></div><div class="stat"><b>${TOPICS.filter(t=>t.video).length}</b><span>videos</span></div><div class="stat"><b>${TOPICS.length-ready}</b><span>en camino</span></div>`;
 document.getElementById("prog").style.width=(ready/TOPICS.length*100)+"%";
 if(LOCAL){const m=document.getElementById("datahub");m.href="preparar-los-datos-es.html";m.target="_self";const e=document.getElementById("enhub");e.href="visual-ml-series-en.html";e.target="_self";}
-document.getElementById("mode").textContent=LOCAL?"Abierto desde tu carpeta: los enlaces llevan a los archivos HTML locales (los videos deben estar en la misma carpeta).":"Abierto en línea: los enlaces llevan a las páginas publicadas.";
+document.getElementById("mode").textContent=LOCAL?"Los enlaces llevan a las páginas de esta misma carpeta (los videos deben estar junto a ellas).":"Abierto en línea: los enlaces llevan a las páginas publicadas.";
 (function(){const s=document.getElementById("heroart"),r=mulberry32(7);
   for(let y=50;y<=250;y+=50)el("line",{x1:20,x2:460,y1:y,y2:y,stroke:"var(--line)"},s);
   const xs=[...Array(111)].map((_,i)=>20+i*4),m=x=>150-70*Math.sin((x-20)/80)+0.0008*(x-240)**2,D=[60,130,215,330,400];

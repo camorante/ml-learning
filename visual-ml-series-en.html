@@ -208,7 +208,7 @@ const TOPICS=[
    tech:{file:"kalman-filter-technical-en.html",url:"https://claude.ai/artifact/MPzqcizFwZhcx3BR3qJkVw"},
    example:"Where is the truck? Four seconds by hand",kw:"kalman gps time series rts smoothing nis sensor fusion"}
 ];
-const LOCAL=location.protocol==="file:";
+const LOCAL=true; /* copia para carpeta y GitHub Pages: enlaces a los archivos de esta carpeta */
 const href=o=>o?(LOCAL?o.file:o.url):"#";
 const NS="http://www.w3.org/2000/svg";
 function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a||{})e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
@@ -265,7 +265,7 @@ const ready=TOPICS.filter(t=>t.ready).length;
 document.getElementById("stats").innerHTML=`<div class="stat"><b>${ready}</b><span>topics ready</span></div><div class="stat"><b>${ready*2}</b><span>pages</span></div><div class="stat"><b>${TOPICS.filter(t=>t.video).length}</b><span>videos</span></div><div class="stat"><b>${TOPICS.length-ready}</b><span>on the way</span></div>`;
 document.getElementById("prog").style.width=(ready/TOPICS.length*100)+"%";
 if(LOCAL){const m=document.getElementById("datahub");m.href="preparing-the-data-en.html";m.target="_self";const e=document.getElementById("eshub");e.href="serie-ml-visual-es.html";e.target="_self";}
-document.getElementById("mode").textContent=LOCAL?"Opened from your folder: links go to the local HTML files (videos must be in the same folder).":"Opened online: links go to the published pages.";
+document.getElementById("mode").textContent=LOCAL?"Links go to the pages in this same folder (videos must sit next to them).":"Opened online: links go to the published pages.";
 (function(){const s=document.getElementById("heroart"),r=mulberry32(7);
   for(let y=50;y<=250;y+=50)el("line",{x1:20,x2:460,y1:y,y2:y,stroke:"var(--line)"},s);
   const xs=[...Array(111)].map((_,i)=>20+i*4),m=x=>150-70*Math.sin((x-20)/80)+0.0008*(x-240)**2,D=[60,130,215,330,400];

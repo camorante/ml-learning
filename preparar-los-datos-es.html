@@ -169,7 +169,7 @@ const TOPICS=[
    tech:{file:"proyecto-completo-tecnico-es.html",url:"https://claude.ai/artifact/GMsur8EPn65FybD5pP6JzL"},
    example:"La semana 81, a mano: avisos, PSI y Kolmogórov-Smirnov",kw:"proyecto end to end ablacion produccion monitorizacion vigilancia deriva drift psi kolmogorov smirnov reentrenar fuga retraso etiqueta sensor"},
 ];
-const LOCAL=location.protocol==="file:";
+const LOCAL=true; /* copia para carpeta y GitHub Pages: enlaces a los archivos de esta carpeta */
 const href=o=>o?(LOCAL?o.file:o.url):"#";
 const NS="http://www.w3.org/2000/svg";
 function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a||{})e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
@@ -199,7 +199,7 @@ const ready=TOPICS.filter(t=>t.ready).length;
 document.getElementById("stats").innerHTML=`<div class="stat"><b>${ready}</b><span>temas listos</span></div><div class="stat"><b>${ready*2}</b><span>páginas</span></div><div class="stat"><b>${TOPICS.filter(t=>t.video).length}</b><span>videos</span></div><div class="stat"><b>${TOPICS.length-ready}</b><span>en camino</span></div>`;
 document.getElementById("prog").style.width=(ready/TOPICS.length*100)+"%";
 if(LOCAL){const m=document.getElementById("mlhub");m.href="serie-ml-visual-es.html";m.target="_self";const e=document.getElementById("enhub");e.href="preparing-the-data-en.html";e.target="_self";}
-document.getElementById("mode").textContent=LOCAL?"Abierto desde tu carpeta: los enlaces llevan a los archivos HTML locales (los videos deben estar en la misma carpeta).":"Abierto en línea: los enlaces llevan a las páginas publicadas.";
+document.getElementById("mode").textContent=LOCAL?"Los enlaces llevan a las páginas de esta misma carpeta (los videos deben estar junto a ellas).":"Abierto en línea: los enlaces llevan a las páginas publicadas.";
 (function(){const s=document.getElementById("heroart"),r=mulberry32(7);
   for(let i=0;i<8;i++)for(let j=0;j<5;j++){const x=30+j*38,y=40+i*28,bad=r()<0.22;const a={x,y,width:30,height:20,rx:3,fill:bad?"var(--point)":"var(--line)","fill-opacity":bad?.8:1};if(bad)a.transform=`rotate(${(r()-.5)*24} ${x+15} ${y+10})`;el("rect",a,s);}
   el("path",{d:"M228 150H262",stroke:"var(--muted)","stroke-width":3},s);el("path",{d:"M262 150l-10-6v12z",fill:"var(--muted)"},s);
