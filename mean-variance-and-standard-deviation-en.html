@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mean, variance and standard deviation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chips.num .chip{padding:6px 12px;min-width:2.6em}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.fig svg .drag{cursor:grab;touch-action:none}
+.fig svg.dragging .drag{cursor:grabbing}
+.c-med{color:var(--good)}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#en" target="_self">← Main menu</a> · The math under ML · topic 7 · explained with drawings · <a href="mean-variance-and-standard-deviation-technical-en.html" target="_self">see the technical version</a> · <a href="math-under-ml-en.html" target="_self">all topics</a> · <a href="media-varianza-y-desviacion-tipica-es.html" target="_self">en español</a></p>
+  <h1>Mean, variance and standard deviation</h1>
+  <p class="lede">When you have a column full of numbers, the first thing to do is sum it up in two: where the center is and how far the values stray from it. It sounds easy, but there are traps: a single badly stored value can move the center, and there is a "divide by n − 1" that nobody explains. Here you'll see all of it with the trips of one truck.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="situ col">
+    <p class="eyebrow">The setup</p>
+    <p>A truck made <strong>8 trips</strong> this week, and the telematics system stored its <strong>fuel consumption</strong> on each one, in liters per 100 kilometers (L/100 km): 32, 35, 30, 33, 37, 31, 34 and 32. Each orange dot in the drawing is a trip. We want two numbers: <strong>how much it normally burns</strong> and <strong>how much that changes</strong> from one trip to the next.</p>
+    <p>Imagine the thick line at the bottom is a stick, and each trip is a weight, all the same weight, hanging at its spot. The <strong>mean</strong> is the point where you would have to rest the stick so it doesn't tip. You can drag the dots (or use the slider) and watch everything change.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="The 8 trips as dots, with the mean as the balance point, the median and the distances to the mean"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each row is a trip, and its <b style="color:var(--point)">orange dot</b> sits at its consumption (the scale is at the bottom). The <b style="color:var(--mean)">blue triangle</b> under the stick and the vertical blue line mark the <b>mean</b>. The <b style="color:var(--sample)">purple</b> bars go from the mean to each trip: they are the <b>deviations</b>, how far each one strays, with its number at the end (+ if it burns more than the mean, − if it burns less). The light blue strip covers the mean ± one <b>standard deviation</b>. The <b style="color:var(--good)">green</b> line is the <b>median</b>, the value with half of the trips on each side.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>Move a trip</h3>
+      <p>Drag an orange dot with your finger or the mouse. Or pick the trip here and move it with the slider.</p>
+      <div class="chips num" id="t-sel" role="group" aria-label="Trip being moved"></div>
+      <div class="slider"><label for="t-v">Consumption (L/100 km) <output id="t-v-o"></output></label><input type="range" id="t-v" min="20" max="80" step="0.1" value="37"><div class="ends"><span>20 L/100 km</span><span>80 L/100 km</span></div></div>
+    </div>
+    <div class="dec">
+      <h3>Example weeks</h3>
+      <p>Each button loads the 8 consumptions of a different week. "8 trips" is the one above, the one worked out by hand in the technical version.</p>
+      <div class="chips" id="t-pre" role="group" aria-label="Example weeks"></div>
+    </div>
+    <div class="dec">
+      <h3>What is drawn</h3>
+      <p>Turn each aid on or off to look at one thing at a time.</p>
+      <div class="chips" role="group" aria-label="Chart layers"><button type="button" class="chip" id="t-dev" aria-pressed="true">deviations</button><button type="button" class="chip" id="t-band" aria-pressed="true">± 1 standard deviation band</button><button type="button" class="chip" id="t-med" aria-pressed="true">median</button></div>
+    </div>
+  </div>
+  <div class="big3" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Try this, in order:</strong></p>
+    <ol class="try">
+      <li>With "8 trips", add up the purple bars on the left (−1, −3, −2, −1) and those on the right (+2, +4, +1): both give 7. That's why the stick doesn't tip.</li>
+      <li>Press "one odd value": trip 5 was stored as 73 instead of 37. The mean jumps to 37.5, more than 7 of the 8 trips, and the median doesn't even notice.</li>
+      <li>Press "more regular": same center, each trip at half the distance. The standard deviation becomes half, and the variance, a quarter.</li>
+      <li>Press "two kinds of route": the mean is 33 and not a single trip is near 33.</li>
+      <li>Drag any dot: the bars on the left and on the right always add up to the same.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">What you just saw</p>
+    <h2>Two numbers to sum up a column</h2>
+    <p>To sum up a column of data (here, the consumption of 8 trips) two numbers are used above all:</p>
+    <ul>
+      <li>A <strong>center</strong>: the "typical" value. The most used one is the <strong>mean</strong>: add everything up and divide by how many there are. (32 + 35 + 30 + 33 + 37 + 31 + 34 + 32) / 8 = 264 / 8 = <strong>33 L/100 km</strong>. Another center is the <strong>median</strong>: sort the values and keep the one in the middle (with 8 values, the mean of the two in the middle: 32 and 33 give 32.5).</li>
+      <li>A <strong>spread</strong>: how far the values stray from the center. The most used one is the <strong>standard deviation</strong>, which here is <strong>2.27 L/100 km</strong>: any given trip strays from the mean by about 2 liters, sometimes more and sometimes less.</li>
+    </ul>
+    <p>With those two numbers you can already say a lot: "this truck burns 33 ± 2.3". The five ideas that follow explain why the mean is that balance point, when it misleads, why the distances are squared, where the famous "divide by n − 1" comes from, and how to compare columns measured in different units.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 5</p>
+    <h2>The mean is the number that misses the least, counting squared</h2>
+    <p>Imagine you have to bet one single number for the 8 trips: "this truck burns this much". On each trip you miss a little: the distance between your number and what it actually burned. If you count each error <strong>squared</strong> (multiplied by itself) and add them up, which number gives the smallest sum? Always, with any column of data, the <strong>mean</strong>. Move around and check it.</p>
+  </div>
+  <figure class="fig"><svg id="sq" role="img" aria-label="Errors of each trip with respect to the chosen number, and the sum of errors for each number"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, each row is a trip: the <b style="color:var(--mean)">dashed blue</b> line is your number and the <b style="color:var(--sample)">purple</b> bar is how much you miss on that trip, with its squared error next to it. At the bottom, the curve tells how much the errors add up to for each number you could pick (the bottom scale is the same as the top one). The dot is your choice: try to bring it to the lowest point of the curve.</p>
+  <div class="decs">
+    <div class="dec">
+      <div class="slider"><label for="q-c">My number (L/100 km) <output id="q-c-o"></output></label><input type="range" id="q-c" min="27" max="39" step="0.1" value="30"><div class="ends"><span>27 L/100 km</span><span>39 L/100 km</span></div></div>
+    </div>
+    <div class="dec">
+      <h3>How I count the errors</h3>
+      <div class="seg" role="group" aria-label="Way of counting the errors"><button type="button" id="q-m0" aria-pressed="true">squared</button><button type="button" id="q-m1" aria-pressed="false">as is (no sign)</button></div>
+      <p>Squared, the mean wins; as is, the median.</p>
+    </div>
+  </div>
+  <div class="big3 col" id="q-big"></div>
+  <p class="qcard col" id="q-msg"></p>
+  <div class="col stack">
+    <p>There is one calculation that explains it all: <strong>sum of squared errors = 36 + 8 × (distance to the mean)²</strong>. The 36 is the minimum, what the squared errors add up to if you pick exactly the mean; and every step you move away is paid by each of the 8 trips. That's why the mean is also the balance point of the toy: there, what is extra on one side exactly makes up for what is missing on the other.</p>
+    <p>This idea, "the number that misses the least, squared", is the same one used by <a href="linear-and-polynomial-regression-en.html" target="_self">linear regression</a> with a line instead of a number, the <a href="least-squares-as-a-projection-en.html" target="_self">least squares</a> of topic 4. The mean is the simplest model there is.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 5</p>
+    <h2>A bad record: the mean runs off, the median stays</h2>
+    <p>Real telematics brings errors. A classic case: trip 5 burned 37 L/100 km, but when it was stored the decimal point of a "37.0" got lost and it became <strong>370</strong>. Or the digits got swapped and it became 73. The mean adds up all the values, so a single absurd number drags it along. The median only looks at the order: the error goes to the end of the row, and the one in the middle is still the same.</p>
+  </div>
+  <div class="chips col" id="o-chips" role="group" aria-label="Stored value"></div>
+  <figure class="fig"><svg id="out" role="img" aria-label="The trips with a bad value, and how the mean and the median change with that value"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, the 8 trips on a line; the <b style="color:var(--point)">ringed dot</b> is trip 5, with the value that was stored. The scale widens so it fits. At the bottom, how the <b style="color:var(--mean)">mean</b>, the <b style="color:var(--good)">median</b> and the <b style="color:var(--sample)">trimmed mean</b> (drop the highest and the lowest trip and take the mean of the rest) change with the stored value, from 37 (correct) to 370.</p>
+  <div class="slider col"><label for="o-v">Stored value of trip 5 (L/100 km) <output id="o-v-o"></output></label><input type="range" id="o-v" min="37" max="370" step="1" value="73"><div class="ends"><span>37 (correct)</span><span>370 (lost decimal point)</span></div></div>
+  <div class="big3 col" id="o-big"></div>
+  <p class="qcard col" id="o-msg"></p>
+  <div class="col stack">
+    <p>So should you always use the median? No: the mean uses all the values and has good properties you'll see in idea 4 and in the technical version. The practical thing is to <strong>compute both</strong>. If they are similar, fine; if they are far apart, something is odd (an error, or data heavily skewed to one side) and it's worth looking before going on. How to hunt for those odd values is told in <a href="outliers-en.html" target="_self">outliers</a>, inside "Preparing the data".</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 5</p>
+    <h2>How far they stray: why squared, and the root at the end</h2>
+    <p>To measure how far the trips stray from the center, the natural thing is to look at the <strong>deviations</strong>: each value minus the mean. But their mean is useless: the positive and negative ones cancel out and always add up to 0 (that's what makes the stick balance). You have to get rid of the sign. You can take the distance as is, but the usual thing is to <strong>square</strong> it: −3 × −3 = 9, no sign, and on top of that what is far away weighs more.</p>
+    <p>The mean of those squares is the <strong>variance</strong>. It has a problem: if the data are in L/100 km, the variance is in "L/100 km squared", a unit that means nothing. That's why at the end you take the <strong>square root</strong>, and out comes the <strong>standard deviation</strong>, in the same units as the data.</p>
+  </div>
+  <div class="seg col" role="group" aria-label="What is drawn"><button type="button" id="d-m0" aria-pressed="false">with sign</button><button type="button" id="d-m1" aria-pressed="false">distance (no sign)</button><button type="button" id="d-m2" aria-pressed="true">squared</button></div>
+  <figure class="fig"><svg id="dev" role="img" aria-label="Bars with each trip's deviation, its distance or its square"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> One <b style="color:var(--sample)">purple</b> bar per trip, with its number on top. Depending on the button, the bar is the deviation with its sign (pointing up if it burns more than the mean), the distance without sign, or the squared deviation. The <b style="color:var(--mean)">blue</b> line is the mean of the bars; in "squared" mode, the <b style="color:var(--point)">dashed orange</b> line is the sum divided by 7 instead of by 8 (idea 4 explains why).</p>
+  <div class="slider col"><label for="d-k">More or less regular <output id="d-k-o"></output></label><input type="range" id="d-k" min="0.5" max="2" step="0.05" value="1"><div class="ends"><span>× 0.5 (half as far)</span><span>× 2 (twice as far)</span></div></div>
+  <div class="big3 col" id="d-big"></div>
+  <p class="qcard col" id="d-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 5</p>
+    <h2>Divide by n or by n − 1?</h2>
+    <p>The 8 trips are a <strong>sample</strong>: what we really care about is the truck, all the trips it makes in a year (the <strong>population</strong>). With the sample we want to guess how much the truck varies. The problem: the distances are measured from the mean of the sample, and that mean is, by construction, in the center of the sample. The true mean of the truck is a bit further away, toward one side. Measured from the sample's own center, the distances come out <strong>a bit shorter</strong> than they really are.</p>
+    <p>How much shorter? Just enough that, dividing by n, the variance comes out on average (n − 1)/n of the true one: with 2 trips, half; with 8, seven eighths. Dividing by <strong>n − 1</strong> instead of by n fixes it. It's called <strong>Bessel's correction</strong>. Here you can check it by drawing samples from a truck whose trips we all know.</p>
+  </div>
+  <figure class="fig"><svg id="bes" role="img" aria-label="The 400 trips of the year, one sample, and the mean of the variances computed dividing by n and by n minus 1"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, the truck's 400 trips of the year (gray dots) and their true mean (<b style="color:var(--mean)">blue</b> line). The <b style="color:var(--point)">orange</b> dots are the last sample and the orange line, its mean. At the bottom, three bars: the true variance of the year, and the mean of all the variances computed from the samples, dividing by n (<b style="color:var(--sample)">purple</b>) or by n − 1 (<b style="color:var(--good)">green</b>). The small vertical tick marks the truth on each bar.</p>
+  <div class="decs">
+    <div class="dec">
+      <div class="slider"><label for="b-n">Trips per sample (n) <output id="b-n-o"></output></label><input type="range" id="b-n" min="2" max="20" step="1" value="3"><div class="ends"><span>2</span><span>20</span></div></div>
+      <p>Changing n starts over from zero.</p>
+    </div>
+    <div class="dec">
+      <h3>Draw samples</h3>
+      <p>Each sample is n trips picked at random from the 400.</p>
+      <div class="btns"><button type="button" class="primary" id="b-1">Draw 1 sample</button><button type="button" id="b-1000">Draw 1,000</button><button type="button" id="b-0">Start over</button></div>
+    </div>
+  </div>
+  <div class="big3 col" id="b-big"></div>
+  <p class="qcard col" id="b-msg"></p>
+  <div class="col stack">
+    <p>When it matters: with lots of data, hardly at all (with 1,000 trips, dividing by 1,000 or by 999 is the same). With little data, a lot: with 3 trips, dividing by 3 underestimates the variance by a third. And watch out for tools, because they don't all do the same: some divide by n and others by n − 1 by default (the technical version has the list).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 5</p>
+    <h2>Comparing different columns: coefficient of variation and z</h2>
+    <p>The same 8 trips have another column: the <strong>idling minutes</strong> (engine running with the truck stopped): 12, 25, 8, 15, 40, 10, 18 and 16. Mean 18 minutes, standard deviation 10.3 minutes. Does idling vary more than consumption? The standard deviations can't be compared, because one is in minutes and the other in L/100 km. Two tricks:</p>
+    <ul>
+      <li><strong>Coefficient of variation</strong>: the standard deviation divided by the mean. Consumption varies 6.9% of its mean (2.27 / 33); idling, 57% (10.3 / 18). Idling depends much more on the trip.</li>
+      <li><strong>Standardize</strong> (compute the <strong>z</strong>): subtract the mean from each value and divide by the standard deviation. The result says <strong>how many standard deviations</strong> away from the mean it is, with no units. That way both columns are compared on the same scale.</li>
+    </ul>
+  </div>
+  <div class="seg col" role="group" aria-label="Scale"><button type="button" id="z-m0" aria-pressed="true">in their units</button><button type="button" id="z-m1" aria-pressed="false">standardized (z)</button></div>
+  <figure class="fig"><svg id="zs" role="img" aria-label="Consumption and idling of the 8 trips, in their units or standardized"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Two rows: consumption on top and idling below, each with its own scale. The <b style="color:var(--mean)">blue</b> tick is the mean of each row and the light blue strip, the mean ± one standard deviation. The chosen trip has a ring and its value. Press "standardized": both rows move to the same scale, the mean goes to 0 and the strip, from −1 to +1.</p>
+  <div class="chips num col" id="z-sel" role="group" aria-label="Chosen trip"></div>
+  <div class="big3 col" id="z-big"></div>
+  <p class="qcard col" id="z-msg"></p>
+  <div class="col stack">
+    <p>Standardizing is exactly what the scaling in <a href="preparing-features-en.html" target="_self">preparing the features</a> does: many models (the ones that measure distances, like <a href="k-nearest-neighbors-en.html" target="_self">nearest neighbors</a> or <a href="k-means-en.html" target="_self">k-means</a>, or the ones trained with <a href="gradient-descent-en.html" target="_self">gradient descent</a>) work poorly if one column goes from 0 to 40 and another from 30 to 37. A warning: the mean and standard deviation used to standardize are computed on the training data and saved, and then applied the same way to new data.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The complete recipe</h2>
+    <ol class="steps">
+      <li><div><strong>The mean</strong> is adding up and dividing by how many there are: the balance point, and the number that misses the least counting the errors squared.</div></li>
+      <li><div><strong>The median</strong> is the middle value once sorted: the number that misses the least counting the errors as is. It doesn't get dragged along by an absurd value.</div></li>
+      <li><div><strong>Compute both.</strong> If they are far apart, there are errors or skewed data: look before going on.</div></li>
+      <li><div><strong>Deviations</strong>: each value minus the mean. They always add up to 0, so they get squared.</div></li>
+      <li><div><strong>The variance</strong> is the mean of those squares, dividing by n − 1 if the data are a sample. <strong>The standard deviation</strong> is its root: in the units of the data.</div></li>
+      <li><div><strong>To compare columns</strong> in different units: coefficient of variation (deviation / mean) or standardize, z = (value − mean) / standard deviation.</div></li>
+      <li><div><strong>With data that never stops arriving</strong> (telematics), the mean and the variance can be updated value by value, without storing everything, with a stable calculation (Welford's, in the technical version).</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where it shows up in fleet telematics</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="4" y="11" width="20" height="15" rx="1.5"/><path d="M24 15h7l5 6v5H24z"/><circle cx="11" cy="29" r="3"/><circle cx="30" cy="29" r="3"/></svg><h3>Consumption of each truck</h3><p>With thousands of trips a month, a few records arrive with the decimal point lost or the sensor stuck at zero. The median consumption per truck withstands those errors; the mean doesn't, and it can flag as a "gas guzzler" a truck that isn't one.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="21" r="12"/><path d="M20 21V13M20 21l6 3"/><path d="M17 6h6"/></svg><h3>Idling that varies a lot</h3><p>A high coefficient of variation in a driver's idling minutes says that the way they stop depends a lot on the day: more room for training than a driver who always leaves the engine running the same amount.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M26 13c-1.5-2-12-3.5-12 2.5s12 3 12 8.5-10.5 4.5-12 2"/><path d="M20 8v24"/></svg><h3>Fuel budget</h3><p>The dollars of fuel per trip on a route have a mean and a standard deviation. With them you set a realistic budget and see which trips stand out: one at 3 standard deviations from the mean deserves a question.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 20h6l3-8 5 16 4-11 3 6h7"/></svg><h3>Real-time summaries</h3><p>The service that receives the GPS data can keep updating, for each truck, the mean and variance of the speed or the consumption with every message, without storing the history: three numbers per truck are enough.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Connections</p>
+    <h2>With the models of the ML series and the other topics</h2>
+    <p>The mean is the simplest model of <a href="linear-and-polynomial-regression-en.html" target="_self">linear regression</a> (a flat line) and comes from the same idea as <a href="least-squares-as-a-projection-en.html" target="_self">least squares</a>. The centers in <a href="k-means-en.html" target="_self">k-means</a> are means of groups. <a href="pca-en.html" target="_self">Principal component analysis</a> looks for the directions with the most variance, and the <a href="kalman-filter-en.html" target="_self">Kalman filter</a> keeps track of the variance of its estimate at every step. The deviations of a column form a vector, and the standard deviation is its <a href="vectors-and-distances-en.html" target="_self">length</a> divided by √(n − 1). In "Preparing the data", <a href="exploratory-data-analysis-en.html" target="_self">exploratory analysis</a> starts with these summaries, <a href="outliers-en.html" target="_self">outliers</a> are hunted with them, and <a href="preparing-features-en.html" target="_self">scaling</a> is standardizing. The next topic, <a href="distributions-en.html" target="_self">distributions</a>, goes one step further: not just the center and the spread, but the whole shape of the data.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>What helps and where it misleads</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>What helps</h3><ul class="pc">
+      <li>Two numbers sum up thousands of values and are understood in any meeting: "33 ± 2.3 L/100 km".</li>
+      <li>Mean and variance can be computed value by value, and summaries of different chunks (days, trucks, servers) can be merged without reading the data again.</li>
+      <li>The standard deviation is in the units of the data and works as a ruler: standardizing puts all the columns on the same scale.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Where it misleads</h3><ul class="pc">
+      <li>A single absurd value drags the mean and, even more, the standard deviation. And with little data, that same value inflates the deviation so much that it doesn't look odd (idea 2).</li>
+      <li>Two numbers don't tell the shape: two kinds of route mixed together give a mean where there is no trip at all (button "two kinds of route").</li>
+      <li>The mean of ratios misleads: the mean of each trip's L/100 km is not the fleet's consumption if the trips have different lengths (the technical version computes it). And n versus n − 1 changes the result depending on the tool.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Mean</dt><dd>Add up all the values and divide by how many there are. The balance point.</dd>
+      <dt>Median</dt><dd>The middle value once sorted (with an even number of values, the mean of the two in the middle).</dd>
+      <dt>Deviation</dt><dd>How far a value strays from the mean: value minus mean. With its sign.</dd>
+      <dt>Variance</dt><dd>The mean of the squared deviations (dividing by n − 1 for a sample). In squared units.</dd>
+      <dt>Standard deviation</dt><dd>The square root of the variance: how far a value typically strays from the mean, in the units of the data.</dd>
+      <dt>Sample and population</dt><dd>The population is everything you care about (all the trips of the year); the sample, what has been measured (8 trips).</dd>
+      <dt>Bessel's correction</dt><dd>Dividing by n − 1 instead of by n when computing the variance of a sample, so it doesn't come out short on average.</dd>
+      <dt>Coefficient of variation</dt><dd>Standard deviation divided by the mean: spread as a percentage of the center, with no units.</dd>
+      <dt>Standardize (z)</dt><dd>(Value − mean) / standard deviation: how many standard deviations a value is from the center.</dd>
+      <dt>Trimmed mean</dt><dd>The mean after dropping a share of the highest and the lowest values. A middle ground between mean and median.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the math behind it</summary>
+    <p style="padding-top:10px">You don't need them to understand the idea:</p>
+    <div class="formula">mean         x̄ = (x₁ + x₂ + … + xₙ) / n
+variance     s² = [(x₁ − x̄)² + … + (xₙ − x̄)²] / (n − 1)
+std. dev.    s  = √s²
+z            zᵢ = (xᵢ − x̄) / s          CV = s / x̄
+
+the 8 trips    32  35  30  33  37  31  34  32       x̄ = 264 / 8 = 33
+deviations     −1  +2  −3   0  +4  −2  +1  −1       add up to 0
+squares         1   4   9   0  16   4   1   1       add up to 36
+   s² = 36 / 7 = 5.14 (L/100 km)²     s = 2.27 L/100 km     (÷ 8: 4.5 and 2.12)
+
+the number c that misses the least
+   (x₁ − c)² + … + (xₙ − c)²  =  36 + 8 · (33 − c)²     → minimum at c = 33
+
+with the 37 stored as 370
+   mean 74.6     median 32.5     s = 119.4     z of the 370 = 2.47
+   (with 8 values, no z can exceed 7 / √8 = 2.47)
+
+update value by value (Welford)
+   n ← n + 1     d = x − mean     mean ← mean + d / n
+   M ← M + d · (x − new mean)     variance = M / (n − 1)</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in one minute</h2>
+    <p>An animated recap: the 8 trips balanced on the mean, the deviations that cancel out and their squares, the standard deviation, the trip stored as 370 that drags the mean away, the "divide by n − 1" and the two standardized columns. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xACXAAEAAgMBAQEAAAAAAAAAAAAABQYHBAEDAggBAQEBAQAAAAAAAAAAAAAAAAABAgMQAAICAQMCBAMDBgoIBAMJAQABAwIEEhEFIQZBBzETFCJRcWEyUkIVgTYjcnO0YpGCsnWzdKEzNCQ1sTcWokMIUxfEhSXCZaNFY3ZUlNMRAQEBAAMBAAAAAAAAAAAAAAARASESMUH/wAARCAIcA8ADASIAAhEAAxEA/9oADAMBAAIRAxEAPwDCIAOjmAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADoKrgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgDgOgD//2Q==" aria-label="Animation: mean, variance and standard deviation">
+      <source src="mean-variance-and-standard-deviation-with-audio-en.mp4" type="video/mp4">
+      Your browser can't play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g,",");s=fr?i+"."+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const fz=v=>f1(v,2).replace(/\.?0+$/,"");
+const sg=(v,d)=>(v>0.0005*10**(1-(d??1))?"+":"")+f1(v,d);
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+const mean=a=>a.reduce((s,v)=>s+v,0)/a.length;
+const median=a=>{const b=a.slice().sort((x,y)=>x-y),n=b.length;return n%2?b[(n-1)/2]:(b[n/2-1]+b[n/2])/2;};
+const ssq=(a,c)=>a.reduce((s,v)=>s+(v-c)**2,0);
+const varS=a=>ssq(a,mean(a))/(a.length-1);
+const sdS=a=>Math.sqrt(varS(a));
+const trim1=a=>{const b=a.slice().sort((x,y)=>x-y);return mean(b.slice(1,-1));};
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+const toggle=(id,cb)=>{const b=$(id);b.onclick=()=>{b.setAttribute("aria-pressed",String(b.getAttribute("aria-pressed")!=="true"));cb();};return ()=>b.getAttribute("aria-pressed")==="true";};
+function niceStep(span,nw){const t=span/(nw?6:10);for(const s of [0.5,1,2,5,10,20,50,100])if(s>=t)return s;return 200;}
+function axis(g,sx,lo,hi,y,FS,nw,unit,tick){const st=tick||niceStep(hi-lo,nw);el("line",{x1:sx(lo),x2:sx(hi),y1:y,y2:y,class:"g-axis"},g);
+  for(let v=Math.ceil(lo/st)*st;v<=hi+1e-9;v+=st){el("line",{x1:sx(v),x2:sx(v),y1:y-4,y2:y+4,class:"g-axis"},g);txt(g,sx(v),y+FS+6,f1(v,st<1?1:0),{"text-anchor":"middle","font-size":FS*0.85});}
+  if(unit)txt(g,sx(hi),y+2*FS+12,unit,{"text-anchor":"end","font-size":FS*0.85,class:"t-ink"});}
+function clampLab(x,s,FS,W){const w=s.length*FS*0.6;return Math.max(6+w/2,Math.min(W-6-w/2,x));}
+function toSvg(svg,e){const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+const X0=[32,35,30,33,37,31,34,32],R0=[12,25,8,15,40,10,18,16];
+
+/* ---------- toy: the balance point ---------- */
+(function(){const svg=$("toy"),sl=$("t-v");
+  const PRE=[["8 trips",X0],["one odd value (73)",[32,35,30,33,73,31,34,32]],["all the same",[33,33,33,33,33,33,33,33]],["more regular",X0.map(v=>33+(v-33)/2)],["two kinds of route",[29,37,29,37,37,29,37,29]]];
+  let V=X0.slice(),sel=4,pi=0,lock=null,drag=-1,geo=null;
+  const showDev=toggle("t-dev",draw),showBand=toggle("t-band",draw),showMed=toggle("t-med",draw);
+  const sb=chips($("t-sel"),V.map((_,i)=>String(i+1)),i=>{sel=i;sync();draw();},sel);
+  const pb=chips($("t-pre"),PRE.map(p=>p[0]),i=>{pi=i;V=PRE[i][1].slice();sync();upd();},0);
+  function sync(){sl.value=V[sel];$("t-v-o").textContent=f1(V[sel],1);sb.forEach((b,j)=>b.setAttribute("aria-pressed",String(j===sel)));}
+  function range(){if(lock)return lock;const lo=Math.floor(Math.min(28,Math.min(...V)-1)),hi=Math.ceil(Math.max(38,Math.max(...V)+1));return [lo,hi];}
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:15,RH=nw?40:30,L=nw?44:86,Rm=nw?24:30,r=nw?13:10;
+    const y0=nw?52:44,Ya=y0+V.length*RH+(nw?14:10),H=Ya+(nw?120:96);svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const [lo,hi]=range(),sx=v=>L+(v-lo)/(hi-lo)*(W-L-Rm),m=mean(V),md=median(V),s=sdS(V);geo={sx,lo,hi,L,Rm,W};
+    if(showBand()&&s>1e-9)el("rect",{x:sx(Math.max(lo,m-s)),y:y0-6,width:sx(Math.min(hi,m+s))-sx(Math.max(lo,m-s)),height:Ya-y0+6,fill:"var(--band)"},svg);
+    const st=niceStep(hi-lo,nw);for(let v=Math.ceil(lo/st)*st;v<=hi+1e-9;v+=st)el("line",{x1:sx(v),x2:sx(v),y1:y0-6,y2:Ya,class:"g-line"},svg);
+    el("line",{x1:sx(m),x2:sx(m),y1:y0-8,y2:Ya,stroke:"var(--mean)","stroke-width":2.5,"stroke-dasharray":"7 5"},svg);
+    if(showMed()){el("line",{x1:sx(md),x2:sx(md),y1:y0-14,y2:Ya,stroke:"var(--good)","stroke-width":2.5,"stroke-dasharray":"3 5"},svg);const t="median "+f1(md,1);txt(svg,clampLab(sx(md),t,FS,W),y0-20,t,Object.assign({"text-anchor":"middle","font-size":FS,"font-weight":700,style:"fill:var(--good)"},halo(5)));}
+    V.forEach((v,i)=>{const y=y0+i*RH+RH/2;txt(svg,nw?6:8,y+FS*0.35,nw?String(i+1):"trip "+(i+1),{"font-size":FS*0.85,class:i===sel?"t-ink":"","font-weight":i===sel?700:400});
+      const d=v-m;if(showDev()&&Math.abs(d)>1e-9){el("line",{x1:sx(m),x2:sx(v),y1:y,y2:y,stroke:"var(--sample)","stroke-width":nw?8:7,"stroke-opacity":.55,"stroke-linecap":"butt"},svg);
+        const lab=sg(d,1),right=d>0,off=r+(i===sel?11:6);let tx=sx(v)+(right?off:-off),an=right?"start":"end";const tw=lab.length*FS*0.85*0.62;if(right&&tx+tw>W-2){tx=sx(v)-off;an="end";}if(!right&&tx-tw<L-4){tx=sx(v)+off;an="start";}
+        txt(svg,tx,y+FS*0.32,lab,Object.assign({"text-anchor":an,"font-size":FS*0.85,"font-weight":700,style:"fill:var(--sample)"},halo(4)));}
+      const c=el("circle",{cx:sx(v),cy:y,r,class:"p-point drag","data-i":i},svg);if(i===sel)el("circle",{cx:sx(v),cy:y,r:r+5,fill:"none",stroke:"var(--ink)","stroke-width":2},svg);});
+    el("line",{x1:L-10,x2:W-Rm+10,y1:Ya,y2:Ya,stroke:"var(--ink)","stroke-width":5,"stroke-linecap":"round"},svg);
+    const tw=nw?22:17,th=nw?36:28;el("path",{d:`M${sx(m)} ${Ya+3}L${sx(m)-tw} ${Ya+3+th}L${sx(m)+tw} ${Ya+3+th}Z`,fill:"var(--mean)"},svg);
+    const ml="mean "+f1(m,1);let mx=sx(m)+tw+8,an="start";if(mx+ml.length*FS*0.62>W-4){mx=sx(m)-tw-8;an="end";}
+    txt(svg,mx,Ya+th-2,ml,Object.assign({"text-anchor":an,"font-size":FS,"font-weight":800,style:"fill:var(--mean)"},halo(5)));
+    const ay=Ya+th+(nw?22:18);el("line",{x1:sx(lo),x2:sx(hi),y1:ay,y2:ay,class:"g-axis"},svg);
+    for(let v=Math.ceil(lo/st)*st;v<=hi+1e-9;v+=st){el("line",{x1:sx(v),x2:sx(v),y1:ay-4,y2:ay+4,class:"g-axis"},svg);txt(svg,sx(v),ay+FS+4,f1(v,st<1?1:0),{"text-anchor":"middle","font-size":FS*0.85});}
+    txt(svg,W-4,ay+2*FS+10,"L/100 km",{"text-anchor":"end","font-size":FS*0.85,class:"t-ink"});}
+  svg.addEventListener("pointerdown",e=>{const t=e.target;if(!t.classList.contains("drag"))return;drag=+t.getAttribute("data-i");sel=drag;lock=range();svg.setPointerCapture(e.pointerId);svg.classList.add("dragging");e.preventDefault();sync();draw();});
+  svg.addEventListener("pointermove",e=>{if(drag<0||!geo)return;const p=toSvg(svg,e);if(!p)return;let v=geo.lo+(p.x-geo.L)/(geo.W-geo.L-geo.Rm)*(geo.hi-geo.lo);v=Math.round(Math.max(20,Math.min(80,Math.max(geo.lo,Math.min(geo.hi,v))))*10)/10;V[drag]=v;sync();upd(true);});
+  const end=()=>{if(drag<0)return;drag=-1;lock=null;svg.classList.remove("dragging");upd();};svg.addEventListener("pointerup",end);svg.addEventListener("pointercancel",end);
+  sl.addEventListener("input",()=>{V[sel]=+sl.value;sync();upd();});
+  function upd(){const m=mean(V),md=median(V),s=sdS(V),va=varS(V);
+    const k=PRE.findIndex(p=>p[1].every((v,i)=>Math.abs(v-V[i])<1e-9));pb.forEach((b,j)=>b.setAttribute("aria-pressed",String(j===k)));
+    $("t-big").innerHTML=`<div><b style="color:var(--mean)">${f1(m,1)}</b><span>mean (L/100 km): the balance point</span></div><div><b style="color:var(--good)">${f1(md,1)}</b><span>median: half of the trips on each side</span></div><div><b>${f1(s,2)}</b><span>standard deviation (L/100 km): how far a trip typically strays</span></div><div><b>${f1(va,2)}</b><span>variance, in (L/100 km)²: the standard deviation squared</span></div>`;
+    const left=V.reduce((a,v)=>a+(v<m?m-v:0),0),inb=V.filter(v=>Math.abs(v-m)<=s+1e-9).length;
+    let msg=`The deviations on the left add up to ${f1(left,1)} and those on the right, also ${f1(left,1)}: that's why the stick balances exactly at the mean. `;
+    if(s<1e-9)msg="All the trips burn the same: there are no deviations, the standard deviation and the variance are 0, and mean and median coincide. A column like this tells nothing new from one trip to another.";
+    else if(k===1)msg+=`A single badly stored trip (73 instead of 37) drags the mean up to <b>${f1(m,1)}</b>, above 7 of the 8 trips, and the standard deviation goes from 2.27 to <b>${f1(s,1)}</b>. The median stays at <b>32.5</b>: for it, the 73 is just "the highest one", the same as the 37 before.`;
+    else if(k===3)msg+=`Same center, each trip at half the distance: the standard deviation drops to half (from 2.27 to <b>${f1(s,2)}</b>) and the variance, to a quarter (from 5.14 to <b>${f1(va,2)}</b>), because the distances are squared.`;
+    else if(k===4)msg+=`The mean is <b>33</b> and not a single trip burns 33: four go on the highway (29) and four in the city (37). The standard deviation, ${f1(s,2)}, warns that there is a lot of spread, but neither the mean nor the deviation tells you they are two groups. For that you have to plot the data.`;
+    else if(k===0)msg+=`The standard deviation, <b>2.27</b>, is how far a trip typically strays: ${inb} of the 8 trips are inside the blue band, between ${f1(m-s,1)} and ${f1(m+s,1)}.`;
+    else msg+=Math.abs(m-md)>0.5*s?`The mean (${f1(m,1)}) and the median (${f1(md,1)}) have pulled apart: some trip is pulling the mean toward its side. When this happens, it's worth looking at that trip.`:`Mean ${f1(m,1)} and median ${f1(md,1)} are close: the trips spread out in a similar way on both sides. ${inb} of the 8 are inside the ± 1 standard deviation band.`;
+    $("t-msg").innerHTML=msg;draw();}
+  window.addEventListener("resize",draw);sync();upd();})();
+
+/* ---------- idea 1: the number that misses the least ---------- */
+(function(){const svg=$("sq"),ic=$("q-c");let mode=0;seg(["q-m0","q-m1"],i=>{mode=i;upd();});
+  const lo=27,hi=39,F=c=>mode?X0.reduce((s,v)=>s+Math.abs(v-c),0):ssq(X0,c);
+  function draw(){const c=+ic.value,nw=narrowOf(svg),W=nw?600:900,FS=nw?21:14,RH=nw?30:22,L=nw?50:70,Rm=nw?20:30,y0=nw?20:16;
+    const Yt=y0+X0.length*RH,ax1=Yt+8,P0=ax1+(nw?96:74),PH=nw?300:210,H=P0+PH+(nw?70:56);svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const sx=v=>L+(v-lo)/(hi-lo)*(W-L-Rm);
+    for(let v=lo;v<=hi;v++)el("line",{x1:sx(v),x2:sx(v),y1:y0,y2:Yt,class:"g-line"},svg);
+    el("line",{x1:sx(c),x2:sx(c),y1:y0-4,y2:Yt+4,stroke:"var(--mean)","stroke-width":2.5,"stroke-dasharray":"7 5"},svg);
+    X0.forEach((v,i)=>{const y=y0+i*RH+RH/2,d=v-c;txt(svg,6,y+FS*0.35,nw?String(i+1):"trip "+(i+1),{"font-size":FS*0.8});
+      if(Math.abs(d)>1e-9)el("line",{x1:sx(c),x2:sx(v),y1:y,y2:y,stroke:"var(--sample)","stroke-width":nw?7:6,"stroke-opacity":.6},svg);
+      el("circle",{cx:sx(v),cy:y,r:nw?9:7,class:"p-point"},svg);
+      const lab=mode?fz(Math.abs(d)):fz(d*d),right=v>=c;let tx=right?Math.max(sx(v),sx(c))+14:Math.min(sx(v),sx(c))-14,an=right?"start":"end";
+      if(an==="start"&&tx+lab.length*FS*0.5>W){tx=Math.min(sx(v),sx(c))-14;an="end";}if(an==="end"&&tx-lab.length*FS*0.5<L){tx=Math.max(sx(v),sx(c))+14;an="start";}
+      txt(svg,tx,y+FS*0.32,lab,Object.assign({"text-anchor":an,"font-size":FS*0.8,"font-weight":700,style:"fill:var(--sample)"},halo(4)));});
+    axis(svg,sx,lo,hi,ax1,FS,nw,"",nw?2:1);
+    const ymax=mode?60:440,PB=P0+PH,syp=y=>PB-y/ymax*PH;
+    for(let y=0;y<=ymax;y+=mode?10:100){el("line",{x1:sx(lo),x2:sx(hi),y1:syp(y),y2:syp(y),class:"g-line"},svg);txt(svg,L-8,syp(y)+FS*0.3,f1(y,0),{"text-anchor":"end","font-size":FS*0.8});}
+    txt(svg,L+6,P0-16,mode?"sum of errors as is":"sum of squared errors",{"font-size":FS*0.9,class:"t-ink","font-weight":700});
+    let d="";for(let k=0;k<=240;k++){const v=lo+(hi-lo)*k/240;d+=(k?"L":"M")+sx(v).toFixed(1)+" "+syp(Math.min(ymax*1.05,F(v))).toFixed(1);}
+    const cp=el("clipPath",{id:"sqclip"},el("defs",null,svg));el("rect",{x:L,y:P0-4,width:W-L-Rm,height:PH+4},cp);
+    el("path",{d,fill:"none",stroke:mode?"var(--good)":"var(--mean)","stroke-width":3.5,"clip-path":"url(#sqclip)"},svg);
+    const best=mode?32.5:33,bv=F(best);
+    if(mode)el("line",{x1:sx(32),x2:sx(33),y1:syp(14),y2:syp(14),stroke:"var(--good)","stroke-width":8,"stroke-opacity":.5,"stroke-linecap":"round"},svg);
+    el("circle",{cx:sx(best),cy:syp(bv),r:6,fill:"var(--surface)",stroke:mode?"var(--good)":"var(--mean)","stroke-width":2.5},svg);
+    txt(svg,sx(best),syp(bv)-14,mode?"minimum: from 32 to 33 (median 32.5)":"minimum: 33, the mean",Object.assign({"text-anchor":"middle","font-size":FS*0.85,"font-weight":700,style:`fill:${mode?"var(--good)":"var(--mean)"}`},halo(5)));
+    const fc=F(c);el("line",{x1:sx(c),x2:sx(c),y1:P0,y2:PB,stroke:"var(--mean)","stroke-width":1.5,"stroke-dasharray":"4 4","stroke-opacity":.7},svg);
+    el("circle",{cx:sx(c),cy:syp(Math.min(ymax,fc)),r:nw?11:9,class:"p-point"},svg);
+    axis(svg,sx,lo,hi,PB,FS,nw,"my number (L/100 km)",nw?2:1);}
+  function upd(){const c=+ic.value;$("q-c-o").textContent=f1(c,1);const fc=F(c),dm=c-33;
+    $("q-big").innerHTML=mode?`<div><b>${f1(fc,1)}</b><span>sum of errors as is with ${f1(c,1)}</span></div><div><b style="color:var(--good)">14.0</b><span>the minimum: any number between 32 and 33</span></div><div><b style="color:var(--mean)">${f1(F(33),1)}</b><span>with the mean (33): also 14, a tie</span></div>`
+      :`<div><b>${f1(fc,1)}</b><span>sum of squared errors with ${f1(c,1)}</span></div><div><b style="color:var(--mean)">36.0</b><span>the minimum, with 33 (the mean)</span></div><div><b style="color:var(--sample)">${f1(fc-36,1)}</b><span>the extra: 8 × ${f1(Math.abs(dm),1)}²</span></div>`;
+    let m;if(mode)m=c>=32-1e-9&&c<=33+1e-9?`Counting the errors as is, any number between 32 and 33 ties at <b>14</b>: if you move a bit to the right, you move away from 4 trips and closer to the other 4. With an even number of values a tie is normal; the <b>median</b> picks the middle point, 32.5. The winner is the one that leaves half of the trips on each side.`:`With ${f1(c,1)} the sum is ${f1(fc,1)}. There are ${X0.filter(v=>v<c).length} trips below your number and ${X0.filter(v=>v>c).length} above: move toward where there are more, until half are left on each side. That's where the <b>median</b> is.`;
+    else m=Math.abs(dm)<0.05?`Right at the mean: the squared errors add up to <b>36</b>, the lowest possible. It's the same 36 as in the variance: 36 / 7 = 5.14. The mean is the number that misses the least, squared.`:`With ${f1(c,1)} the squared errors add up to ${f1(fc,1)}: that's 36 (the minimum) plus 8 × ${f1(Math.abs(dm),1)}² = ${f1(fc-36,1)}, because you are ${f1(Math.abs(dm),1)} away from the mean and each of the 8 trips pays for it, squared. Move your number to ${dm>0?"the left":"the right"}.`;
+    $("q-msg").innerHTML=m;draw();}
+  ic.addEventListener("input",upd);window.addEventListener("resize",draw);upd();})();
+
+/* ---------- idea 2: the bad record ---------- */
+(function(){const svg=$("out"),iv=$("o-v"),VAL=[37,73,370];
+  const cb=chips($("o-chips"),["37 (correct)","73 (digits swapped)","370 (lost decimal point)"],i=>{iv.value=VAL[i];upd();},1);
+  const vals=v=>{const a=X0.slice();a[4]=v;return a;};
+  function draw(){const v=+iv.value,A=vals(v),nw=narrowOf(svg),W=nw?600:900,FS=nw?25:14,L=nw?54:60,Rm=nw?24:30;
+    const H=nw?640:470,y1=nw?92:70,P0=nw?250:190,PB=H-(nw?84:48);svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const hi=Math.max(60,Math.ceil(v*1.08/10)*10),lo=Math.min(25,Math.floor(Math.min(...A)/5)*5),sx=x=>L+(x-lo)/(hi-lo)*(W-L-Rm);
+    const m=mean(A),md=median(A),tr=trim1(A);
+    txt(svg,L,FS+4,nw?"the 8 trips (ring: trip 5)":"the 8 trips, with trip 5 as it was stored",{"font-size":FS*0.9,class:"t-ink","font-weight":700});
+    el("line",{x1:sx(m),x2:sx(m),y1:y1-30,y2:y1+12,stroke:"var(--mean)","stroke-width":3},svg);el("line",{x1:sx(md),x2:sx(md),y1:y1-30,y2:y1+12,stroke:"var(--good)","stroke-width":3},svg);
+    const cnt={};A.forEach((x,i)=>{const k=Math.round(sx(x)/6);cnt[k]=(cnt[k]||0)+1;const yy=y1-(cnt[k]-1)*(nw?10:8);el("circle",{cx:sx(x),cy:yy,r:nw?9:7,class:"p-point"},svg);if(i===4)el("circle",{cx:sx(x),cy:yy,r:nw?15:12,fill:"none",stroke:"var(--ink)","stroke-width":2},svg);});
+    const lm="mean "+f1(m,1),lmd="median "+f1(md,1);
+    txt(svg,clampLab(sx(m),lm,FS,W),y1-36,lm,Object.assign({"text-anchor":"middle","font-size":FS*0.9,"font-weight":700,style:"fill:var(--mean)"},halo(5)));
+    txt(svg,clampLab(sx(md),lmd,FS,W),y1+FS+18,lmd,Object.assign({"text-anchor":"middle","font-size":FS*0.9,"font-weight":700,style:"fill:var(--good)"},halo(5)));
+    axis(svg,sx,lo,hi,y1+FS+34,FS,nw,"",hi-lo>150?50:hi-lo>60?20:10);
+    const qx=x=>L+(x-37)/(370-37)*(W-L-Rm),qy=y=>PB-(y-25)/(80-25)*(PB-P0);
+    for(let y=30;y<=80;y+=10){el("line",{x1:L,x2:W-Rm,y1:qy(y),y2:qy(y),class:"g-line"},svg);txt(svg,L-8,qy(y)+FS*0.3,String(y),{"text-anchor":"end","font-size":FS*0.8});}
+    txt(svg,L+4,P0-14,"by stored value (L/100 km)",{"font-size":FS*0.9,class:"t-ink","font-weight":700});
+    const line=(f,col,dash)=>{let d="";for(let k=0;k<=100;k++){const x=37+333*k/100;d+=(k?"L":"M")+qx(x).toFixed(1)+" "+qy(f(vals(x))).toFixed(1);}el("path",{d,fill:"none",stroke:col,"stroke-width":3.2,"stroke-dasharray":dash||"none"},svg);};
+    line(median,"var(--good)");line(trim1,"var(--sample)","8 6");line(mean,"var(--mean)");
+    [[m,"var(--mean)"],[tr,"var(--sample)"],[md,"var(--good)"]].forEach(([y,c])=>el("circle",{cx:qx(v),cy:qy(y),r:nw?9:7,fill:c,stroke:"var(--point-ring)","stroke-width":2},svg));
+    txt(svg,W-Rm,qy(74.6)+(nw?34:26),"mean",Object.assign({"text-anchor":"end","font-size":FS*0.9,"font-weight":700,style:"fill:var(--mean)"},halo(5)));
+    txt(svg,W-Rm,qy(32.8)-12,"trimmed",Object.assign({"text-anchor":"end","font-size":FS*0.9,"font-weight":700,style:"fill:var(--sample)"},halo(5)));
+    txt(svg,W-Rm,qy(32.5)+FS+8,"median",Object.assign({"text-anchor":"end","font-size":FS*0.9,"font-weight":700,style:"fill:var(--good)"},halo(5)));
+    [37,100,200,300,370].forEach(x=>txt(svg,qx(x),PB+FS+6,String(x),{"text-anchor":"middle","font-size":FS*0.8}));
+    txt(svg,W-Rm,PB+2*FS+8,"stored value of trip 5",{"text-anchor":"end","font-size":FS*0.85,class:"t-ink"});}
+  function upd(){const v=+iv.value,A=vals(v),m=mean(A),md=median(A),s=sdS(A),z=(v-m)/s;$("o-v-o").textContent=f1(v,0);
+    const k=VAL.indexOf(v);cb.forEach((b,j)=>b.setAttribute("aria-pressed",String(j===k)));
+    $("o-big").innerHTML=`<div><b style="color:var(--mean)">${f1(m,1)}</b><span>mean</span></div><div><b style="color:var(--good)">${f1(md,1)}</b><span>median</span></div><div><b style="color:var(--sample)">${f1(trim1(A),1)}</b><span>trimmed mean (without the highest and the lowest)</span></div><div><b>${f1(s,1)}</b><span>standard deviation</span></div><div><b>${f1(z,2)}</b><span>z of trip 5</span></div>`;
+    let msg;if(v===37)msg=`With the correct value, mean (33) and median (32.5) almost coincide, and trip 5 is ${f1(z,2)} standard deviations from the mean: a somewhat thirsty trip, nothing more. Move the slider.`;
+    else msg=`With trip 5 stored as ${f1(v,0)}, the mean rises to <b>${f1(m,1)}</b>: every extra liter of the error is shared among the 8 trips. The median doesn't move from <b>32.5</b>, and the trimmed mean barely does (${f1(trim1(A),1)}). And something treacherous: the error is only <b>${f1(z,2)}</b> standard deviations from the mean, because it has inflated the standard deviation itself, up to ${f1(s,1)}. With 8 values, no value can go beyond 2.47 no matter how odd it is: a rule like "odd if more than 3 standard deviations away" would never find it.`;
+    $("o-msg").innerHTML=msg;draw();}
+  iv.addEventListener("input",upd);window.addEventListener("resize",draw);upd();})();
+
+/* ---------- idea 3: deviations, squares and root ---------- */
+(function(){const svg=$("dev"),ik=$("d-k");let mode=2;seg(["d-m0","d-m1","d-m2"],i=>{mode=i;upd();});
+  const data=()=>{const k=+ik.value;return X0.map(v=>33+(v-33)*k);};
+  function draw(){const A=data(),D=A.map(v=>v-33),B=D.map(d=>mode===0?d:mode===1?Math.abs(d):d*d),nw=narrowOf(svg),W=nw?600:900,FS=nw?21:14,L=nw?56:60,Rm=nw?16:30;
+    const H=nw?560:400,T=nw?96:66,Bt=H-(nw?64:52);svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const k=+ik.value,bm=Math.max(...B.map(Math.abs)),ymax=Math.max(mode===2?20:5,bm*1.3),ymin=mode===0?-ymax*0.8:0,sy=y=>Bt-(y-ymin)/(ymax-ymin)*(Bt-T);
+    const st=niceStep(ymax-ymin,true);for(let y=Math.ceil(ymin/st)*st;y<=ymax+1e-9;y+=st){el("line",{x1:L,x2:W-Rm,y1:sy(y),y2:sy(y),class:"g-line"},svg);txt(svg,L-8,sy(y)+FS*0.3,f1(y,st<1?1:0),{"text-anchor":"end","font-size":FS*0.8});}
+    el("line",{x1:L,x2:W-Rm,y1:sy(0),y2:sy(0),class:"g-axis"},svg);
+    const gl=el("g",null,svg),bw=(W-L-Rm)/8;B.forEach((b,i)=>{const x=L+i*bw+bw*0.18,w=bw*0.64,y=Math.min(sy(b),sy(0)),h=Math.abs(sy(b)-sy(0));
+      el("rect",{x,y,width:w,height:Math.max(h,1),rx:4,fill:"var(--sample)","fill-opacity":.75},svg);
+      txt(svg,x+w/2,b>=0?sy(b)-8:sy(b)+FS+4,mode===0?sg(b,1):fz(b),Object.assign({"text-anchor":"middle","font-size":FS*0.8,"font-weight":700,class:"t-ink"},halo(4)));
+      txt(svg,x+w/2,Bt+FS+6,nw?String(i+1):"trip "+(i+1),{"text-anchor":"middle","font-size":FS*0.8});});
+    const avg=mean(B);el("line",{x1:L,x2:W-Rm,y1:sy(avg),y2:sy(avg),stroke:"var(--mean)","stroke-width":3},gl);
+    const capA=mode===0?"mean of the deviations: 0":mode===1?"mean of the distances: "+f1(avg,2):"÷ 8: "+f1(avg,2);
+    txt(svg,W-Rm,T-18,capA,{"text-anchor":"end","font-size":FS*0.9,"font-weight":700,style:"fill:var(--mean)"});
+    if(mode===2){const a7=B.reduce((s,v)=>s+v,0)/7;el("line",{x1:L,x2:W-Rm,y1:sy(a7),y2:sy(a7),stroke:"var(--point)","stroke-width":2.5,"stroke-dasharray":"8 6"},gl);
+      txt(svg,W-Rm,T+FS-14,"÷ 7: "+f1(a7,2)+" = variance",{"text-anchor":"end","font-size":FS*0.9,"font-weight":700,style:"fill:var(--point)"});}
+    txt(svg,L,nw?24:20,mode===0?"deviation (L/100 km)":mode===1?"distance to the mean (L/100 km)":"squared deviation, (L/100 km)²",{"font-size":FS*0.9,class:"t-ink","font-weight":700});}
+  function upd(){const k=+ik.value,A=data(),D=A.map(v=>v-33),ss=D.reduce((s,d)=>s+d*d,0),va=ss/7,sd=Math.sqrt(va),mad=mean(D.map(Math.abs));$("d-k-o").textContent="× "+f1(k,2);
+    $("d-big").innerHTML=`<div><b>${f1(D.reduce((s,d)=>s+d,0)+0,1)}</b><span>sum of the signed deviations: always 0</span></div><div><b>${f1(mad,2)}</b><span>mean distance to the mean (L/100 km)</span></div><div><b style="color:var(--point)">${f1(va,2)}</b><span>variance: ${f1(ss,1)} / 7, in (L/100 km)²</span></div><div><b style="color:var(--mean)">${f1(sd,2)}</b><span>standard deviation: √${f1(va,2)}, in L/100 km</span></div>`;
+    let m;if(mode===0)m=`The signed deviations cancel out: the negative ones add up to −${f1(7*k,1)} and the positive ones to +${f1(7*k,1)}. Their mean is always <b>0</b>, for any column of data, so it's useless for measuring spread. You have to get rid of the sign.`;
+    else if(mode===1)m=`Without sign, the mean distance to the mean is <b>${f1(mad,2)}</b> L/100 km. It's a perfectly valid measure of spread, and easy to understand. But with absolute values the math gets complicated (idea 1 showed a sum with corners and ties); with squares everything comes out in clean formulas. Press "squared".`;
+    else m=`The squares add up to <b>${f1(ss,1)}</b>. Look at trip 5: its deviation is ${f1(4*k,1)}, but its square (${f1(16*k*k,1)}) is almost half of the total: squares give a lot of weight to what is far away. Dividing by 7 gives the variance, <b>${f1(va,2)}</b>, in squared units; its root, <b>${f1(sd,2)}</b>, is back in L/100 km. ${Math.abs(k-1)>0.01?`With the distances × ${f1(k,2)}, the standard deviation is multiplied by ${f1(k,2)} and the variance by ${f1(k*k,2)}.`:"Move the slider: if the distances are multiplied by 2, so is the standard deviation, but the variance is multiplied by 4."}`;
+    $("d-msg").innerHTML=m;draw();}
+  ik.addEventListener("input",upd);window.addEventListener("resize",draw);upd();})();
+
+/* ---------- idea 4: n or n − 1 ---------- */
+(function(){const svg=$("bes"),in_=$("b-n"),rnd=mulberry32(7);
+  const P=[];for(let i=0;i<400;i++){let g=0;for(let k=0;k<4;k++)g-=Math.log(1-rnd());P.push(Math.round((29+g)*10)/10);}
+  const MU=mean(P),S2=ssq(P,MU)/P.length,jit=P.map(()=>rnd());
+  let cnt=0,sN=0,sN1=0,last=null;
+  function sample(){const n=+in_.value,A=[];for(let i=0;i<n;i++)A.push(P[Math.floor(rnd()*P.length)]);const ss=ssq(A,mean(A));cnt++;sN+=ss/n;sN1+=ss/(n-1);last=A;}
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?26:14,L=nw?20:30,Rm=nw?20:30,H=nw?640:400;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const lo=28,hi=Math.ceil(Math.max(...P))+1,sx=v=>L+(v-lo)/(hi-lo)*(W-L-Rm),Ty=nw?40:30,Th=nw?150:110;
+    txt(svg,L,Ty-12,"the 400 trips of the year",{"font-size":FS*0.9,class:"t-ink","font-weight":700});
+    P.forEach((v,i)=>el("circle",{cx:sx(v),cy:Ty+8+jit[i]*(Th-16),r:nw?3.5:3,fill:"var(--muted)","fill-opacity":.45},svg));
+    el("line",{x1:sx(MU),x2:sx(MU),y1:Ty-4,y2:Ty+Th+4,stroke:"var(--mean)","stroke-width":3},svg);
+    if(last){const m=mean(last);last.forEach(v=>el("circle",{cx:sx(v),cy:Ty+Th/2,r:nw?10:8,class:"p-point"},svg));el("line",{x1:sx(m),x2:sx(m),y1:Ty-4,y2:Ty+Th+4,stroke:"var(--point)","stroke-width":3,"stroke-dasharray":"7 5"},svg);}
+    axis(svg,sx,lo,hi,Ty+Th+10,FS,nw,"L/100 km",nw?4:2);
+    const B0=Ty+Th+(nw?110:80),bh=nw?34:26,gap=nw?62:44,bx=nw?20:330,bw=W-bx-Rm-(nw?0:80),vmax=S2*1.5,bxs=v=>bx+Math.min(v,vmax)/vmax*bw;
+    const rows=[["the truth: variance of the 400",S2,"var(--mean)"],["mean of the variances ÷ n",cnt?sN/cnt:0,"var(--sample)"],["mean of the variances ÷ (n − 1)",cnt?sN1/cnt:0,"var(--good)"]];
+    rows.forEach(([lab,v,c],i)=>{const y=B0+i*(bh+gap);if(nw)txt(svg,bx,y-10,lab,{"font-size":FS*0.85,class:"t-ink"});else txt(svg,bx-12,y+bh*0.7,lab,{"text-anchor":"end","font-size":FS*0.9,class:"t-ink"});
+      el("rect",{x:bx,y,width:bw,height:bh,rx:6,fill:"var(--line)"},svg);if(i===0||cnt)el("rect",{x:bx,y,width:bxs(v)-bx,height:bh,rx:6,fill:c,"fill-opacity":.85},svg);
+      el("line",{x1:bxs(S2),x2:bxs(S2),y1:y-5,y2:y+bh+5,stroke:"var(--ink)","stroke-width":3},svg);
+      const t=i===0||cnt?f1(v,2):"—";if(nw)txt(svg,W-Rm,y-10,t,{"text-anchor":"end","font-size":FS*0.9,"font-weight":700,class:"t-ink"});else txt(svg,bx+bw+12,y+bh*0.7,t,{"font-size":FS,"font-weight":700,class:"t-ink"});});}
+  function upd(){const n=+in_.value;$("b-n-o").textContent=n+" trips";const aN=cnt?sN/cnt:0,aN1=cnt?sN1/cnt:0;
+    $("b-big").innerHTML=`<div><b>${f1(cnt,0)}</b><span>samples drawn</span></div><div><b style="color:var(--sample)">${cnt?f1(100*aN/S2,0)+"%":"—"}</b><span>÷ n, as % of the truth</span></div><div><b style="color:var(--good)">${cnt?f1(100*aN1/S2,0)+"%":"—"}</b><span>÷ (n − 1), as % of the truth</span></div><div><b>${f1(100*(n-1)/n,0)}%</b><span>(n − 1)/n: what the math predicts for ÷ n</span></div>`;
+    let m;if(!cnt)m=`The true variance of the 400 trips is <b>${f1(S2,2)}</b>. Press "Draw 1 sample" to pick ${n} trips at random and compute their variance both ways.`;
+    else{const A=last,ma=mean(A),a=ssq(A,ma),b=ssq(A,MU);m=`In the last sample, the squares of the distances to <b>its own mean</b> (${f1(ma,2)}) add up to ${f1(a,2)}; measured from the true mean (${f1(MU,2)}) they would add up to ${f1(b,2)}, more. It always happens: the sample mean is the point that misses the least with that data (idea 1). `+(cnt<200?`Draw many more samples to see the average.`:`After ${f1(cnt,0)} samples, dividing by ${n} gives on average <b>${f1(100*aN/S2,0)}%</b> of the truth (the math predicts ${f1(100*(n-1)/n,0)}%), and dividing by ${n-1}, <b>${f1(100*aN1/S2,0)}%</b>.${n<=4?" With so few trips per sample the difference is huge.":n>=15?" With more trips per sample the difference gets small.":""}`);}
+    $("b-msg").innerHTML=m;draw();}
+  const reset=()=>{cnt=0;sN=0;sN1=0;last=null;upd();};
+  $("b-1").onclick=()=>{sample();upd();};$("b-1000").onclick=()=>{for(let i=0;i<1000;i++)sample();upd();};$("b-0").onclick=reset;
+  in_.addEventListener("input",reset);window.addEventListener("resize",draw);upd();})();
+
+/* ---------- idea 5: standardize ---------- */
+(function(){const svg=$("zs");let mode=0,t=0,anim=null,sel=4;
+  const mX=mean(X0),sX=sdS(X0),mR=mean(R0),sR=sdS(R0),zX=X0.map(v=>(v-mX)/sX),zR=R0.map(v=>(v-mR)/sR);
+  const sb=chips($("z-sel"),X0.map((_,i)=>"trip "+(i+1)),i=>{sel=i;upd();},sel);
+  seg(["z-m0","z-m1"],i=>{mode=i;go();upd();});
+  function go(){if(anim)cancelAnimationFrame(anim);const t0=t,t1=mode,st=performance.now();const step=now=>{const u=Math.min(1,(now-st)/700),e=u<.5?2*u*u:1-2*(1-u)*(1-u);t=t0+(t1-t0)*e;draw();if(u<1)anim=requestAnimationFrame(step);else anim=null;};anim=requestAnimationFrame(step);}
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?25:14,L=nw?20:150,Rm=nw?24:30,RH=nw?220:150,H=2*RH+(nw?20:10);svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const rows=[["consumption",X0,mX,sX,28,38,"L/100 km",zX],["idling",R0,mR,sR,0,45,"min",zR]];
+    rows.forEach(([name,A,m,s,lo,hi,u,Z],r)=>{const y0=r*RH+(nw?44:30),ya=y0+(nw?70:54),pos=(v,z)=>{const a=L+(v-lo)/(hi-lo)*(W-L-Rm),b=L+(z+2.5)/5*(W-L-Rm);return a+(b-a)*t;};
+      if(nw)txt(svg,L,y0,name+(t<0.5?" ("+u+")":" (z)"),{"font-size":FS,"font-weight":700,class:"t-ink"});else{txt(svg,L-20,ya-8,name,{"text-anchor":"end","font-size":FS*1.1,"font-weight":700,class:"t-ink"});txt(svg,L-20,ya+FS+4,t<0.5?u:"z",{"text-anchor":"end","font-size":FS*0.85});}
+      el("rect",{x:pos(m-s,-1),y:ya-34,width:pos(m+s,1)-pos(m-s,-1),height:46,fill:"var(--band)"},svg);
+      el("line",{x1:L,x2:W-Rm,y1:ya,y2:ya,class:"g-axis"},svg);
+      const tk=t<0.5?(r?[0,10,20,30,40]:[28,30,32,34,36,38]):[-2,-1,0,1,2];tk.forEach(v=>{const x=t<0.5?L+(v-lo)/(hi-lo)*(W-L-Rm):L+(v+2.5)/5*(W-L-Rm);el("line",{x1:x,x2:x,y1:ya-4,y2:ya+4,class:"g-axis"},svg);txt(svg,x,ya+FS+6,t<0.5?String(v):sg(v,0),{"text-anchor":"middle","font-size":FS*0.85});});
+      el("line",{x1:pos(m,0),x2:pos(m,0),y1:ya-40,y2:ya+6,stroke:"var(--mean)","stroke-width":3.5},svg);
+      A.forEach((v,i)=>{if(i!==sel)el("circle",{cx:pos(v,Z[i]),cy:ya-14,r:nw?10:8,class:"p-point","fill-opacity":.8},svg);});
+      const xs=pos(A[sel],Z[sel]);el("circle",{cx:xs,cy:ya-14,r:nw?10:8,class:"p-point"},svg);el("circle",{cx:xs,cy:ya-14,r:nw?16:13,fill:"none",stroke:"var(--ink)","stroke-width":2.5},svg);
+      const lab=t<0.5?f1(A[sel],0)+" "+u:"z = "+f1(Z[sel],2);txt(svg,clampLab(xs,lab,FS,W),ya-38,lab,Object.assign({"text-anchor":"middle","font-size":FS,"font-weight":700,class:"t-ink"},halo(5)));});}
+  function upd(){$("z-big").innerHTML=`<div><b>${f1(zX[sel],2)}</b><span>z of the consumption of trip ${sel+1}</span></div><div><b>${f1(zR[sel],2)}</b><span>z of the idling of trip ${sel+1}</span></div><div><b>${f1(100*sX/mX,1)}%</b><span>coefficient of variation of consumption</span></div><div><b>${f1(100*sR/mR,0)}%</b><span>coefficient of variation of idling</span></div>`;
+    const a=zX[sel],b=zR[sel],w=v=>Math.abs(v)<0.5?"almost at the mean":Math.abs(v)<1.5?(v>0?"somewhat above":"somewhat below"):(v>0?"well above":"well below");
+    let m=`Trip ${sel+1}: it burned ${f1(X0[sel],0)} L/100 km (mean 33) and had ${f1(R0[sel],0)} minutes of idling (mean 18). In z: consumption ${sg(a,2)}, ${w(a)}; idling ${sg(b,2)}, ${w(b)}. `;
+    m+=mode?`Now both rows share a scale: 0 is the mean of each one and each step is one standard deviation. Both clouds have the same center and the same width; all that is left is how they are spread out.`:sel===4?`Trip 5 is the highest in both columns, but in which one does it stand out more? In their units you can't tell. Press "standardized".`:`Press "standardized" to see both columns on the same scale.`;
+    if(sel===4&&mode)m+=` Trip 5 stands out a bit more in idling (2.13) than in consumption (1.76).`;
+    $("z-msg").innerHTML=m;draw();}
+  window.addEventListener("resize",draw);upd();})();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Distribuciones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.rowb{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.case{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:8px;align-content:start}
+.case h3{font-size:1rem}
+.case p.d{font-size:.92rem;color:var(--muted)}
+.case .ans{font-size:.9rem;color:var(--muted);min-height:1.2em}
+.case .ans b.ok{color:var(--good)}.case .ans b.no{color:var(--warn)}
+.case .btns{gap:6px}
+.case .btns button{padding:5px 11px;font-size:.86rem}
+.case .btns button.ok{background:var(--good);border-color:var(--good);color:var(--surface)}
+.case .btns button.no{border-color:var(--warn);color:var(--warn)}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#es" target="_self">← Menú principal</a> · Las matemáticas debajo del ML · tema 8 · explicado con dibujos · <a href="distribuciones-tecnico-es.html" target="_self">ver la versión técnica</a> · <a href="matematicas-del-ml-es.html" target="_self">todos los temas</a> · <a href="distributions-en.html" target="_self">in English</a></p>
+  <h1>Distribuciones</h1>
+  <p class="lede">Si apuntas muchas veces lo mismo (el consumo de cada trayecto, las entregas que llegan tarde cada día, las alertas de un camión), los datos acaban dibujando una forma. Unas pocas formas aparecen una y otra vez, y saber cuál toca dice qué es lo normal, qué es raro y cuánto cabe esperar.</p>
+</header>
+
+<section class="first" aria-label="Juguete interactivo">
+  <div class="situ col">
+    <p class="eyebrow">La situación del juguete</p>
+    <p>Una empresa de transporte apunta cuatro cosas de su flota de camiones: el <strong>consumo de cada trayecto</strong> (litros de gasóleo cada 100 km), cuántas de las <strong>20 entregas</strong> de un día llegan tarde, cuántas <strong>alertas de frenada brusca</strong> da un camión en un día y cuánto <strong>duran las paradas</strong> en el muelle de un cliente.</p>
+    <p>Cada dato suelto dice poco. Pero si se apuntan muchos y se cuenta <strong>cuántas veces sale cada valor</strong>, aparece un dibujo de barras (un <strong>histograma</strong>). Con pocos datos el dibujo da saltos; con muchos se queda quieto en una forma. Esa forma es la <strong>distribución</strong>.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="Histograma de los datos apuntados y forma de fondo"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada <b style="color:var(--point)">barra naranja</b> dice qué parte de los datos (en %) cae en ese valor o en ese tramo. Todas las barras juntas suman 100 %. La raya vertical <b style="color:var(--sample)">violeta</b> es la media de los datos. La línea o los puntos <b style="color:var(--mean)">azules</b> son la forma de fondo: lo que saldría con infinitos datos.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>¿Qué se apunta?</h3>
+      <p>Cuatro cosas distintas de la flota. Cada una tiene su forma.</p>
+      <div class="chips" id="t-q" role="group" aria-label="Qué se apunta"></div>
+    </div>
+    <div class="dec">
+      <h3>¿Cuántos datos?</h3>
+      <div class="slider"><label for="t-n">Datos apuntados <output id="t-n-o"></output></label><input type="range" id="t-n" min="0" max="8" step="1" value="2"><div class="ends"><span>1</span><span>10 000</span></div></div>
+      <p>Cada dato es un trayecto, un día o una parada. Ve subiendo poco a poco.</p>
+    </div>
+    <div class="dec">
+      <h3>Repetir y comparar</h3>
+      <p>«Otra muestra» apunta datos nuevos (otros días, otros trayectos). «Ver la forma de fondo» dibuja la distribución de verdad, la que no cambia.</p>
+      <div class="rowb"><button type="button" id="t-re">↻ Otra muestra</button><button type="button" id="t-th" aria-pressed="false">Ver la forma de fondo</button></div>
+    </div>
+  </div>
+  <div class="big3" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Prueba en este orden:</strong></p>
+    <ol class="try">
+      <li>Con «Consumo por trayecto» y 20 datos, pulsa «Otra muestra» varias veces: las barras cambian mucho de una vez a otra.</li>
+      <li>Sube hasta 10 000 y pulsa «Ver la forma de fondo»: las barras se pegan a la campana azul, y ya no se mueven al pedir otra muestra.</li>
+      <li>Cambia a «Entregas tarde» y a «Alertas de frenada»: ahora son barras sueltas, porque solo salen números enteros, y las dos formas se parecen mucho.</li>
+      <li>Prueba «Duración de las paradas»: no es una campana. Casi todas son cortas, pero algunas duran mucho: tiene una cola larga hacia la derecha.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Lo que acabas de ver</p>
+    <h2>Cada tipo de dato tiene su forma</h2>
+    <p>Una <strong>distribución</strong> es la lista de los valores que puede tomar algo y de lo a menudo que sale cada uno. El histograma de unos pocos datos es una foto borrosa de ella; con muchos datos la foto se aclara. Tres cosas que conviene quedarse:</p>
+    <ul>
+      <li><strong>Discreta o continua.</strong> Lo que se <strong>cuenta</strong> (entregas, alertas) solo toma valores enteros: su distribución son barras sueltas. Lo que se <strong>mide</strong> (litros, minutos) puede tomar cualquier valor: su distribución es una curva.</li>
+      <li><strong>Todo suma 100 %.</strong> Entre todas las barras, o bajo toda la curva, está el 100 % de los casos. Por eso una distribución sirve para responder «¿qué parte de los días…?».</li>
+      <li><strong>La media y la desviación típica</strong> resumen el centro y la anchura (están explicadas en el <a href="media-varianza-y-desviacion-tipica-es.html" target="_self">tema 7</a>), pero no la forma: las paradas tienen una cola que esos dos números no cuentan.</li>
+    </ul>
+    <p>Las ideas que siguen explican cómo se lee una probabilidad en el dibujo y las tres formas que más aparecen: la <strong>normal</strong> (la campana del consumo), la <strong>binomial</strong> (las entregas tarde) y la <strong>Poisson</strong> (las alertas). Al final, las colas largas y cómo reconocer cuál toca.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 6</p>
+    <h2>La probabilidad es una barra o un trozo de área</h2>
+    <p>Con la forma de fondo se pueden hacer preguntas: ¿qué parte de los días llegan como mucho 2 entregas tarde? ¿Qué parte de los trayectos gastan entre 30 y 35 litros? En una distribución de barras, la respuesta es <strong>sumar las barras</strong> de esos valores. En una curva, es el <strong>área</strong> que queda debajo entre esos dos valores.</p>
+  </div>
+  <div class="seg col" role="group" aria-label="Distribución"><button type="button" id="a-0" aria-pressed="true">Entregas tarde (barras)</button><button type="button" id="a-1" aria-pressed="false">Consumo (curva)</button></div>
+  <figure class="fig"><svg id="ar" role="img" aria-label="Distribución con un tramo coloreado: su probabilidad"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Es la forma de fondo del juguete. Lo coloreado en <b style="color:var(--point)">naranja</b> es el tramo que eliges con los dos deslizadores: su probabilidad es la suma de esas barras, o el área naranja bajo la curva. Lo <b style="color:var(--mean)">azul</b> es el resto. Naranja y azul juntos son siempre el 100 %.</p>
+  <div class="controls col">
+    <div class="slider"><label for="a-lo">Desde <output id="a-lo-o"></output></label><input type="range" id="a-lo" min="0" max="10" step="1" value="0"></div>
+    <div class="slider"><label for="a-hi">Hasta <output id="a-hi-o"></output></label><input type="range" id="a-hi" min="0" max="10" step="1" value="2"></div>
+  </div>
+  <div class="big3 col" id="a-big"></div>
+  <p class="qcard col" id="a-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 6</p>
+    <h2>La normal: una campana con un centro y una anchura</h2>
+    <p>El consumo de los trayectos depende de muchas cosas pequeñas a la vez: el viento, la carga, el tráfico, el conductor, las cuestas. Cuando algo es la <strong>suma de muchos efectos pequeños</strong> que no dependen unos de otros, sale casi siempre la misma forma: una campana simétrica, la <strong>distribución normal</strong> (o de Gauss). Solo necesita dos números: el centro, <strong>μ</strong> («mu», la media), y la anchura, <strong>σ</strong> («sigma», la desviación típica).</p>
+  </div>
+  <figure class="fig"><svg id="nm" role="img" aria-label="Campana normal con las bandas de una, dos y tres sigmas y un trayecto marcado"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> La campana <b style="color:var(--mean)">azul</b> es el consumo de los trayectos. Las bandas de fondo marcan μ ± 1σ, μ ± 2σ y μ ± 3σ, con el % de trayectos que cae dentro de cada una. La raya <b style="color:var(--point)">naranja</b> es un trayecto concreto, y el área naranja, los trayectos que gastan todavía más que él.</p>
+  <div class="controls col">
+    <div class="slider"><label for="n-mu">Centro μ (consumo medio) <output id="n-mu-o"></output></label><input type="range" id="n-mu" min="26" max="38" step="0.5" value="32"></div>
+    <div class="slider"><label for="n-sd">Anchura σ (desviación típica) <output id="n-sd-o"></output></label><input type="range" id="n-sd" min="1" max="5" step="0.1" value="2.5"></div>
+    <div class="slider"><label for="n-x">Un trayecto que gasta <output id="n-x-o"></output></label><input type="range" id="n-x" min="20" max="46" step="0.5" value="37"></div>
+  </div>
+  <div class="big3 col" id="n-big"></div>
+  <p class="qcard col" id="n-msg"></p>
+  <div class="col stack">
+    <p>La <strong>regla 68-95-99,7</strong> vale para cualquier normal, con cualquier μ y σ: el 68 % de los casos cae a menos de 1σ del centro, el 95 % a menos de 2σ y el 99,7 % a menos de 3σ. Por eso la distancia al centro se mide en sigmas, con un número llamado <strong>z</strong>: z = (valor − μ) / σ. Un trayecto con z = 2 es raro (solo un 2,3 % gasta más) en cualquier camión, gaste lo que gaste de media. Es la idea detrás de muchas reglas para detectar <a href="valores-atipicos-es.html" target="_self">valores atípicos</a>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 6</p>
+    <h2>La binomial: cuántos de n salen «sí»</h2>
+    <p>Cada día salen <strong>20 entregas</strong>. Cada una puede llegar tarde o no, y en esta empresa llega tarde una de cada diez (<strong>p = 10 %</strong>). Si cada entrega va a su aire, sin que el retraso de una afecte a las otras, el número de entregas tarde del día sigue la <strong>distribución binomial</strong>. Solo necesita dos números: cuántos intentos hay (<strong>n</strong>) y la probabilidad de «sí» en cada uno (<strong>p</strong>).</p>
+  </div>
+  <figure class="fig"><svg id="bn" role="img" aria-label="Barras de la distribución binomial con la cola de los días malos coloreada"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada barra <b style="color:var(--mean)">azul</b> es el % de días con ese número de entregas tarde (0, 1, 2…). Las barras <b style="color:var(--point)">naranjas</b> son los «días malos»: los que tienen al menos el número que eliges abajo. La raya violeta es la media, n × p.</p>
+  <div class="controls col">
+    <div class="slider"><label for="b-n">Entregas al día (n) <output id="b-n-o"></output></label><input type="range" id="b-n" min="1" max="60" step="1" value="20"></div>
+    <div class="slider"><label for="b-p">Probabilidad de que una llegue tarde (p) <output id="b-p-o"></output></label><input type="range" id="b-p" min="1" max="90" step="1" value="10"></div>
+    <div class="slider"><label for="b-t">Día malo: al menos <output id="b-t-o"></output></label><input type="range" id="b-t" min="0" max="20" step="1" value="6"></div>
+  </div>
+  <div class="big3 col" id="b-big"></div>
+  <p class="qcard col" id="b-msg"></p>
+  <div class="col stack">
+    <p>La binomial aparece cada vez que se cuentan los «sí» de un número fijo de intentos parecidos: de 12 camiones que pasan la ITV, cuántos la suspenden; de 300 frenadas, cuántas son bruscas; de 1 000 clientes avisados, cuántos responden. Es también la base de la <a href="regresion-logistica-es.html" target="_self">regresión logística</a>, que lo que hace es estimar la p de cada caso.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 de 6</p>
+    <h2>La Poisson: contar cosas raras en un rato</h2>
+    <p>Las <strong>alertas de frenada brusca</strong> de un camión no tienen «n intentos» claros: pueden pasar en cualquier momento del día, y cada momento tiene una probabilidad diminuta. Cuando se cuentan <strong>sucesos sueltos en un intervalo</strong> (alertas por día, averías por mes, llamadas por hora), sale la <strong>distribución de Poisson</strong>. Solo necesita un número, <strong>λ</strong> («lambda»): cuántos sucesos hay de media en el intervalo.</p>
+  </div>
+  <figure class="fig"><svg id="ps" role="img" aria-label="Barras de la distribución de Poisson y, si se elige, una binomial para comparar"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Las barras <b style="color:var(--mean)">azules</b> son el % de días con 0, 1, 2… alertas; las <b style="color:var(--point)">naranjas</b>, los días con muchas (al menos el número que eliges). Si eliges comparar, los aros <b style="color:var(--sample)">violetas</b> son una binomial con n intentos y p = λ / n: misma media, pero con un número fijo de intentos.</p>
+  <div class="controls col">
+    <div class="slider"><label for="p-l">Alertas de media al día (λ) <output id="p-l-o"></output></label><input type="range" id="p-l" min="0.2" max="12" step="0.1" value="2"></div>
+    <div class="slider"><label for="p-t">Día con muchas: al menos <output id="p-t-o"></output></label><input type="range" id="p-t" min="1" max="25" step="1" value="7"></div>
+  </div>
+  <div class="chips col" id="p-cmp" role="group" aria-label="Comparar con una binomial"></div>
+  <div class="big3 col" id="p-big"></div>
+  <p class="qcard col" id="p-msg"></p>
+  <div class="col stack">
+    <p>Una curiosidad útil de la Poisson: <strong>la media y la varianza valen lo mismo</strong>, λ. Si un camión da de media 2 alertas al día, su varianza (el cuadrado de la desviación típica, <a href="media-varianza-y-desviacion-tipica-es.html" target="_self">tema 7</a>) también es 2. Si en los datos la varianza sale mucho mayor que la media, algo no es Poisson: por ejemplo, porque se mezclan conductores tranquilos y conductores bruscos.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 de 6</p>
+    <h2>Colas largas: cuando la campana engaña</h2>
+    <p>Las paradas en el muelle de un cliente no son una suma de efectos pequeños: son una <strong>multiplicación</strong>. Si hay cola, se tarda el doble; si además falta el responsable, otra vez el doble. Además no pueden durar menos de 0 minutos. Lo que sale es una forma torcida: la mayoría de paradas son cortas, pero unas pocas duran muchísimo. Se dice que tiene una <strong>cola larga</strong> a la derecha (una forma típica es la <strong>lognormal</strong>).</p>
+  </div>
+  <figure class="fig"><svg id="cl" role="img" aria-label="Duración de las paradas con cola larga y la campana normal con la misma media y desviación típica"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> La curva <b style="color:var(--mean)">azul</b> es la duración real de las paradas. La curva <b style="color:var(--sample)">violeta discontinua</b> es una campana normal con la misma media y la misma desviación típica: lo que uno supondría sin mirar la forma. La zona rayada a la izquierda del 0 son <b>minutos negativos</b> que la campana da por posibles. Las rayas verticales son la <b>mediana</b> (la mitad de las paradas duran menos) y la <b>media</b>. Lo <b style="color:var(--point)">naranja</b> son las paradas más largas que el límite que eliges.</p>
+  <div class="controls col">
+    <div class="slider"><label for="c-s">Lo larga que es la cola <output id="c-s-o"></output></label><input type="range" id="c-s" min="0.1" max="1.2" step="0.05" value="0.8"><div class="ends"><span>casi simétrica</span><span>muy larga</span></div></div>
+    <div class="slider"><label for="c-t">Paradas de más de <output id="c-t-o"></output></label><input type="range" id="c-t" min="15" max="120" step="5" value="60"></div>
+  </div>
+  <div class="big3 col" id="c-big"></div>
+  <p class="qcard col" id="c-msg"></p>
+  <div class="col stack">
+    <p>Con colas largas, la media se va hacia la cola y deja de ser «lo típico»: la mediana lo describe mejor. Y la regla «media más dos desviaciones típicas» del <a href="valores-atipicos-es.html" target="_self">tema de atípicos</a> marca como raras demasiadas paradas normales y, a la vez, se queda corta para saber cuánto pueden durar las peores. Otra cola típica es la <strong>exponencial</strong>: si las alertas llegan como una Poisson, el tiempo de espera entre una y la siguiente sigue esa forma, con muchas esperas cortas y alguna muy larga.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 6 de 6</p>
+    <h2>¿Cuál toca? Tres preguntas</h2>
+    <p>Antes de mirar los datos, la pregunta de qué se está apuntando ya dice mucho. El esquema de abajo resume cómo elegir; las tarjetas son casos de la flota para practicar. Pulsa en cada tarjeta la forma que crees que tiene: el esquema marca el camino de la respuesta correcta.</p>
+  </div>
+  <figure class="fig"><svg id="dq" role="img" aria-label="Esquema de decisión para elegir la distribución"></svg></figure>
+  <p class="howto col"><b>Cómo leer el esquema.</b> Se empieza arriba. La primera pregunta es si se <b>cuenta</b> o se <b>mide</b>. Después, si se cuenta: ¿hay un número fijo de intentos? Si se mide: ¿es la suma de muchos efectos pequeños, o puede dispararse? El camino de la última tarjeta que has contestado sale <b style="color:var(--point)">resaltado en naranja</b>.</p>
+  <div class="cases" id="q-cases"></div>
+  <p class="qcard col" id="q-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta completa</h2>
+    <ol class="steps">
+      <li><div><strong>Una distribución dice qué valores salen y con qué frecuencia.</strong> Un histograma con muchos datos se acerca a ella; con pocos, da saltos.</div></li>
+      <li><div><strong>Lo que se cuenta va en barras; lo que se mide, en curva.</strong> La probabilidad es la suma de barras o el área bajo la curva, y el total es siempre 100 %.</div></li>
+      <li><div><strong>La normal</strong> sale de sumar muchos efectos pequeños. Con μ y σ basta, y la regla 68-95-99,7 y la z dicen qué es raro.</div></li>
+      <li><div><strong>La binomial</strong> cuenta los «sí» de n intentos con la misma p. Su media es n × p.</div></li>
+      <li><div><strong>La Poisson</strong> cuenta sucesos sueltos en un intervalo. Su media y su varianza valen λ, y es lo que queda de una binomial con muchos intentos y p pequeña.</div></li>
+      <li><div><strong>Si algo se multiplica o no puede bajar de 0</strong>, sospecha de una cola larga: mira la mediana y los percentiles, no solo media ± 2σ.</div></li>
+      <li><div><strong>Comprueba siempre con los datos</strong>: dibuja el histograma encima de la forma elegida y compara la media con la varianza en los conteos.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>Dónde aparece en la telemetría de flota</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 32h28"/><path d="M8 32c4 0 6-20 12-20s8 20 12 20"/><path d="M27 12v20" stroke-dasharray="3 3"/></svg><h3>Consumo fuera de lo normal</h3><p>Con la campana de cada modelo de camión y ruta, un trayecto con z mayor que 3 merece una mirada: rueda mal hinchada, filtro sucio o conducción agresiva. Comparar en sigmas sirve igual para un camión de reparto que para uno de larga distancia.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 32V22M14 32V12M20 32V8M26 32V18M32 32V26"/><path d="M5 32h30"/></svg><h3>Umbrales de alertas con sentido</h3><p>Si un conductor da de media 2 alertas al día, 7 en un día solo pasa por azar 1 vez de cada 221. Con la Poisson se fija un umbral que avisa de lo raro sin llenar el panel de falsas alarmas.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="12"/><path d="M20 13v7l5 3"/></svg><h3>Penalizaciones por retraso</h3><p>Con 20 entregas al día, p = 10 % y 15 € por entrega tarde, la binomial dice que el coste medio es de 30 € al día y que unos 3 días al año habrá 6 o más retrasos: sirve para presupuestar y para saber cuándo un día malo ya no es mala suerte.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 32h28"/><path d="M8 32c2-18 6-22 9-22s6 10 17 20"/></svg><h3>Tiempos de parada y acuerdos de servicio</h3><p>La duración de paradas, descargas o reparaciones tiene cola larga. Prometer «menos de 45 minutos el 95 % de las veces» se calcula con el percentil de la forma real; con la campana se prometería algo que no se cumple.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Conexiones</p>
+    <h2>Con los modelos de la serie ML y los otros temas</h2>
+    <p>La media y la desviación típica que resumen cada forma se explican en el <a href="media-varianza-y-desviacion-tipica-es.html" target="_self">tema 7</a>. En la serie ML, el <a href="bayes-es.html" target="_self">teorema de Bayes</a> usa estas distribuciones para decir qué se cree de una p o de una λ antes y después de ver los datos; los <a href="procesos-gaussianos-es.html" target="_self">procesos gaussianos</a> y el <a href="filtro-de-kalman-es.html" target="_self">filtro de Kalman</a> están construidos sobre la normal (el ruido del GPS se modela como una campana); la <a href="regresion-logistica-es.html" target="_self">regresión logística</a> es una binomial en la que la p depende de los datos de cada caso. En «Preparar los datos», el <a href="analisis-exploratorio-es.html" target="_self">análisis exploratorio</a> empieza dibujando histogramas como los del juguete, los <a href="valores-atipicos-es.html" target="_self">valores atípicos</a> se buscan en las colas, y las <a href="clases-desbalanceadas-es.html" target="_self">clases desbalanceadas</a> aparecen cuando lo que se busca es un suceso raro, como una avería.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo que ayuda y dónde engaña</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Lo que ayuda</h3><ul class="pc">
+      <li>Con uno o dos números (μ y σ, n y p, λ) se describe una forma entera y se responde a cualquier pregunta de «qué parte de los días».</li>
+      <li>Dicen qué es raro de verdad y qué es azar: un día con 4 entregas tarde no es un problema; uno con 8, sí.</li>
+      <li>Permiten simular: generar días y trayectos falsos pero realistas para probar un panel o un presupuesto.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Dónde engaña</h3><ul class="pc">
+      <li>Los datos reales casi nunca siguen una forma de libro al pie de la letra: hay que comprobarla, sobre todo en las colas, que es donde están las sorpresas.</li>
+      <li>Mezclar grupos distintos (camiones de reparto y de larga distancia, conductores tranquilos y bruscos) da formas que no son ninguna de las tres.</li>
+      <li>La binomial y la Poisson suponen que cada suceso va a su aire. Si un atasco retrasa diez entregas a la vez, los días malos son mucho más frecuentes de lo que dicen.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Distribución</dt><dd>Qué valores puede tomar algo y con qué frecuencia sale cada uno. Su dibujo es la «forma» de los datos.</dd>
+      <dt>Histograma</dt><dd>Dibujo de barras que cuenta cuántos datos caen en cada valor o tramo.</dd>
+      <dt>Discreta / continua</dt><dd>Discreta: solo valores sueltos, normalmente contados (0, 1, 2…). Continua: cualquier valor, normalmente medido (32,47 litros).</dd>
+      <dt>Normal (o de Gauss)</dt><dd>La campana simétrica. Aparece al sumar muchos efectos pequeños e independientes.</dd>
+      <dt>μ y σ</dt><dd>El centro (la media) y la anchura (la desviación típica) de una distribución.</dd>
+      <dt>z</dt><dd>A cuántas sigmas del centro está un valor: (valor − μ) / σ.</dd>
+      <dt>Binomial</dt><dd>Cuántos «sí» salen de n intentos iguales, cada uno con probabilidad p.</dd>
+      <dt>Poisson</dt><dd>Cuántos sucesos sueltos pasan en un intervalo, si de media pasan λ.</dd>
+      <dt>Cola larga</dt><dd>Cuando unos pocos valores son muchísimo mayores que los típicos. La media queda por encima de la mediana.</dd>
+      <dt>Lognormal y exponencial</dt><dd>Dos formas con cola larga: la primera, para cosas que se multiplican (duraciones, costes); la segunda, para esperas entre sucesos de una Poisson.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: las cuentas detrás de todo</summary>
+    <p style="padding-top:10px">No hacen falta para entender la idea:</p>
+    <div class="formula">normal (μ, σ)
+   z = (x − μ) / σ        P(|z| &lt; 1) = 68,3 %   P(|z| &lt; 2) = 95,4 %   P(|z| &lt; 3) = 99,7 %
+   consumo μ = 32, σ = 2,5:  37 L → z = 2 → gastan más el 2,3 %
+
+binomial (n, p)
+   P(k) = C(n, k) · pᵏ · (1 − p)ⁿ⁻ᵏ      C(n, k) = formas de elegir k de n
+   media = n·p      varianza = n·p·(1 − p)
+   20 entregas, p = 0,1:  P(0) = 0,9²⁰ = 12,2 %   P(6 o más) = 1,1 %
+
+Poisson (λ)
+   P(k) = e^(−λ) · λᵏ / k!      media = varianza = λ
+   λ = 2:  P(0) = e⁻² = 13,5 %   P(7 o más) = 0,45 %
+   binomial con n grande y p = λ / n  →  Poisson (λ)
+
+cola larga (lognormal)
+   log(duración) es normal;  mediana = 12 min,  media = 12 · e^(0,8²/2) = 16,5 min</div>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2>Todo en un minuto</h2>
+    <p>Un repaso animado: los datos que caen y forman una campana, la regla 68-95-99,7, las entregas tarde de la binomial, las alertas de la Poisson y la cola larga de las paradas que la campana no ve. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xACpAAEAAgMBAQEAAAAAAAAAAAAABgcFBAgDAQIBAQEBAQAAAAAAAAAAAAAAAAABAgMQAQACAQMCAwMGBwoIDAMHBQABAgMFBBESBjEhB1ETQSIyFHFhNrN0QoG0IzV1UlVzchUWsZGhgpSyktNiNDNDopPSwiQ3xBdTCIOEY6PB1LVUhUbwldFE4UcRAQEBAAIDAAMBAQAAAAAAAAARAUECMRIhQnFRMiL/wAARCAQ4B4ADASIAAhEAAxEA/9oADAMBAAIRAxEAPwCkgHVgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAG1stO3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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/2Q==" aria-label="Animación: distribuciones">
+      <source src="distribuciones-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g," ");s=fr?i+","+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+/* porcentaje legible: 2 decimales si es pequeño */
+const fp=v=>v<0.00005?"< 0,01 %":v<0.1?f1(100*v,2)+" %":f1(100*v,1)+" %";
+const oneIn=v=>v<=0?"nunca":v>0.5?"más de la mitad":"1 de cada "+f1(Math.round(1/v),0);
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+/* ---- matemáticas ---- */
+function erf(x){const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+0.3275911*x);const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return s*y;}
+const Phi=z=>0.5*(1+erf(z/Math.SQRT2));
+const npdf=(x,m,s)=>Math.exp(-0.5*((x-m)/s)**2)/(s*Math.sqrt(2*Math.PI));
+const ncdf=(x,m,s)=>Phi((x-m)/s);
+const LF=[0];for(let i=1;i<=400;i++)LF.push(LF[i-1]+Math.log(i));
+function binom(n,p){const a=[];for(let k=0;k<=n;k++)a.push(p<=0?(k===0?1:0):p>=1?(k===n?1:0):Math.exp(LF[n]-LF[k]-LF[n-k]+k*Math.log(p)+(n-k)*Math.log(1-p)));return a;}
+function pois(l,kmax){const a=[];for(let k=0;k<=kmax;k++)a.push(Math.exp(-l+k*Math.log(l)-LF[k]));return a;}
+const lnpdf=(x,mu,s)=>x<=0?0:npdf(Math.log(x),mu,s)/x;
+const lncdf=(x,mu,s)=>x<=0?0:ncdf(Math.log(x),mu,s);
+const sum=(a,i,j)=>{let t=0;for(let k=Math.max(0,i);k<=Math.min(a.length-1,j);k++)t+=a[k];return t;};
+/* marco de un gráfico: ejes, rejilla y escalas */
+function frame(svg,o){const nw=narrowOf(svg),W=nw?600:900,H=o.H?(nw?o.H[1]:o.H[0]):(nw?500:380),FS=nw?25:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+  const L=nw?74:64,R=W-(nw?28:14),T=o.top??(nw?52:34),B=H-(nw?72:50);
+  const sx=x=>L+(x-o.x0)/(o.x1-o.x0)*(R-L),sy=y=>B-(y/o.y1)*(B-T);
+  const g=el("g",null,svg);
+  for(const v of o.yt){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},g);txt(g,L-8,sy(v)+FS*0.35,o.fy(v),{"text-anchor":"end","font-size":FS*0.85});}
+  for(const v of o.xt)txt(g,sx(v),B+FS+6,o.fx?o.fx(v):String(v),{"text-anchor":"middle","font-size":FS*0.85});
+  el("line",{x1:L,x2:R,y1:B,y2:B,class:"g-axis"},g);
+  txt(g,R,H-6,o.xl,{"text-anchor":"end","font-size":FS*0.9,class:"t-ink"});
+  if(o.yl)txt(g,L+4,T-12,o.yl,{"font-size":FS*0.85});
+  return {W,H,FS,L,R,T,B,sx,sy,nw,g};}
+function niceMax(v){const c=[1,2,2.5,4,5,6,8,10,12,15,20,25,30,40,50,60,80,100];for(const x of c)if(x>=v)return x;return 100;}
+const ticks=(m)=>{const st=m<=4?1:m<=10?2:m<=25?5:m<=50?10:20;const a=[];for(let v=0;v<=m+1e-9;v+=st)a.push(v);return a;};
+const pct=v=>f1(v,0)+" %";
+
+/* ---------- juguete: de datos a forma ---------- */
+(function(){const svg=$("toy"),in_=$("t-n"),NS=[1,5,20,50,100,300,1000,3000,10000];let cur=0,seed=1,showT=false;
+  const LS=Math.log(12),S8=0.8;
+  const Q=[
+    {name:"Consumo por trayecto",kind:"c",lo:22,hi:42,w:1,xl:"litros cada 100 km",what:"trayectos",one:"trayecto",gen:r=>32+2.5*gauss(r),pdf:x=>npdf(x,32,2.5),cdf:x=>ncdf(x,32,2.5),m:32,s:2.5,xt:[22,26,30,34,38,42]},
+    {name:"Entregas tarde de 20",kind:"d",lo:0,hi:10,xl:"entregas tarde en el día (de 20)",what:"días",one:"día",gen:r=>{let c=0;for(let i=0;i<20;i++)if(r()<0.1)c++;return c;},pm:binom(20,0.1),m:2,s:Math.sqrt(1.8),xt:[0,1,2,3,4,5,6,7,8,9,10]},
+    {name:"Alertas de frenada en un día",kind:"d",lo:0,hi:10,xl:"alertas de frenada en el día",what:"días",one:"día",gen:r=>{let u=r(),k=0,p=Math.exp(-2),F=p;while(u>F&&k<60){k++;p*=2/k;F+=p;}return k;},pm:pois(2,60),m:2,s:Math.SQRT2,xt:[0,1,2,3,4,5,6,7,8,9,10]},
+    {name:"Duración de las paradas",kind:"c",lo:0,hi:100,w:5,xl:"minutos de parada",what:"paradas",one:"parada",gen:r=>Math.exp(LS+S8*gauss(r)),pdf:x=>lnpdf(x,LS,S8),cdf:x=>lncdf(x,LS,S8),m:12*Math.exp(S8*S8/2),s:12*Math.exp(S8*S8/2)*Math.sqrt(Math.exp(S8*S8)-1),xt:[0,20,40,60,80,100]}];
+  let data=[];
+  function regen(){const r=mulberry32(1000*seed+17*cur+3);data=[];for(let i=0;i<10000;i++)data.push(Q[cur].gen(r));}
+  chips($("t-q"),Q.map(q=>q.name),i=>{cur=i;regen();draw();});
+  $("t-re").onclick=()=>{seed++;regen();draw();};
+  const bt=$("t-th");bt.onclick=()=>{showT=!showT;bt.setAttribute("aria-pressed",String(showT));draw();};
+  function draw(){const q=Q[cur],n=NS[+in_.value],x=data.slice(0,n);
+    /* recuento */
+    let nb,lab,obs,th,out=0;
+    if(q.kind==="d"){nb=q.hi-q.lo+1;obs=new Array(nb).fill(0);x.forEach(v=>{if(v<=q.hi)obs[v]++;else out++;});th=q.pm.slice(0,nb);}
+    else{nb=Math.round((q.hi-q.lo)/q.w);obs=new Array(nb).fill(0);x.forEach(v=>{let b=Math.floor((v-q.lo)/q.w);if(cur===0)b=Math.max(0,Math.min(nb-1,b));if(b>=0&&b<nb)obs[b]++;else out++;});
+      th=[];for(let b=0;b<nb;b++)th.push(q.cdf(q.lo+(b+1)*q.w)-q.cdf(q.lo+b*q.w));}
+    const ob=obs.map(c=>c/n),tv=0.5*(ob.reduce((a,v,i)=>a+Math.abs(v-th[i]),0)+Math.abs(out/n-Math.max(0,1-th.reduce((a,b)=>a+b,0))));
+    const ymax=niceMax(100*Math.max(Math.max(...th)*1.2,Math.max(...ob)*1.05));
+    const x0=q.kind==="d"?q.lo-0.6:q.lo,x1=q.kind==="d"?q.hi+0.6:q.hi;
+    const F=frame(svg,{x0,x1,y1:ymax,yt:ticks(ymax),fy:pct,xt:q.xt,xl:q.xl,yl:"% de los "+q.what});
+    const {sx,sy,FS}=F;
+    for(let b=0;b<nb;b++){let a,c;if(q.kind==="d"){a=sx(b-0.4);c=sx(b+0.4);}else{a=sx(q.lo+b*q.w)+1;c=sx(q.lo+(b+1)*q.w)-1;}
+      const h=100*ob[b];if(h>0)el("rect",{x:a,y:sy(Math.min(h,ymax)),width:c-a,height:F.B-sy(Math.min(h,ymax)),fill:"var(--point)","fill-opacity":.6,stroke:"var(--point)","stroke-width":1.2},svg);}
+    if(showT){if(q.kind==="d"){for(let b=0;b<nb;b++){const y=sy(100*th[b]);el("line",{x1:sx(b-0.46),x2:sx(b+0.46),y1:y,y2:y,stroke:"var(--mean)","stroke-width":4,"stroke-linecap":"round"},svg);el("circle",{cx:sx(b),cy:y,r:5,fill:"var(--mean)"},svg);}}
+      else{let d="";const N=240;for(let i=0;i<=N;i++){const xv=q.lo+(q.hi-q.lo)*i/N;d+=(i?"L":"M")+sx(xv).toFixed(1)+" "+sy(Math.min(ymax,100*q.pdf(xv)*q.w)).toFixed(1);}el("path",{d,fill:"none",stroke:"var(--mean)","stroke-width":3.5},svg);}}
+    const mean=x.reduce((a,b)=>a+b,0)/n,sd=n>1?Math.sqrt(x.reduce((a,b)=>a+(b-mean)**2,0)/(n-1)):0;
+    if(mean>=x0&&mean<=x1){el("line",{x1:sx(mean),x2:sx(mean),y1:F.T-4,y2:F.B,stroke:"var(--sample)","stroke-width":3,"stroke-dasharray":"7 5"},svg);
+      txt(svg,sx(mean)+(cur===3?8:-8),F.T+FS*0.4,"media "+f1(mean,1),Object.assign({"text-anchor":cur===3?"start":"end","font-size":FS*0.9,"font-weight":700,style:"fill:var(--sample)"},halo(5)));}
+    if(out>0&&cur===3)txt(svg,F.R-4,F.T+FS*1.9,`${f1(out,0)} ${out===1?"parada":"paradas"} de más de 100 min, fuera del dibujo`,Object.assign({"text-anchor":"end","font-size":FS*0.8},halo(5)));
+    $("t-n-o").textContent=f1(n,0)+" "+(n===1?q.one:q.what);
+    $("t-big").innerHTML=`<div><b>${f1(n,0)}</b><span>${q.what} apuntados</span></div><div><b style="color:var(--sample)">${f1(mean,q.kind==="d"?2:1)}</b><span>media de los datos (la de fondo: ${f1(q.m,1)})</span></div><div><b>${n>1?f1(sd,q.kind==="d"?2:1):"—"}</b><span>desviación típica de los datos (la de fondo: ${f1(q.s,q.kind==="d"?2:1)})</span></div><div><b style="color:var(--point)">${f1(100*tv,1)} %</b><span>de los datos tendrían que cambiar de barra para encajar en la forma de fondo</span></div>`;
+    let m;
+    if(n<=5)m=`Con ${n===1?"un solo dato":n+" datos"} no hay ninguna forma: cada barra es ${n===1?"ese dato":"un dato suelto"}, y la media puede caer en cualquier sitio. Sube el deslizador.`;
+    else if(n<=100)m=`Con ${n} ${q.what} ya se adivina algo, pero las barras dan saltos: pulsa «Otra muestra» y verás que cambian bastante. Hasta un ${f1(100*tv,0)} % de los datos está en «la barra equivocada» respecto a la forma de fondo: es puro azar de haber apuntado pocos.${showT?"":" Pulsa «Ver la forma de fondo» para compararlos."}`;
+    else{const fit=`Con ${f1(n,0)} ${q.what}, solo un ${f1(100*tv,1)} % de los datos se sale de la forma de fondo, y la media de los datos (${f1(mean,2)}) casi coincide con la de fondo. `;
+      m=fit+[`<b>Una campana</b>: simétrica alrededor de 32 litros, con la mayoría de trayectos entre 29,5 y 34,5 (la media ± una desviación típica). Es la <b>normal</b> (idea 2).`,
+        `<b>Barras sueltas</b>: solo se puede tener 0, 1, 2… entregas tarde, nunca 1,5. Lo más común es 1 o 2, y 6 o más pasa poquísimo. Es la <b>binomial</b> (idea 3).`,
+        `<b>Barras sueltas</b> otra vez, casi iguales a las de las entregas tarde: la misma media, 2. Pero aquí no hay un máximo de 20: un día podría haber 12 alertas. Es la <b>Poisson</b> (idea 4).`,
+        `<b>No es una campana</b>: el pico está en unos 6 minutos, la mitad de las paradas dura menos de 12 y aun así hay paradas de más de una hora. La media (${f1(mean,1)} min) queda a la derecha del pico, empujada por la cola. Es una <b>cola larga</b> (idea 5).`][cur]+(showT?"":" Pulsa «Ver la forma de fondo».");}
+    $("t-msg").innerHTML=m;}
+  in_.addEventListener("input",draw);window.addEventListener("resize",draw);regen();draw();})();
+
+/* ---------- idea 1: barras y áreas ---------- */
+(function(){const svg=$("ar"),lo=$("a-lo"),hi=$("a-hi");let mode=0;const PM=binom(20,0.1);const keep=[[0,2],[30,35]];
+  const setMode=md=>{keep[mode]=[+lo.value,+hi.value];mode=md;[lo,hi].forEach(s=>{s.min=md?24:0;s.max=md?40:10;s.step=md?0.5:1;});lo.value=keep[md][0];hi.value=keep[md][1];draw();};
+  seg(["a-0","a-1"],setMode);
+  function draw(){let a=+lo.value,b=+hi.value;if(a>b){const t=a;a=b;b=t;}
+    let P,F;
+    if(mode===0){F=frame(svg,{x0:-0.6,x1:10.6,y1:30,yt:[0,10,20,30],fy:pct,xt:[0,1,2,3,4,5,6,7,8,9,10],xl:"entregas tarde en el día (de 20)",yl:"% de los días"});
+      for(let k=0;k<=10;k++){const on=k>=a&&k<=b,y=F.sy(100*PM[k]);el("rect",{x:F.sx(k-0.4),y,width:F.sx(k+0.4)-F.sx(k-0.4),height:F.B-y,fill:on?"var(--point)":"var(--mean)","fill-opacity":on?.85:.35},svg);
+        if(PM[k]>0.004)txt(svg,F.sx(k),y-6,f1(100*PM[k],1),Object.assign({"text-anchor":"middle","font-size":F.FS*0.78,class:on?"t-ink":null,"font-weight":on?700:400},halo(4)));}
+      P=sum(PM,a,b);}
+    else{F=frame(svg,{x0:24,x1:40,y1:18,yt:[0,5,10,15],fy:v=>f1(v,0),xt:[24,26,28,30,32,34,36,38,40],xl:"litros cada 100 km",yl:"altura de la curva (% por litro)"});
+      const pdf=x=>100*npdf(x,32,2.5),N=200;let d="",da="";
+      for(let i=0;i<=N;i++){const x=24+16*i/N;d+=(i?"L":"M")+F.sx(x).toFixed(1)+" "+F.sy(pdf(x)).toFixed(1);}
+      el("path",{d:d+`L${F.sx(40)} ${F.B}L${F.sx(24)} ${F.B}Z`,fill:"var(--mean)","fill-opacity":.18},svg);
+      for(let i=0;i<=N;i++){const x=a+(b-a)*i/N;da+=(i?"L":"M")+F.sx(x).toFixed(1)+" "+F.sy(pdf(x)).toFixed(1);}
+      if(b>a)el("path",{d:da+`L${F.sx(b)} ${F.B}L${F.sx(a)} ${F.B}Z`,fill:"var(--point)","fill-opacity":.75},svg);
+      el("path",{d,fill:"none",stroke:"var(--mean)","stroke-width":3.5},svg);
+      [a,b].forEach(v=>el("line",{x1:F.sx(v),x2:F.sx(v),y1:F.T,y2:F.B,stroke:"var(--point)","stroke-width":2.5,"stroke-dasharray":"6 4"},svg));
+      P=ncdf(b,32,2.5)-ncdf(a,32,2.5);}
+    txt(svg,F.R-6,F.T+F.FS*0.6,"naranja: "+fp(P),Object.assign({"text-anchor":"end","font-size":F.FS*1.15,"font-weight":800,style:"fill:var(--point)"},halo(6)));
+    const fmt=v=>mode?f1(v,1)+" L":f1(v,0);$("a-lo-o").textContent=fmt(+lo.value);$("a-hi-o").textContent=fmt(+hi.value);
+    $("a-big").innerHTML=`<div><b style="color:var(--point)">${fp(P)}</b><span>${mode?"de los trayectos gastan":"de los días llegan tarde"} entre ${fmt(a)} y ${fmt(b)}${mode?"":" entregas"}</span></div><div><b style="color:var(--mean)">${fp(1-P)}</b><span>el resto</span></div><div><b>100 %</b><span>los dos juntos, siempre</span></div>`;
+    let m;
+    if(mode===0){m=a===b?`Un solo valor: la probabilidad de que lleguen exactamente ${a} tarde es la altura de su barra, <b>${fp(P)}</b>.`:`Lleguen entre ${a} y ${b} tarde: se suman ${b-a+1} barras, ${[...Array(b-a+1)].map((_,i)=>f1(100*PM[a+i],1)).join(" + ")} = <b>${fp(P)}</b>.`;
+      if(a===0&&b===2)m+=" Dos de cada tres días llegan como mucho 2 tarde. Mueve «Hasta» a 10: casi el 100 %, porque más de 10 de 20 no pasa prácticamente nunca.";
+      else if(b>=10&&a===0)m+=" Desde 0 hasta 10 están casi todos los días: la suma de todas las barras es el 100 %.";}
+    else{m=b-a<1e-9?`Desde y hasta coinciden: un trayecto que gaste <b>exactamente</b> ${f1(a,1)} litros (ni una gota más ni menos) tiene probabilidad 0, porque bajo una raya no hay área. En lo que se mide, solo tienen probabilidad los tramos.`:`El área naranja, entre ${f1(a,1)} y ${f1(b,1)} litros, es el <b>${fp(P)}</b> de toda el área bajo la curva.`;
+      if(a===30&&b===35)m+=" Dos de cada tres trayectos gastan entre 30 y 35 litros. Fíjate en que no es una barra: la altura de la curva no es una probabilidad, el área sí.";
+      else if(a<=24&&b>=40)m+=" Toda la curva: el 100 % de los trayectos (lo que queda fuera de 24–40 es menos de 1 de cada 10 000).";}
+    $("a-msg").innerHTML=m;}
+  [lo,hi].forEach(s=>s.addEventListener("input",draw));window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 2: normal ---------- */
+(function(){const svg=$("nm"),im=$("n-mu"),is=$("n-sd"),ix=$("n-x");
+  function draw(){const mu=+im.value,s=+is.value,x=+ix.value,z=(x-mu)/s,tail=1-Phi(z);
+    const ymax=niceMax(100*npdf(mu,mu,s)*1.4);
+    const F=frame(svg,{x0:14,x1:50,y1:ymax,yt:ticks(ymax),fy:v=>f1(v,0),xt:[14,20,26,32,38,44,50],xl:"litros cada 100 km",yl:"% de trayectos por litro",H:[400,500]});
+    const {sx,sy,FS}=F;
+    const band=(k,op)=>{const a=Math.max(14,mu-k*s),b=Math.min(50,mu+k*s);el("rect",{x:sx(a),y:F.T,width:sx(b)-sx(a),height:F.B-F.T,fill:"var(--mean)","fill-opacity":op},svg);};
+    band(3,.05);band(2,.07);band(1,.10);
+    const lab=[["68,3 %",1],["95,4 %",2],["99,7 %",3]];
+    lab.forEach(([t,k],i)=>{const y=F.T+FS*1.1+i*(FS*1.6),a=sx(Math.max(14,mu-k*s)),b=sx(Math.min(50,mu+k*s));
+      el("line",{x1:a+2,x2:b-2,y1:y,y2:y,stroke:"var(--mean)","stroke-width":1.5,"stroke-opacity":.7},svg);
+      const lb=(k===1?"±1σ: ":k===2?"±2σ: ":"±3σ: ")+t,need=lb.length*FS*0.8*0.62+12,st=Object.assign({"font-size":FS*0.8},halo(4));
+      if(b-a>need)txt(svg,(a+b)/2,y-5,lb,Object.assign({"text-anchor":"middle"},st));else if(F.R-b>need)txt(svg,b+6,y+FS*0.28,lb,Object.assign({"text-anchor":"start"},st));else txt(svg,a-6,y+FS*0.28,lb,Object.assign({"text-anchor":"end"},st));});
+    const N=300;let d="",dt="";for(let i=0;i<=N;i++){const xv=14+36*i/N;d+=(i?"L":"M")+sx(xv).toFixed(1)+" "+sy(100*npdf(xv,mu,s)).toFixed(1);}
+    const xa=Math.max(14,Math.min(50,x));for(let i=0;i<=N;i++){const xv=xa+(50-xa)*i/N;dt+=(i?"L":"M")+sx(xv).toFixed(1)+" "+sy(100*npdf(xv,mu,s)).toFixed(1);}
+    el("path",{d:dt+`L${sx(50)} ${F.B}L${sx(xa)} ${F.B}Z`,fill:"var(--point)","fill-opacity":.7},svg);
+    el("path",{d,fill:"none",stroke:"var(--mean)","stroke-width":3.5},svg);
+    el("line",{x1:sx(mu),x2:sx(mu),y1:sy(100*npdf(mu,mu,s)),y2:F.B,stroke:"var(--mean)","stroke-width":2,"stroke-dasharray":"5 4"},svg);
+    el("line",{x1:sx(x),x2:sx(x),y1:F.T+4*FS*1.6,y2:F.B,stroke:"var(--point)","stroke-width":3},svg);
+    const rt=sx(x)>F.L+(F.R-F.L)*0.7;
+    txt(svg,sx(x)+(rt?-8:8),F.T+4*FS*1.6+FS,`z = ${f1(z,2)}`,Object.assign({"text-anchor":rt?"end":"start","font-size":FS*1.05,"font-weight":800,style:"fill:var(--point)"},halo(6)));
+    $("n-mu-o").textContent=f1(mu,1)+" L";$("n-sd-o").textContent=f1(s,1)+" L";$("n-x-o").textContent=f1(x,1)+" L";
+    $("n-big").innerHTML=`<div><b style="color:var(--point)">${f1(z,2)}</b><span>z: a cuántas σ del centro está el trayecto</span></div><div><b style="color:var(--point)">${fp(tail)}</b><span>de los trayectos gastan todavía más</span></div><div><b>${oneIn(tail)}</b><span>trayectos gasta tanto o más</span></div>`;
+    const az=Math.abs(z);let m=`(${f1(x,1)} − ${f1(mu,1)}) / ${f1(s,1)} = <b>z = ${f1(z,2)}</b>. `;
+    if(z<-0.05)m+=`Este trayecto gasta <b>menos</b> que la media; gastan más que él el ${fp(tail)} de los trayectos. ${az>2?"Un consumo tan bajo también es raro: ¿un trayecto cuesta abajo, o un sensor que mide mal?":""}`;
+    else if(az<1)m+=`Está a menos de una σ del centro, como el 68 % de los trayectos: nada que mirar.`;
+    else if(az<2)m+=`Entre una y dos σ: gasta más que lo típico, pero el ${fp(tail)} de los trayectos gasta aún más. Pasa a menudo.`;
+    else if(az<3)m+=`A más de dos σ: solo el ${fp(tail)} de los trayectos gasta más (${oneIn(tail)}). ${Math.abs(z-2)<0.01&&Math.abs(mu-32)<0.01&&Math.abs(s-2.5)<0.01?"Son 5 litros más de lo normal cada 100 km: en un viaje de 600 km, 30 litros, unos 50 € de gasóleo. ":""}Merece una mirada si se repite.`;
+    else m+=`A más de tres σ: ${oneIn(tail)} trayectos gastaría tanto por azar. Lo más probable es que pase algo: una avería, una rueda baja o un error del sensor.`;
+    if(Math.abs(mu-32)>0.01||Math.abs(s-2.5)>0.01)m+=` Si cambias μ o σ, el mismo consumo de ${f1(x,1)} L puede pasar de raro a normal: lo que importa es z.`;
+    $("n-msg").innerHTML=m;}
+  [im,is,ix].forEach(i=>i.addEventListener("input",draw));window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 3: binomial ---------- */
+(function(){const svg=$("bn"),in_=$("b-n"),ip=$("b-p"),it=$("b-t");
+  function draw(){const n=+in_.value,p=+ip.value/100;it.max=n;if(+it.value>n)it.value=n;const t=+it.value,P=binom(n,p);
+    const tail=sum(P,t,n),mean=n*p,sd=Math.sqrt(n*p*(1-p));
+    const ymax=niceMax(100*Math.max(...P)*1.15),nw=narrowOf(svg),xt=[];const st=n<=12?1:n<=30?(nw?5:2):n<=60?(nw?10:5):10;for(let k=0;k<=n;k+=st)xt.push(k);
+    const F=frame(svg,{x0:-0.6,x1:n+0.6,y1:ymax,yt:ticks(ymax),fy:pct,xt,xl:`entregas tarde en el día (de ${n})`,yl:"% de los días"});
+    const {sx,sy,FS}=F;const bw=Math.max(1,(sx(1)-sx(0))*0.8);
+    for(let k=0;k<=n;k++){const on=k>=t,y=sy(100*P[k]);if(P[k]>1e-6)el("rect",{x:sx(k)-bw/2,y,width:bw,height:Math.max(0.5,F.B-y),fill:on?"var(--point)":"var(--mean)","fill-opacity":on?.9:.55},svg);}
+    el("line",{x1:sx(mean),x2:sx(mean),y1:F.T,y2:F.B,stroke:"var(--sample)","stroke-width":3,"stroke-dasharray":"7 5"},svg);
+    const lr=mean>n*0.6;txt(svg,sx(mean)+(lr?-8:8),F.T+FS*0.5,"media n × p = "+f1(mean,1),Object.assign({"text-anchor":lr?"end":"start","font-size":FS*0.9,"font-weight":700,style:"fill:var(--sample)"},halo(5)));
+    txt(svg,F.R-4,F.T+FS*2,`al menos ${t}: ${fp(tail)}`,Object.assign({"text-anchor":"end","font-size":FS*1.05,"font-weight":800,style:"fill:var(--point)"},halo(6)));
+    $("b-n-o").textContent=n;$("b-p-o").textContent=f1(100*p,0)+" %";$("b-t-o").textContent=t+" tarde";
+    $("b-big").innerHTML=`<div><b style="color:var(--sample)">${f1(mean,1)}</b><span>tarde de media al día (n × p)</span></div><div><b>± ${f1(sd,2)}</b><span>desviación típica, √(n × p × (1 − p))</span></div><div><b style="color:var(--point)">${fp(tail)}</b><span>de los días con ${t} o más tarde</span></div><div><b>${f1(250*tail,1)}</b><span>días así en un año de 250 laborables</span></div><div><b>${f1(mean*15,0)} €</b><span>de penalización media al día, a 15 € por retraso</span></div>`;
+    let m;
+    if(n===20&&Math.abs(p-0.1)<1e-9&&t===6)m=`Con 20 entregas y p = 10 %, lo más común son 1 o 2 retrasos (27 % y 28,5 % de los días), y <b>6 o más solo pasan el ${fp(tail)} de los días</b>: unos 3 al año. Si un día salen 6 tarde, lo más probable es que no sea mala suerte: algo ha fallado (un atasco, un camión averiado, una ruta mal planificada).`;
+    else if(n===20&&Math.abs(p-0.1)<1e-9)m=`Con p = 10 %, ${t} o más retrasos pasan el ${fp(tail)} de los días (${oneIn(tail)}). La media sigue siendo 2: cambiar el umbral no cambia la forma, solo qué parte coloreas.`;
+    else if(p>=0.4&&n>=15)m=`Con n = ${n} y p = ${f1(100*p,0)} %, la binomial ya parece una <b>campana</b> alrededor de ${f1(mean,1)}: cuando n × p y n × (1 − p) son grandes, la binomial se parece mucho a una normal con la misma media y desviación típica. ${t} o más: ${fp(tail)}.`;
+    else if(p<=0.05&&n>=30)m=`Con muchos intentos y una p pequeña (${n} entregas, ${f1(100*p,0)} %), la binomial se queda pegada a la izquierda y ya casi no depende de n: solo de la media, ${f1(mean,1)}. Esa forma es la <b>Poisson</b> de la idea 4. ${t} o más: ${fp(tail)}.`;
+    else m=`Con ${n} entregas y p = ${f1(100*p,0)} %, de media llegan tarde ${f1(mean,1)} al día, con una desviación típica de ${f1(sd,2)}. ${t} o más: ${fp(tail)} de los días (${f1(250*tail,1)} al año). Cambia p y mira cómo se desplaza toda la forma.`;
+    $("b-msg").innerHTML=m;}
+  [in_,ip,it].forEach(i=>i.addEventListener("input",draw));window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 4: Poisson ---------- */
+(function(){const svg=$("ps"),il=$("p-l"),it=$("p-t");let cmp=0;const CN=[0,10,50,500];
+  chips($("p-cmp"),["Sin comparar","Binomial con n = 10","n = 50","n = 500"],i=>{cmp=i;draw();});
+  function draw(){const l=+il.value,t=+it.value,km=Math.max(12,Math.ceil(l+4.5*Math.sqrt(l))),P=pois(l,km),tail=1-sum(P,0,t-1);
+    let Bn=null,n=CN[cmp];if(cmp&&l/n<1)Bn=binom(n,l/n);
+    const top=Math.max(...P,...(Bn?Bn.slice(0,km+1):[0]));const ymax=niceMax(100*top*1.15),nw=narrowOf(svg),xt=[];const st=km<=12?1:km<=26?(nw?4:2):5;for(let k=0;k<=km;k+=st)xt.push(k);
+    const F=frame(svg,{x0:-0.6,x1:km+0.6,y1:ymax,yt:ticks(ymax),fy:pct,xt,xl:"alertas de frenada en el día",yl:"% de los días"});
+    const {sx,sy,FS}=F;const bw=(sx(1)-sx(0))*0.75;
+    for(let k=0;k<=km;k++){const on=k>=t,y=sy(100*P[k]);el("rect",{x:sx(k)-bw/2,y,width:bw,height:Math.max(0.5,F.B-y),fill:on?"var(--point)":"var(--mean)","fill-opacity":on?.9:.55},svg);}
+    if(Bn)for(let k=0;k<=km&&k<=n;k++){el("circle",{cx:sx(k),cy:sy(100*Bn[k]),r:F.nw?8:7,fill:"none",stroke:"var(--sample)","stroke-width":3},svg);}
+    el("line",{x1:sx(l),x2:sx(l),y1:F.T,y2:F.B,stroke:"var(--sample)","stroke-width":3,"stroke-dasharray":"7 5"},svg);
+    const lr=l>km*0.6;txt(svg,sx(l)+(lr?-8:8),F.T+FS*0.5,"media λ = "+f1(l,1),Object.assign({"text-anchor":lr?"end":"start","font-size":FS*0.9,"font-weight":700,style:"fill:var(--sample)"},halo(5)));
+    txt(svg,F.R-4,F.T+FS*2,`al menos ${t}: ${fp(tail)}`,Object.assign({"text-anchor":"end","font-size":FS*1.05,"font-weight":800,style:"fill:var(--point)"},halo(6)));
+    let tv=0;if(Bn){for(let k=0;k<=Math.max(km,n);k++)tv+=Math.abs((Bn[k]||0)-(k<=km?P[k]:0));tv/=2;}
+    if(Bn)txt(svg,F.R-4,F.T+FS*3.3,`binomial ${n} × ${f1(l/n,3)}: se aparta un ${f1(100*tv,1)} %`,Object.assign({"text-anchor":"end","font-size":FS*0.85,style:"fill:var(--sample)","font-weight":700},halo(5)));
+    $("p-l-o").textContent=f1(l,1);$("p-t-o").textContent=t+" alertas";
+    $("p-big").innerHTML=`<div><b style="color:var(--sample)">${f1(l,1)}</b><span>media de alertas al día (λ)</span></div><div><b>${f1(l,1)}</b><span>varianza: en la Poisson, igual que la media</span></div><div><b style="color:var(--point)">${fp(tail)}</b><span>de los días con ${t} o más alertas</span></div><div><b>${oneIn(tail)}</b><span>días, por puro azar</span></div>`;
+    let m;
+    if(cmp&&l/n>=1)m=`Con n = ${n} intentos no se puede tener una media de ${f1(l,1)}: la p sería mayor que 1. Elige una n más grande.`;
+    else if(cmp===1)m=`Una binomial con solo 10 intentos y p = ${f1(l/10,2)} se parece a la Poisson, pero no del todo (se aparta un ${f1(100*tv,1)} %): con 10 intentos nunca puede haber más de 10 alertas, y tiene menos días con 0. Prueba n = 50 y n = 500.`;
+    else if(cmp)m=`Con ${n} intentos y p = ${f1(l/n,4).replace(/0+$/,"")} los aros casi tocan las barras: solo se aparta un ${f1(100*tv,2)} %. <b>La Poisson es una binomial con muchísimos intentos y una p diminuta</b>: un camión hace cientos de frenadas al día y cada una tiene una probabilidad muy pequeña de ser brusca. Por eso no hace falta saber n: basta con la media.`;
+    else if(Math.abs(l-2)<1e-9&&t===7)m=`Un conductor con λ = 2 alertas de media tiene días sin ninguna (${fp(P[0])}) y días con 3 o 4, todo normal. Pero <b>7 o más solo pasa el ${fp(tail)} de los días</b>, ${oneIn(tail)}. Si pasa, conviene mirar ese día: un tramo de obras, un conductor nuevo o un sensor demasiado sensible. Pulsa «Binomial con n = 10» para comparar.`;
+    else if(l>=8)m=`Con λ = ${f1(l,1)} la Poisson se vuelve casi simétrica y parece una campana alrededor de ${f1(l,1)}, con desviación típica √λ = ${f1(Math.sqrt(l),2)}. ${t} o más: ${fp(tail)}.`;
+    else if(l<1)m=`Con λ = ${f1(l,1)} lo más normal es <b>no tener ninguna alerta</b> (${fp(P[0])} de los días). Es la forma de los sucesos muy raros, como las averías graves de un camión en un mes.`;
+    else m=`Con λ = ${f1(l,1)}, ${t} o más alertas pasan el ${fp(tail)} de los días. La media y la varianza valen ${f1(l,1)}: cuanto mayor es λ, más ancha es la forma.`;
+    $("p-msg").innerHTML=m;}
+  [il,it].forEach(i=>i.addEventListener("input",draw));window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 5: colas largas ---------- */
+(function(){const svg=$("cl"),is=$("c-s"),it=$("c-t");const mu=Math.log(12);
+  function draw(){const s=+is.value,T=+it.value,mean=12*Math.exp(s*s/2),sd=mean*Math.sqrt(Math.exp(s*s)-1);
+    const pr=1-lncdf(T,mu,s),pn=1-ncdf(T,mean,sd),neg=ncdf(0,mean,sd),q95=Math.exp(mu+1.6448536*s),q95n=mean+1.6448536*sd;
+    const peak=Math.max(lnpdf(Math.exp(mu-s*s),mu,s),npdf(mean,mean,sd));const ymax=niceMax(100*peak*1.12);
+    const F=frame(svg,{x0:-30,x1:120,y1:ymax,yt:ticks(ymax),fy:v=>f1(v,0),xt:[-30,0,30,60,90,120],xl:"minutos de parada",yl:"% de paradas por minuto",H:[400,500]});
+    const {sx,sy,FS}=F;
+    /* zona imposible */
+    const pid="hatch8";const pat=el("pattern",{id:pid,width:10,height:10,patternUnits:"userSpaceOnUse",patternTransform:"rotate(45)"},el("defs",null,svg));el("line",{x1:0,y1:0,x2:0,y2:10,stroke:"var(--warn)","stroke-width":2.5,"stroke-opacity":.5},pat);
+    el("rect",{x:sx(-30),y:F.T,width:sx(0)-sx(-30),height:F.B-F.T,fill:`url(#${pid})`},svg);
+    txt(svg,sx(-15),F.T+FS*0.2+14,"imposible",Object.assign({"text-anchor":"middle","font-size":FS*0.85,style:"fill:var(--warn)","font-weight":700},halo(5)));
+    const N=360,path=(f,a,b)=>{let d="";for(let i=0;i<=N;i++){const x=a+(b-a)*i/N;d+=(i?"L":"M")+sx(x).toFixed(1)+" "+sy(Math.min(ymax,100*f(x))).toFixed(1);}return d;};
+    const fl=x=>lnpdf(x,mu,s),fn=x=>npdf(x,mean,sd);
+    if(T<120)el("path",{d:path(fl,T,120)+`L${sx(120)} ${F.B}L${sx(T)} ${F.B}Z`,fill:"var(--point)","fill-opacity":.75},svg);
+    el("path",{d:path(fn,-30,120),fill:"none",stroke:"var(--sample)","stroke-width":3,"stroke-dasharray":"9 6"},svg);
+    el("path",{d:path(fl,0.01,120),fill:"none",stroke:"var(--mean)","stroke-width":3.5},svg);
+    el("line",{x1:sx(T),x2:sx(T),y1:F.T,y2:F.B,stroke:"var(--point)","stroke-width":2},svg);
+    const vl=(x,t,dy,anchor)=>{el("line",{x1:sx(x),x2:sx(x),y1:F.T+dy-FS,y2:F.B,stroke:"var(--ink)","stroke-width":1.6,"stroke-dasharray":"3 4"},svg);txt(svg,sx(x)+(anchor==="end"?-6:6),F.T+dy,t,Object.assign({"text-anchor":anchor,"font-size":FS*0.85,class:"t-ink","font-weight":700},halo(5)));};
+    vl(12,"mediana 12",FS*2.2,"end");vl(mean,"media "+f1(mean,1),FS*3.5,"start");
+    $("c-s-o").textContent=f1(s,2);$("c-t-o").textContent=T+" min";
+    $("c-big").innerHTML=`<div><b>${f1(mean,1)} min</b><span>media (la mediana es 12 min)</span></div><div><b style="color:var(--point)">${fp(pr)}</b><span>de las paradas duran más de ${T} min (forma real)</span></div><div><b style="color:var(--sample)">${fp(pn)}</b><span>según la campana con la misma media y σ</span></div><div><b style="color:var(--warn)">${fp(neg)}</b><span>de paradas «de menos de 0 min» según la campana</span></div><div><b>${f1(q95,0)} min</b><span>el 95 % de las paradas duran menos (la campana diría ${f1(q95n,0)})</span></div>`;
+    let m;
+    if(s<=0.25)m=`Con una cola tan corta, la forma real es casi una campana: media (${f1(mean,1)}) y mediana (12) casi coinciden, y la normal acierta bastante (${fp(pr)} frente a ${fp(pn)} de paradas de más de ${T} min). Sube la cola.`;
+    else{const r=pn>0?pr/pn:Infinity;
+      m=`Con esta cola, la media (${f1(mean,1)} min) ya está por encima de la mediana (12): unas pocas paradas larguísimas tiran de ella hacia arriba. La campana con la misma media y desviación típica se equivoca por los dos lados: da un ${fp(neg)} de paradas con minutos negativos, y dice que ${fp(pn)} duran más de ${T} min, cuando en realidad son el ${fp(pr)}${r>1.5&&isFinite(r)?`, <b>${f1(r,r<10?1:0)} veces más</b>`:""}.`;
+      if(Math.abs(s-0.8)<1e-9&&T===60)m+=` Si un cliente tiene 1 000 paradas al año, la campana espera unas 3 de más de una hora; en realidad habrá unas 22.`;}
+    $("c-msg").innerHTML=m;}
+  [is,it].forEach(i=>i.addEventListener("input",draw));window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 6: cuál toca ---------- */
+(function(){const svg=$("dq"),box=$("q-cases");
+  const OPT=["Normal","Binomial","Poisson","Cola larga"];
+  const CASES=[
+    ["Velocidad media en autovía","La velocidad media de cada trayecto por autovía, en km/h.",0,"Se mide y es la suma de muchos efectos pequeños (tráfico, cuestas, viento, conductor): campana alrededor de unos 82 km/h."],
+    ["Camiones que suspenden la ITV","De los 12 camiones que pasan la ITV este mes, cuántos la suspenden.",1,"Se cuenta, y hay un número fijo de intentos (12), cada uno con una probabilidad parecida de suspender: binomial."],
+    ["Pinchazos de la semana","Cuántos pinchazos tiene toda la flota en una semana.",2,"Se cuentan sucesos sueltos en un intervalo, sin un máximo claro de intentos: Poisson. Su media y su varianza deberían parecerse."],
+    ["Tiempo para firmar el albarán","Minutos que tarda un cliente en firmar el albarán de entrega.",3,"Se mide, no puede bajar de 0, y a veces se dispara (el responsable no está, hay cola): cola larga."],
+    ["Diferencia en la báscula","Diferencia entre el peso declarado de la carga y el que marca la báscula, en kg.",0,"Se mide y es la suma de pequeños errores (palets, humedad, la propia báscula), unos hacia arriba y otros hacia abajo: normal alrededor de 0."],
+    ["Coste de una reparación","Coste en € de cada reparación del taller.",3,"Se mide en €, no puede ser negativo y unas pocas reparaciones (un motor, una caja de cambios) cuestan muchísimo más que las típicas: cola larga."],
+    ["Llamadas a asistencia","Llamadas que recibe el servicio de asistencia en carretera en una hora.",2,"Se cuentan sucesos sueltos en un intervalo (una hora), y cada conductor llama de forma independiente: Poisson."],
+    ["Días con salida tardía","De los 22 laborables del mes, en cuántos sale tarde del depósito un camión.",1,"Se cuenta, con un número fijo de intentos (22 días), cada uno con su probabilidad de salir tarde: binomial."]];
+  const ans=new Array(CASES.length).fill(-1);let last=-1;
+  CASES.forEach((c,i)=>{const d=document.createElement("div");d.className="case";d.innerHTML=`<h3>${c[0]}</h3><p class="d">${c[1]}</p><div class="btns"></div><p class="ans"></p>`;box.appendChild(d);
+    const bs=OPT.map((o,j)=>{const b=document.createElement("button");b.type="button";b.textContent=o;b.onclick=()=>{ans[i]=j;last=i;bs.forEach((y,k)=>{y.className=k===c[2]?"ok":(k===j?"no":"");});
+      d.querySelector(".ans").innerHTML=(j===c[2]?`<b class="ok">¡Bien!</b> `:`<b class="no">Es ${OPT[c[2]].toLowerCase()}.</b> `)+c[3];draw();};d.querySelector(".btns").appendChild(b);return b;});});
+  function draw(){const nw=narrowOf(svg);const W=nw?600:900,H=nw?400:340,FS=nw?22:15;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const ans_=last>=0?CASES[last][2]:-1;
+    /* nodos: [x, y, texto, ruta] */
+    const P=nw?{q0:[300,40],q1:[150,180],q2:[450,180],l0:[78,340],l1:[222,340],l2:[372,340],l3:[516,340]}:{q0:[450,40],q1:[230,150],q2:[670,150],l0:[120,280],l1:[340,280],l2:[560,280],l3:[780,280]};
+    const leaf=[["l2","Normal"],["l0","Binomial"],["l1","Poisson"],["l3","Cola larga"]];
+    const path=ans_<0?[]:ans_===0?["q0","q2","l2"]:ans_===1?["q0","q1","l0"]:ans_===2?["q0","q1","l1"]:["q0","q2","l3"];
+    const on=(a,b)=>path.includes(a)&&path.includes(b);
+    const E=[["q0","q1","cuento"],["q0","q2","mido"],["q1","l0",nw?"n fijo":"hay n intentos"],["q1","l1",nw?"en un rato":"sucesos en un rato"],["q2","l2",nw?"suma":"suma de efectos"],["q2","l3",nw?"se dispara":"se multiplica / ≥ 0"]];
+    E.forEach(([a,b,t])=>{const A=P[a],Bp=P[b],o=on(a,b);el("line",{x1:A[0],y1:A[1]+22,x2:Bp[0],y2:Bp[1]-22,stroke:o?"var(--point)":"var(--muted)","stroke-width":o?4:1.8,"stroke-opacity":o?1:.6},svg);
+      let lx=(A[0]+Bp[0])/2+(Bp[0]<A[0]?-8:8),an=Bp[0]<A[0]?"end":"start";const tw=t.length*FS*0.85*0.6;if(an==="start"&&lx+tw>W-4){lx=W-4;an="end";}if(an==="end"&&lx-tw<4){lx=4;an="start";}
+      txt(svg,lx,(A[1]+Bp[1])/2+4,t,Object.assign({"text-anchor":an,"font-size":FS*0.85,class:o?"t-ink":null,"font-weight":o?700:400},halo(5)));});
+    const box_=(k,t,leafC)=>{const [x,y]=P[k],o=path.includes(k);const lines=t.split("\n");const w=Math.max(...lines.map(s=>s.length))*FS*0.6+26,h=lines.length*FS*1.2+16;
+      el("rect",{x:x-w/2,y:y-h/2,width:w,height:h,rx:leafC?h/2:10,fill:leafC?"var(--mean)":"var(--surface)","fill-opacity":leafC?(o?.9:.16):1,stroke:o?"var(--point)":"var(--line)","stroke-width":o?3.5:1.5},svg);
+      lines.forEach((s,i)=>txt(svg,x,y-(lines.length-1)*FS*0.6+i*FS*1.2+FS*0.35,s,{"text-anchor":"middle","font-size":FS,"font-weight":leafC?700:400,class:"t-ink",style:leafC&&o?"fill:var(--surface)":null}));};
+    box_("q0","¿Cuento o mido?");box_("q1",nw?"¿Intentos\nfijos?":"¿Hay un número\nfijo de intentos?");box_("q2",nw?"¿Suma o\nse dispara?":"¿Suma de efectos\no puede dispararse?");
+    leaf.forEach(([k,t])=>box_(k,t,true));
+    const done=ans.filter(a=>a>=0).length,ok=ans.filter((a,i)=>a===CASES[i][2]).length;
+    $("q-msg").innerHTML=done===0?"Elige una forma en cualquier tarjeta. No hay que acertar a la primera: cada respuesta explica por qué.":done<CASES.length?`Llevas ${ok} de ${done} bien. ${done<4?"Sigue con las demás tarjetas.":"Fíjate en que casi siempre basta con la primera pregunta: ¿se cuenta o se mide?"}`:`Has hecho las ${CASES.length}: <b>${ok} bien</b>. ${ok===CASES.length?"¡Todas!":""} Recuerda que el esquema da una primera sospecha: después hay que comprobarla dibujando los datos, como en el juguete.`;}
+  window.addEventListener("resize",draw);draw();})();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Distributions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.rowb{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.case{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:8px;align-content:start}
+.case h3{font-size:1rem}
+.case p.d{font-size:.92rem;color:var(--muted)}
+.case .ans{font-size:.9rem;color:var(--muted);min-height:1.2em}
+.case .ans b.ok{color:var(--good)}.case .ans b.no{color:var(--warn)}
+.case .btns{gap:6px}
+.case .btns button{padding:5px 11px;font-size:.86rem}
+.case .btns button.ok{background:var(--good);border-color:var(--good);color:var(--surface)}
+.case .btns button.no{border-color:var(--warn);color:var(--warn)}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#en" target="_self">← Main menu</a> · The math under ML · topic 8 · explained with drawings · <a href="distributions-technical-en.html" target="_self">see the technical version</a> · <a href="math-under-ml-en.html" target="_self">all topics</a> · <a href="distribuciones-es.html" target="_self">en español</a></p>
+  <h1>Distributions</h1>
+  <p class="lede">If you write down the same thing many times (the fuel used on each trip, the deliveries that arrive late each day, the alerts from a truck), the data ends up drawing a shape. A few shapes show up again and again, and knowing which one applies tells you what's normal, what's rare and how much to expect.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="situ col">
+    <p class="eyebrow">The setup</p>
+    <p>A trucking company records four things about its fleet: the <strong>fuel used on each trip</strong> (liters of diesel per 100 km), how many of the day's <strong>20 deliveries</strong> arrive late, how many <strong>harsh-braking alerts</strong> a truck gives in a day, and how long <strong>stops last</strong> at a customer's loading dock.</p>
+    <p>A single number on its own says little. But if you record many and count <strong>how often each value comes up</strong>, a bar chart appears (a <strong>histogram</strong>). With little data the chart jumps around; with a lot of data it settles into a shape. That shape is the <strong>distribution</strong>.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="Histogram of the recorded data and the underlying shape"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each <b style="color:var(--point)">orange bar</b> says what share of the data (in %) falls on that value or in that range. All the bars together add up to 100%. The <b style="color:var(--sample)">purple</b> vertical line is the mean of the data. The <b style="color:var(--mean)">blue</b> line or dots are the underlying shape: what you would get with infinitely many data points.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>What is recorded?</h3>
+      <p>Four different things about the fleet. Each one has its own shape.</p>
+      <div class="chips" id="t-q" role="group" aria-label="What is recorded"></div>
+    </div>
+    <div class="dec">
+      <h3>How much data?</h3>
+      <div class="slider"><label for="t-n">Data points recorded <output id="t-n-o"></output></label><input type="range" id="t-n" min="0" max="8" step="1" value="2"><div class="ends"><span>1</span><span>10,000</span></div></div>
+      <p>Each data point is a trip, a day or a stop. Raise it little by little.</p>
+    </div>
+    <div class="dec">
+      <h3>Repeat and compare</h3>
+      <p>"Another sample" records new data (other days, other trips). "Show the underlying shape" draws the true distribution, the one that doesn't change.</p>
+      <div class="rowb"><button type="button" id="t-re">↻ Another sample</button><button type="button" id="t-th" aria-pressed="false">Show the underlying shape</button></div>
+    </div>
+  </div>
+  <div class="big3" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Try this, in order:</strong></p>
+    <ol class="try">
+      <li>With "Fuel per trip" and 20 data points, press "Another sample" several times: the bars change a lot from one time to the next.</li>
+      <li>Go up to 10,000 and press "Show the underlying shape": the bars hug the blue bell, and they no longer move when you ask for another sample.</li>
+      <li>Switch to "Late deliveries" and "Braking alerts": now they are separate bars, because only whole numbers come up, and the two shapes look very much alike.</li>
+      <li>Try "Stop duration": it's not a bell. Almost all stops are short, but some last a very long time: it has a long tail to the right.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">What you just saw</p>
+    <h2>Each kind of data has its own shape</h2>
+    <p>A <strong>distribution</strong> is the list of values something can take and how often each one comes up. The histogram of a few data points is a blurry photo of it; with lots of data the photo sharpens. Three things worth keeping in mind:</p>
+    <ul>
+      <li><strong>Discrete or continuous.</strong> What you <strong>count</strong> (deliveries, alerts) only takes whole values: its distribution is separate bars. What you <strong>measure</strong> (liters, minutes) can take any value: its distribution is a curve.</li>
+      <li><strong>Everything adds up to 100%.</strong> Across all the bars, or under the whole curve, is 100% of the cases. That's why a distribution can answer "what share of days…?".</li>
+      <li><strong>The mean and the standard deviation</strong> summarize the center and the width (they are explained in <a href="mean-variance-and-standard-deviation-en.html" target="_self">topic 7</a>), but not the shape: the stops have a tail that those two numbers don't tell you about.</li>
+    </ul>
+    <p>The ideas below explain how to read a probability off the chart and the three shapes that show up most: the <strong>normal</strong> (the fuel bell), the <strong>binomial</strong> (late deliveries) and the <strong>Poisson</strong> (alerts). At the end, long tails and how to recognize which one applies.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 6</p>
+    <h2>Probability is a bar or a piece of area</h2>
+    <p>With the underlying shape you can ask questions: what share of days have at most 2 late deliveries? What share of trips use between 30 and 35 liters? In a distribution of bars, the answer is to <strong>add up the bars</strong> for those values. In a curve, it's the <strong>area</strong> under it between those two values.</p>
+  </div>
+  <div class="seg col" role="group" aria-label="Distribution"><button type="button" id="a-0" aria-pressed="true">Late deliveries (bars)</button><button type="button" id="a-1" aria-pressed="false">Fuel use (curve)</button></div>
+  <figure class="fig"><svg id="ar" role="img" aria-label="Distribution with a shaded range: its probability"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> It's the underlying shape from the toy. The part in <b style="color:var(--point)">orange</b> is the range you pick with the two sliders: its probability is the sum of those bars, or the orange area under the curve. The <b style="color:var(--mean)">blue</b> part is the rest. Orange and blue together are always 100%.</p>
+  <div class="controls col">
+    <div class="slider"><label for="a-lo">From <output id="a-lo-o"></output></label><input type="range" id="a-lo" min="0" max="10" step="1" value="0"></div>
+    <div class="slider"><label for="a-hi">To <output id="a-hi-o"></output></label><input type="range" id="a-hi" min="0" max="10" step="1" value="2"></div>
+  </div>
+  <div class="big3 col" id="a-big"></div>
+  <p class="qcard col" id="a-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 6</p>
+    <h2>The normal: a bell with a center and a width</h2>
+    <p>The fuel used on a trip depends on many small things at once: the wind, the load, the traffic, the driver, the hills. When something is the <strong>sum of many small effects</strong> that don't depend on each other, almost always the same shape comes out: a symmetric bell, the <strong>normal distribution</strong> (or Gaussian). It only needs two numbers: the center, <strong>μ</strong> ("mu", the mean), and the width, <strong>σ</strong> ("sigma", the standard deviation).</p>
+  </div>
+  <figure class="fig"><svg id="nm" role="img" aria-label="Normal bell with the one, two and three sigma bands and one trip marked"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The <b style="color:var(--mean)">blue</b> bell is the fuel use of the trips. The background bands mark μ ± 1σ, μ ± 2σ and μ ± 3σ, with the % of trips that falls inside each one. The <b style="color:var(--point)">orange</b> line is one particular trip, and the orange area is the trips that use even more than it.</p>
+  <div class="controls col">
+    <div class="slider"><label for="n-mu">Center μ (average fuel use) <output id="n-mu-o"></output></label><input type="range" id="n-mu" min="26" max="38" step="0.5" value="32"></div>
+    <div class="slider"><label for="n-sd">Width σ (standard deviation) <output id="n-sd-o"></output></label><input type="range" id="n-sd" min="1" max="5" step="0.1" value="2.5"></div>
+    <div class="slider"><label for="n-x">A trip that uses <output id="n-x-o"></output></label><input type="range" id="n-x" min="20" max="46" step="0.5" value="37"></div>
+  </div>
+  <div class="big3 col" id="n-big"></div>
+  <p class="qcard col" id="n-msg"></p>
+  <div class="col stack">
+    <p>The <strong>68-95-99.7 rule</strong> holds for any normal, with any μ and σ: 68% of cases fall within 1σ of the center, 95% within 2σ and 99.7% within 3σ. That's why distance from the center is measured in sigmas, with a number called <strong>z</strong>: z = (value − μ) / σ. A trip with z = 2 is rare (only 2.3% use more) for any truck, whatever its average fuel use. It's the idea behind many rules for spotting <a href="outliers-en.html" target="_self">outliers</a>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 6</p>
+    <h2>The binomial: how many of n come out "yes"</h2>
+    <p>Every day there are <strong>20 deliveries</strong>. Each one may arrive late or not, and at this company one in ten arrives late (<strong>p = 10%</strong>). If each delivery goes its own way, with no delay affecting the others, the number of late deliveries in a day follows the <strong>binomial distribution</strong>. It only needs two numbers: how many tries there are (<strong>n</strong>) and the probability of "yes" on each one (<strong>p</strong>).</p>
+  </div>
+  <figure class="fig"><svg id="bn" role="img" aria-label="Bars of the binomial distribution with the tail of bad days shaded"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each <b style="color:var(--mean)">blue</b> bar is the % of days with that number of late deliveries (0, 1, 2…). The <b style="color:var(--point)">orange</b> bars are the "bad days": those with at least the number you pick below. The purple line is the mean, n × p.</p>
+  <div class="controls col">
+    <div class="slider"><label for="b-n">Deliveries per day (n) <output id="b-n-o"></output></label><input type="range" id="b-n" min="1" max="60" step="1" value="20"></div>
+    <div class="slider"><label for="b-p">Probability that one is late (p) <output id="b-p-o"></output></label><input type="range" id="b-p" min="1" max="90" step="1" value="10"></div>
+    <div class="slider"><label for="b-t">Bad day: at least <output id="b-t-o"></output></label><input type="range" id="b-t" min="0" max="20" step="1" value="6"></div>
+  </div>
+  <div class="big3 col" id="b-big"></div>
+  <p class="qcard col" id="b-msg"></p>
+  <div class="col stack">
+    <p>The binomial shows up whenever you count the "yeses" out of a fixed number of similar tries: of 12 trucks going through their annual inspection, how many fail; of 300 brakings, how many are harsh; of 1,000 customers notified, how many reply. It's also the basis of <a href="logistic-regression-en.html" target="_self">logistic regression</a>, which is really estimating the p of each case.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 6</p>
+    <h2>The Poisson: counting rare things over a stretch of time</h2>
+    <p>A truck's <strong>harsh-braking alerts</strong> don't have a clear "n tries": they can happen at any moment of the day, and each moment has a tiny probability. When you count <strong>separate events in an interval</strong> (alerts per day, breakdowns per month, calls per hour), you get the <strong>Poisson distribution</strong>. It only needs one number, <strong>λ</strong> ("lambda"): how many events there are on average in the interval.</p>
+  </div>
+  <figure class="fig"><svg id="ps" role="img" aria-label="Bars of the Poisson distribution and, if chosen, a binomial for comparison"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The <b style="color:var(--mean)">blue</b> bars are the % of days with 0, 1, 2… alerts; the <b style="color:var(--point)">orange</b> ones, the days with many (at least the number you pick). If you choose to compare, the <b style="color:var(--sample)">purple</b> rings are a binomial with n tries and p = λ / n: same mean, but with a fixed number of tries.</p>
+  <div class="controls col">
+    <div class="slider"><label for="p-l">Average alerts per day (λ) <output id="p-l-o"></output></label><input type="range" id="p-l" min="0.2" max="12" step="0.1" value="2"></div>
+    <div class="slider"><label for="p-t">Day with many: at least <output id="p-t-o"></output></label><input type="range" id="p-t" min="1" max="25" step="1" value="7"></div>
+  </div>
+  <div class="chips col" id="p-cmp" role="group" aria-label="Compare with a binomial"></div>
+  <div class="big3 col" id="p-big"></div>
+  <p class="qcard col" id="p-msg"></p>
+  <div class="col stack">
+    <p>A useful quirk of the Poisson: <strong>the mean and the variance are equal</strong>, both λ. If a truck gives 2 alerts a day on average, its variance (the square of the standard deviation, <a href="mean-variance-and-standard-deviation-en.html" target="_self">topic 7</a>) is also 2. If in the data the variance comes out much larger than the mean, something isn't Poisson: for example, because calm drivers and harsh drivers are mixed together.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 6</p>
+    <h2>Long tails: when the bell misleads you</h2>
+    <p>Stops at a customer's loading dock aren't a sum of small effects: they are a <strong>multiplication</strong>. If there's a line, it takes twice as long; if the person in charge is also missing, twice as long again. Besides, they can't last less than 0 minutes. What comes out is a skewed shape: most stops are short, but a few last a very long time. It's said to have a <strong>long tail</strong> to the right (a typical shape is the <strong>lognormal</strong>).</p>
+  </div>
+  <figure class="fig"><svg id="cl" role="img" aria-label="Stop duration with a long tail and the normal bell with the same mean and standard deviation"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The <b style="color:var(--mean)">blue</b> curve is the real duration of the stops. The <b style="color:var(--sample)">dashed purple</b> curve is a normal bell with the same mean and the same standard deviation: what you would assume without looking at the shape. The hatched zone left of 0 is <b>negative minutes</b> that the bell treats as possible. The vertical lines are the <b>median</b> (half of the stops last less) and the <b>mean</b>. The <b style="color:var(--point)">orange</b> part is the stops longer than the limit you pick.</p>
+  <div class="controls col">
+    <div class="slider"><label for="c-s">How long the tail is <output id="c-s-o"></output></label><input type="range" id="c-s" min="0.1" max="1.2" step="0.05" value="0.8"><div class="ends"><span>almost symmetric</span><span>very long</span></div></div>
+    <div class="slider"><label for="c-t">Stops longer than <output id="c-t-o"></output></label><input type="range" id="c-t" min="15" max="120" step="5" value="60"></div>
+  </div>
+  <div class="big3 col" id="c-big"></div>
+  <p class="qcard col" id="c-msg"></p>
+  <div class="col stack">
+    <p>With long tails, the mean drifts toward the tail and stops being "the typical value": the median describes it better. And the "mean plus two standard deviations" rule from the <a href="outliers-en.html" target="_self">outliers topic</a> flags too many normal stops as rare and, at the same time, falls short of telling how long the worst ones can last. Another typical tail is the <strong>exponential</strong>: if alerts arrive like a Poisson, the waiting time between one and the next follows that shape, with many short waits and the occasional very long one.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 6 of 6</p>
+    <h2>Which one applies? Three questions</h2>
+    <p>Before looking at the data, the question of what is being recorded already says a lot. The diagram below sums up how to choose; the cards are fleet cases to practice with. On each card, press the shape you think it has: the diagram highlights the path to the right answer.</p>
+  </div>
+  <figure class="fig"><svg id="dq" role="img" aria-label="Decision diagram for choosing the distribution"></svg></figure>
+  <p class="howto col"><b>How to read the diagram.</b> Start at the top. The first question is whether you <b>count</b> or <b>measure</b>. Then, if you count: is there a fixed number of tries? If you measure: is it the sum of many small effects, or can it shoot up? The path of the last card you answered is <b style="color:var(--point)">highlighted in orange</b>.</p>
+  <div class="cases" id="q-cases"></div>
+  <p class="qcard col" id="q-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The full recipe</h2>
+    <ol class="steps">
+      <li><div><strong>A distribution says which values come up and how often.</strong> A histogram with lots of data gets close to it; with little data, it jumps around.</div></li>
+      <li><div><strong>What you count goes in bars; what you measure, in a curve.</strong> Probability is the sum of bars or the area under the curve, and the total is always 100%.</div></li>
+      <li><div><strong>The normal</strong> comes from adding many small effects. μ and σ are enough, and the 68-95-99.7 rule and z tell you what's rare.</div></li>
+      <li><div><strong>The binomial</strong> counts the "yeses" out of n tries with the same p. Its mean is n × p.</div></li>
+      <li><div><strong>The Poisson</strong> counts separate events in an interval. Its mean and its variance are both λ, and it's what a binomial becomes with many tries and a small p.</div></li>
+      <li><div><strong>If something multiplies or can't go below 0</strong>, suspect a long tail: look at the median and the percentiles, not just mean ± 2σ.</div></li>
+      <li><div><strong>Always check against the data</strong>: draw the histogram on top of the chosen shape and compare the mean with the variance for counts.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where it shows up in fleet telemetry</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 32h28"/><path d="M8 32c4 0 6-20 12-20s8 20 12 20"/><path d="M27 12v20" stroke-dasharray="3 3"/></svg><h3>Unusual fuel use</h3><p>With the bell for each truck model and route, a trip with z greater than 3 deserves a look: an underinflated tire, a dirty filter or aggressive driving. Comparing in sigmas works just as well for a delivery truck as for a long-haul one.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 32V22M14 32V12M20 32V8M26 32V18M32 32V26"/><path d="M5 32h30"/></svg><h3>Alert thresholds that make sense</h3><p>If a driver gives 2 alerts a day on average, 7 in one day only happens by chance 1 time in 221. With the Poisson you set a threshold that flags what's rare without filling the dashboard with false alarms.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="12"/><path d="M20 13v7l5 3"/></svg><h3>Late-delivery penalties</h3><p>With 20 deliveries a day, p = 10% and $15 per late delivery, the binomial says the average cost is $30 a day and that about 3 days a year will have 6 or more delays: useful for budgeting and for knowing when a bad day is no longer bad luck.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 32h28"/><path d="M8 32c2-18 6-22 9-22s6 10 17 20"/></svg><h3>Stop times and service agreements</h3><p>The duration of stops, unloadings or repairs has a long tail. Promising "under 45 minutes 95% of the time" is computed with the percentile of the real shape; with the bell you would promise something you can't keep.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Connections</p>
+    <h2>With the models of the ML series and the other topics</h2>
+    <p>The mean and the standard deviation that summarize each shape are explained in <a href="mean-variance-and-standard-deviation-en.html" target="_self">topic 7</a>. In the ML series, <a href="bayes-en.html" target="_self">Bayes' theorem</a> uses these distributions to say what you believe about a p or a λ before and after seeing the data; <a href="gaussian-processes-en.html" target="_self">Gaussian processes</a> and the <a href="kalman-filter-en.html" target="_self">Kalman filter</a> are built on the normal (GPS noise is modeled as a bell); <a href="logistic-regression-en.html" target="_self">logistic regression</a> is a binomial in which p depends on the data of each case. In "Preparing the data", <a href="exploratory-data-analysis-en.html" target="_self">exploratory analysis</a> starts by drawing histograms like the ones in the toy, <a href="outliers-en.html" target="_self">outliers</a> are hunted for in the tails, and <a href="imbalanced-classes-en.html" target="_self">imbalanced classes</a> appear when what you're looking for is a rare event, like a breakdown.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>Where it helps and where it misleads</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Where it helps</h3><ul class="pc">
+      <li>With one or two numbers (μ and σ, n and p, λ) you describe a whole shape and can answer any "what share of days" question.</li>
+      <li>They tell you what's truly rare and what's chance: a day with 4 late deliveries isn't a problem; one with 8 is.</li>
+      <li>They let you simulate: generate fake but realistic days and trips to test a dashboard or a budget.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Where it misleads</h3><ul class="pc">
+      <li>Real data almost never follows a textbook shape to the letter: you have to check it, especially in the tails, which is where the surprises are.</li>
+      <li>Mixing different groups (delivery and long-haul trucks, calm and harsh drivers) gives shapes that are none of the three.</li>
+      <li>The binomial and the Poisson assume each event goes its own way. If one traffic jam delays ten deliveries at once, bad days are much more frequent than they say.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Distribution</dt><dd>Which values something can take and how often each one comes up. Its drawing is the "shape" of the data.</dd>
+      <dt>Histogram</dt><dd>A bar chart that counts how many data points fall on each value or range.</dd>
+      <dt>Discrete / continuous</dt><dd>Discrete: only separate values, usually counted (0, 1, 2…). Continuous: any value, usually measured (32.47 liters).</dd>
+      <dt>Normal (or Gaussian)</dt><dd>The symmetric bell. It appears when you add many small, independent effects.</dd>
+      <dt>μ and σ</dt><dd>The center (the mean) and the width (the standard deviation) of a distribution.</dd>
+      <dt>z</dt><dd>How many sigmas from the center a value is: (value − μ) / σ.</dd>
+      <dt>Binomial</dt><dd>How many "yeses" come out of n identical tries, each with probability p.</dd>
+      <dt>Poisson</dt><dd>How many separate events happen in an interval, if λ happen on average.</dd>
+      <dt>Long tail</dt><dd>When a few values are much, much larger than the typical ones. The mean ends up above the median.</dd>
+      <dt>Lognormal and exponential</dt><dd>Two shapes with a long tail: the first, for things that multiply (durations, costs); the second, for waits between events of a Poisson.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the math behind it</summary>
+    <p style="padding-top:10px">You don't need it to understand the idea:</p>
+    <div class="formula">normal (μ, σ)
+   z = (x − μ) / σ        P(|z| &lt; 1) = 68.3%   P(|z| &lt; 2) = 95.4%   P(|z| &lt; 3) = 99.7%
+   fuel μ = 32, σ = 2.5:  37 L → z = 2 → 2.3% use more
+
+binomial (n, p)
+   P(k) = C(n, k) · pᵏ · (1 − p)ⁿ⁻ᵏ      C(n, k) = ways to choose k out of n
+   mean = n·p      variance = n·p·(1 − p)
+   20 deliveries, p = 0.1:  P(0) = 0.9²⁰ = 12.2%   P(6 or more) = 1.1%
+
+Poisson (λ)
+   P(k) = e^(−λ) · λᵏ / k!      mean = variance = λ
+   λ = 2:  P(0) = e⁻² = 13.5%   P(7 or more) = 0.45%
+   binomial with large n and p = λ / n  →  Poisson (λ)
+
+long tail (lognormal)
+   log(duration) is normal;  median = 12 min,  mean = 12 · e^(0.8²/2) = 16.5 min</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in one minute</h2>
+    <p>An animated recap: data falling into place to form a bell, the 68-95-99.7 rule, the late deliveries of the binomial, the alerts of the Poisson and the long tail of the stops that the bell doesn't see. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABIqoEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgIEgP//Z" aria-label="Animation: distributions">
+      <source src="distributions-with-audio-en.mp4" type="video/mp4">
+      Your browser can't play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g,",");s=fr?i+"."+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+/* readable percentage: 2 decimals if small */
+const fp=v=>v<0.00005?"< 0.01%":v<0.1?f1(100*v,2)+"%":f1(100*v,1)+"%";
+const oneIn=v=>v<=0?"never":v>0.5?"more than half":"1 in "+f1(Math.round(1/v),0);
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+/* ---- math ---- */
+function erf(x){const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+0.3275911*x);const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return s*y;}
+const Phi=z=>0.5*(1+erf(z/Math.SQRT2));
+const npdf=(x,m,s)=>Math.exp(-0.5*((x-m)/s)**2)/(s*Math.sqrt(2*Math.PI));
+const ncdf=(x,m,s)=>Phi((x-m)/s);
+const LF=[0];for(let i=1;i<=400;i++)LF.push(LF[i-1]+Math.log(i));
+function binom(n,p){const a=[];for(let k=0;k<=n;k++)a.push(p<=0?(k===0?1:0):p>=1?(k===n?1:0):Math.exp(LF[n]-LF[k]-LF[n-k]+k*Math.log(p)+(n-k)*Math.log(1-p)));return a;}
+function pois(l,kmax){const a=[];for(let k=0;k<=kmax;k++)a.push(Math.exp(-l+k*Math.log(l)-LF[k]));return a;}
+const lnpdf=(x,mu,s)=>x<=0?0:npdf(Math.log(x),mu,s)/x;
+const lncdf=(x,mu,s)=>x<=0?0:ncdf(Math.log(x),mu,s);
+const sum=(a,i,j)=>{let t=0;for(let k=Math.max(0,i);k<=Math.min(a.length-1,j);k++)t+=a[k];return t;};
+/* chart frame: axes, grid and scales */
+function frame(svg,o){const nw=narrowOf(svg),W=nw?600:900,H=o.H?(nw?o.H[1]:o.H[0]):(nw?500:380),FS=nw?25:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+  const L=nw?74:64,R=W-(nw?28:14),T=o.top??(nw?52:34),B=H-(nw?72:50);
+  const sx=x=>L+(x-o.x0)/(o.x1-o.x0)*(R-L),sy=y=>B-(y/o.y1)*(B-T);
+  const g=el("g",null,svg);
+  for(const v of o.yt){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},g);txt(g,L-8,sy(v)+FS*0.35,o.fy(v),{"text-anchor":"end","font-size":FS*0.85});}
+  for(const v of o.xt)txt(g,sx(v),B+FS+6,o.fx?o.fx(v):String(v),{"text-anchor":"middle","font-size":FS*0.85});
+  el("line",{x1:L,x2:R,y1:B,y2:B,class:"g-axis"},g);
+  txt(g,R,H-6,o.xl,{"text-anchor":"end","font-size":FS*0.9,class:"t-ink"});
+  if(o.yl)txt(g,L+4,T-12,o.yl,{"font-size":FS*0.85});
+  return {W,H,FS,L,R,T,B,sx,sy,nw,g};}
+function niceMax(v){const c=[1,2,2.5,4,5,6,8,10,12,15,20,25,30,40,50,60,80,100];for(const x of c)if(x>=v)return x;return 100;}
+const ticks=(m)=>{const st=m<=4?1:m<=10?2:m<=25?5:m<=50?10:20;const a=[];for(let v=0;v<=m+1e-9;v+=st)a.push(v);return a;};
+const pct=v=>f1(v,0)+"%";
+
+/* ---------- toy: from data to shape ---------- */
+(function(){const svg=$("toy"),in_=$("t-n"),NS=[1,5,20,50,100,300,1000,3000,10000];let cur=0,seed=1,showT=false;
+  const LS=Math.log(12),S8=0.8;
+  const Q=[
+    {name:"Fuel per trip",kind:"c",lo:22,hi:42,w:1,xl:"liters per 100 km",what:"trips",one:"trip",gen:r=>32+2.5*gauss(r),pdf:x=>npdf(x,32,2.5),cdf:x=>ncdf(x,32,2.5),m:32,s:2.5,xt:[22,26,30,34,38,42]},
+    {name:"Late deliveries out of 20",kind:"d",lo:0,hi:10,xl:"late deliveries in the day (out of 20)",what:"days",one:"day",gen:r=>{let c=0;for(let i=0;i<20;i++)if(r()<0.1)c++;return c;},pm:binom(20,0.1),m:2,s:Math.sqrt(1.8),xt:[0,1,2,3,4,5,6,7,8,9,10]},
+    {name:"Braking alerts in a day",kind:"d",lo:0,hi:10,xl:"braking alerts in the day",what:"days",one:"day",gen:r=>{let u=r(),k=0,p=Math.exp(-2),F=p;while(u>F&&k<60){k++;p*=2/k;F+=p;}return k;},pm:pois(2,60),m:2,s:Math.SQRT2,xt:[0,1,2,3,4,5,6,7,8,9,10]},
+    {name:"Stop duration",kind:"c",lo:0,hi:100,w:5,xl:"minutes stopped",what:"stops",one:"stop",gen:r=>Math.exp(LS+S8*gauss(r)),pdf:x=>lnpdf(x,LS,S8),cdf:x=>lncdf(x,LS,S8),m:12*Math.exp(S8*S8/2),s:12*Math.exp(S8*S8/2)*Math.sqrt(Math.exp(S8*S8)-1),xt:[0,20,40,60,80,100]}];
+  let data=[];
+  function regen(){const r=mulberry32(1000*seed+17*cur+3);data=[];for(let i=0;i<10000;i++)data.push(Q[cur].gen(r));}
+  chips($("t-q"),Q.map(q=>q.name),i=>{cur=i;regen();draw();});
+  $("t-re").onclick=()=>{seed++;regen();draw();};
+  const bt=$("t-th");bt.onclick=()=>{showT=!showT;bt.setAttribute("aria-pressed",String(showT));draw();};
+  function draw(){const q=Q[cur],n=NS[+in_.value],x=data.slice(0,n);
+    /* counts */
+    let nb,lab,obs,th,out=0;
+    if(q.kind==="d"){nb=q.hi-q.lo+1;obs=new Array(nb).fill(0);x.forEach(v=>{if(v<=q.hi)obs[v]++;else out++;});th=q.pm.slice(0,nb);}
+    else{nb=Math.round((q.hi-q.lo)/q.w);obs=new Array(nb).fill(0);x.forEach(v=>{let b=Math.floor((v-q.lo)/q.w);if(cur===0)b=Math.max(0,Math.min(nb-1,b));if(b>=0&&b<nb)obs[b]++;else out++;});
+      th=[];for(let b=0;b<nb;b++)th.push(q.cdf(q.lo+(b+1)*q.w)-q.cdf(q.lo+b*q.w));}
+    const ob=obs.map(c=>c/n),tv=0.5*(ob.reduce((a,v,i)=>a+Math.abs(v-th[i]),0)+Math.abs(out/n-Math.max(0,1-th.reduce((a,b)=>a+b,0))));
+    const ymax=niceMax(100*Math.max(Math.max(...th)*1.2,Math.max(...ob)*1.05));
+    const x0=q.kind==="d"?q.lo-0.6:q.lo,x1=q.kind==="d"?q.hi+0.6:q.hi;
+    const F=frame(svg,{x0,x1,y1:ymax,yt:ticks(ymax),fy:pct,xt:q.xt,xl:q.xl,yl:"% of "+q.what});
+    const {sx,sy,FS}=F;
+    for(let b=0;b<nb;b++){let a,c;if(q.kind==="d"){a=sx(b-0.4);c=sx(b+0.4);}else{a=sx(q.lo+b*q.w)+1;c=sx(q.lo+(b+1)*q.w)-1;}
+      const h=100*ob[b];if(h>0)el("rect",{x:a,y:sy(Math.min(h,ymax)),width:c-a,height:F.B-sy(Math.min(h,ymax)),fill:"var(--point)","fill-opacity":.6,stroke:"var(--point)","stroke-width":1.2},svg);}
+    if(showT){if(q.kind==="d"){for(let b=0;b<nb;b++){const y=sy(100*th[b]);el("line",{x1:sx(b-0.46),x2:sx(b+0.46),y1:y,y2:y,stroke:"var(--mean)","stroke-width":4,"stroke-linecap":"round"},svg);el("circle",{cx:sx(b),cy:y,r:5,fill:"var(--mean)"},svg);}}
+      else{let d="";const N=240;for(let i=0;i<=N;i++){const xv=q.lo+(q.hi-q.lo)*i/N;d+=(i?"L":"M")+sx(xv).toFixed(1)+" "+sy(Math.min(ymax,100*q.pdf(xv)*q.w)).toFixed(1);}el("path",{d,fill:"none",stroke:"var(--mean)","stroke-width":3.5},svg);}}
+    const mean=x.reduce((a,b)=>a+b,0)/n,sd=n>1?Math.sqrt(x.reduce((a,b)=>a+(b-mean)**2,0)/(n-1)):0;
+    if(mean>=x0&&mean<=x1){el("line",{x1:sx(mean),x2:sx(mean),y1:F.T-4,y2:F.B,stroke:"var(--sample)","stroke-width":3,"stroke-dasharray":"7 5"},svg);
+      txt(svg,sx(mean)+(cur===3?8:-8),F.T+FS*0.4,"mean "+f1(mean,1),Object.assign({"text-anchor":cur===3?"start":"end","font-size":FS*0.9,"font-weight":700,style:"fill:var(--sample)"},halo(5)));}
+    if(out>0&&cur===3)txt(svg,F.R-4,F.T+FS*1.9,`${f1(out,0)} ${out===1?"stop":"stops"} over 100 min, off the chart`,Object.assign({"text-anchor":"end","font-size":FS*0.8},halo(5)));
+    $("t-n-o").textContent=f1(n,0)+" "+(n===1?q.one:q.what);
+    $("t-big").innerHTML=`<div><b>${f1(n,0)}</b><span>${q.what} recorded</span></div><div><b style="color:var(--sample)">${f1(mean,q.kind==="d"?2:1)}</b><span>mean of the data (the underlying one: ${f1(q.m,1)})</span></div><div><b>${n>1?f1(sd,q.kind==="d"?2:1):"—"}</b><span>standard deviation of the data (the underlying one: ${f1(q.s,q.kind==="d"?2:1)})</span></div><div><b style="color:var(--point)">${f1(100*tv,1)}%</b><span>of the data would have to move to another bar to fit the underlying shape</span></div>`;
+    let m;
+    if(n<=5)m=`With ${n===1?"a single data point":n+" data points"} there's no shape at all: each bar is ${n===1?"that data point":"one stray data point"}, and the mean can land anywhere. Move the slider up.`;
+    else if(n<=100)m=`With ${n} ${q.what} you can already guess something, but the bars jump around: press "Another sample" and you'll see they change quite a bit. Up to ${f1(100*tv,0)}% of the data is in "the wrong bar" compared with the underlying shape: pure chance from having recorded only a few.${showT?"":" Press \"Show the underlying shape\" to compare them."}`;
+    else{const fit=`With ${f1(n,0)} ${q.what}, only ${f1(100*tv,1)}% of the data strays from the underlying shape, and the mean of the data (${f1(mean,2)}) nearly matches the underlying one. `;
+      m=fit+[`<b>A bell</b>: symmetric around 32 liters, with most trips between 29.5 and 34.5 (the mean ± one standard deviation). It's the <b>normal</b> (idea 2).`,
+        `<b>Separate bars</b>: you can only have 0, 1, 2… late deliveries, never 1.5. The most common is 1 or 2, and 6 or more hardly ever happens. It's the <b>binomial</b> (idea 3).`,
+        `<b>Separate bars</b> again, almost the same as for late deliveries: the same mean, 2. But here there's no maximum of 20: one day there could be 12 alerts. It's the <b>Poisson</b> (idea 4).`,
+        `<b>It's not a bell</b>: the peak is at about 6 minutes, half of the stops last less than 12, and yet there are stops of more than an hour. The mean (${f1(mean,1)} min) sits to the right of the peak, pushed by the tail. It's a <b>long tail</b> (idea 5).`][cur]+(showT?"":" Press \"Show the underlying shape\".");}
+    $("t-msg").innerHTML=m;}
+  in_.addEventListener("input",draw);window.addEventListener("resize",draw);regen();draw();})();
+
+/* ---------- idea 1: bars and areas ---------- */
+(function(){const svg=$("ar"),lo=$("a-lo"),hi=$("a-hi");let mode=0;const PM=binom(20,0.1);const keep=[[0,2],[30,35]];
+  const setMode=md=>{keep[mode]=[+lo.value,+hi.value];mode=md;[lo,hi].forEach(s=>{s.min=md?24:0;s.max=md?40:10;s.step=md?0.5:1;});lo.value=keep[md][0];hi.value=keep[md][1];draw();};
+  seg(["a-0","a-1"],setMode);
+  function draw(){let a=+lo.value,b=+hi.value;if(a>b){const t=a;a=b;b=t;}
+    let P,F;
+    if(mode===0){F=frame(svg,{x0:-0.6,x1:10.6,y1:30,yt:[0,10,20,30],fy:pct,xt:[0,1,2,3,4,5,6,7,8,9,10],xl:"late deliveries in the day (out of 20)",yl:"% of days"});
+      for(let k=0;k<=10;k++){const on=k>=a&&k<=b,y=F.sy(100*PM[k]);el("rect",{x:F.sx(k-0.4),y,width:F.sx(k+0.4)-F.sx(k-0.4),height:F.B-y,fill:on?"var(--point)":"var(--mean)","fill-opacity":on?.85:.35},svg);
+        if(PM[k]>0.004)txt(svg,F.sx(k),y-6,f1(100*PM[k],1),Object.assign({"text-anchor":"middle","font-size":F.FS*0.78,class:on?"t-ink":null,"font-weight":on?700:400},halo(4)));}
+      P=sum(PM,a,b);}
+    else{F=frame(svg,{x0:24,x1:40,y1:18,yt:[0,5,10,15],fy:v=>f1(v,0),xt:[24,26,28,30,32,34,36,38,40],xl:"liters per 100 km",yl:"height of the curve (% per liter)"});
+      const pdf=x=>100*npdf(x,32,2.5),N=200;let d="",da="";
+      for(let i=0;i<=N;i++){const x=24+16*i/N;d+=(i?"L":"M")+F.sx(x).toFixed(1)+" "+F.sy(pdf(x)).toFixed(1);}
+      el("path",{d:d+`L${F.sx(40)} ${F.B}L${F.sx(24)} ${F.B}Z`,fill:"var(--mean)","fill-opacity":.18},svg);
+      for(let i=0;i<=N;i++){const x=a+(b-a)*i/N;da+=(i?"L":"M")+F.sx(x).toFixed(1)+" "+F.sy(pdf(x)).toFixed(1);}
+      if(b>a)el("path",{d:da+`L${F.sx(b)} ${F.B}L${F.sx(a)} ${F.B}Z`,fill:"var(--point)","fill-opacity":.75},svg);
+      el("path",{d,fill:"none",stroke:"var(--mean)","stroke-width":3.5},svg);
+      [a,b].forEach(v=>el("line",{x1:F.sx(v),x2:F.sx(v),y1:F.T,y2:F.B,stroke:"var(--point)","stroke-width":2.5,"stroke-dasharray":"6 4"},svg));
+      P=ncdf(b,32,2.5)-ncdf(a,32,2.5);}
+    txt(svg,F.R-6,F.T+F.FS*0.6,"orange: "+fp(P),Object.assign({"text-anchor":"end","font-size":F.FS*1.15,"font-weight":800,style:"fill:var(--point)"},halo(6)));
+    const fmt=v=>mode?f1(v,1)+" L":f1(v,0);$("a-lo-o").textContent=fmt(+lo.value);$("a-hi-o").textContent=fmt(+hi.value);
+    $("a-big").innerHTML=`<div><b style="color:var(--point)">${fp(P)}</b><span>${mode?"of trips use":"of days have"} between ${fmt(a)} and ${fmt(b)}${mode?"":" late deliveries"}</span></div><div><b style="color:var(--mean)">${fp(1-P)}</b><span>the rest</span></div><div><b>100%</b><span>both together, always</span></div>`;
+    let m;
+    if(mode===0){m=a===b?`A single value: the probability that exactly ${a} arrive late is the height of its bar, <b>${fp(P)}</b>.`:`Between ${a} and ${b} late: you add ${b-a+1} bars, ${[...Array(b-a+1)].map((_,i)=>f1(100*PM[a+i],1)).join(" + ")} = <b>${fp(P)}</b>.`;
+      if(a===0&&b===2)m+=" Two days out of three have at most 2 late. Move \"To\" to 10: almost 100%, because more than 10 out of 20 practically never happens.";
+      else if(b>=10&&a===0)m+=" From 0 to 10 covers almost every day: the sum of all the bars is 100%.";}
+    else{m=b-a<1e-9?`From and to are the same: a trip that uses <b>exactly</b> ${f1(a,1)} liters (not a drop more or less) has probability 0, because there's no area under a line. For things you measure, only ranges have a probability.`:`The orange area, between ${f1(a,1)} and ${f1(b,1)} liters, is <b>${fp(P)}</b> of the whole area under the curve.`;
+      if(a===30&&b===35)m+=" Two trips out of three use between 30 and 35 liters. Notice it's not a bar: the height of the curve isn't a probability, the area is.";
+      else if(a<=24&&b>=40)m+=" The whole curve: 100% of the trips (what falls outside 24–40 is less than 1 in 10,000).";}
+    $("a-msg").innerHTML=m;}
+  [lo,hi].forEach(s=>s.addEventListener("input",draw));window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 2: normal ---------- */
+(function(){const svg=$("nm"),im=$("n-mu"),is=$("n-sd"),ix=$("n-x");
+  function draw(){const mu=+im.value,s=+is.value,x=+ix.value,z=(x-mu)/s,tail=1-Phi(z);
+    const ymax=niceMax(100*npdf(mu,mu,s)*1.4);
+    const F=frame(svg,{x0:14,x1:50,y1:ymax,yt:ticks(ymax),fy:v=>f1(v,0),xt:[14,20,26,32,38,44,50],xl:"liters per 100 km",yl:"% of trips per liter",H:[400,500]});
+    const {sx,sy,FS}=F;
+    const band=(k,op)=>{const a=Math.max(14,mu-k*s),b=Math.min(50,mu+k*s);el("rect",{x:sx(a),y:F.T,width:sx(b)-sx(a),height:F.B-F.T,fill:"var(--mean)","fill-opacity":op},svg);};
+    band(3,.05);band(2,.07);band(1,.10);
+    const lab=[["68.3%",1],["95.4%",2],["99.7%",3]];
+    lab.forEach(([t,k],i)=>{const y=F.T+FS*1.1+i*(FS*1.6),a=sx(Math.max(14,mu-k*s)),b=sx(Math.min(50,mu+k*s));
+      el("line",{x1:a+2,x2:b-2,y1:y,y2:y,stroke:"var(--mean)","stroke-width":1.5,"stroke-opacity":.7},svg);
+      const lb=(k===1?"±1σ: ":k===2?"±2σ: ":"±3σ: ")+t,need=lb.length*FS*0.8*0.62+12,st=Object.assign({"font-size":FS*0.8},halo(4));
+      if(b-a>need)txt(svg,(a+b)/2,y-5,lb,Object.assign({"text-anchor":"middle"},st));else if(F.R-b>need)txt(svg,b+6,y+FS*0.28,lb,Object.assign({"text-anchor":"start"},st));else txt(svg,a-6,y+FS*0.28,lb,Object.assign({"text-anchor":"end"},st));});
+    const N=300;let d="",dt="";for(let i=0;i<=N;i++){const xv=14+36*i/N;d+=(i?"L":"M")+sx(xv).toFixed(1)+" "+sy(100*npdf(xv,mu,s)).toFixed(1);}
+    const xa=Math.max(14,Math.min(50,x));for(let i=0;i<=N;i++){const xv=xa+(50-xa)*i/N;dt+=(i?"L":"M")+sx(xv).toFixed(1)+" "+sy(100*npdf(xv,mu,s)).toFixed(1);}
+    el("path",{d:dt+`L${sx(50)} ${F.B}L${sx(xa)} ${F.B}Z`,fill:"var(--point)","fill-opacity":.7},svg);
+    el("path",{d,fill:"none",stroke:"var(--mean)","stroke-width":3.5},svg);
+    el("line",{x1:sx(mu),x2:sx(mu),y1:sy(100*npdf(mu,mu,s)),y2:F.B,stroke:"var(--mean)","stroke-width":2,"stroke-dasharray":"5 4"},svg);
+    el("line",{x1:sx(x),x2:sx(x),y1:F.T+4*FS*1.6,y2:F.B,stroke:"var(--point)","stroke-width":3},svg);
+    const rt=sx(x)>F.L+(F.R-F.L)*0.7;
+    txt(svg,sx(x)+(rt?-8:8),F.T+4*FS*1.6+FS,`z = ${f1(z,2)}`,Object.assign({"text-anchor":rt?"end":"start","font-size":FS*1.05,"font-weight":800,style:"fill:var(--point)"},halo(6)));
+    $("n-mu-o").textContent=f1(mu,1)+" L";$("n-sd-o").textContent=f1(s,1)+" L";$("n-x-o").textContent=f1(x,1)+" L";
+    $("n-big").innerHTML=`<div><b style="color:var(--point)">${f1(z,2)}</b><span>z: how many σ from the center the trip is</span></div><div><b style="color:var(--point)">${fp(tail)}</b><span>of trips use even more</span></div><div><b>${oneIn(tail)}</b><span>trips uses this much or more</span></div>`;
+    const az=Math.abs(z);let m=`(${f1(x,1)} − ${f1(mu,1)}) / ${f1(s,1)} = <b>z = ${f1(z,2)}</b>. `;
+    if(z<-0.05)m+=`This trip uses <b>less</b> than the mean; ${fp(tail)} of trips use more than it. ${az>2?"Fuel use that low is also rare: a downhill trip, or a sensor that reads wrong?":""}`;
+    else if(az<1)m+=`It's within one σ of the center, like 68% of trips: nothing to look at.`;
+    else if(az<2)m+=`Between one and two σ: it uses more than typical, but ${fp(tail)} of trips use even more. It happens often.`;
+    else if(az<3)m+=`More than two σ out: only ${fp(tail)} of trips use more (${oneIn(tail)}). ${Math.abs(z-2)<0.01&&Math.abs(mu-32)<0.01&&Math.abs(s-2.5)<0.01?"That's 5 liters more than normal per 100 km: on a 600 km trip, 30 liters, about $50 of diesel. ":""}Worth a look if it happens again.`;
+    else m+=`More than three σ out: ${oneIn(tail)} trips would use this much by chance. Most likely something is going on: a breakdown, a low tire or a sensor error.`;
+    if(Math.abs(mu-32)>0.01||Math.abs(s-2.5)>0.01)m+=` If you change μ or σ, the same fuel use of ${f1(x,1)} L can go from rare to normal: what matters is z.`;
+    $("n-msg").innerHTML=m;}
+  [im,is,ix].forEach(i=>i.addEventListener("input",draw));window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 3: binomial ---------- */
+(function(){const svg=$("bn"),in_=$("b-n"),ip=$("b-p"),it=$("b-t");
+  function draw(){const n=+in_.value,p=+ip.value/100;it.max=n;if(+it.value>n)it.value=n;const t=+it.value,P=binom(n,p);
+    const tail=sum(P,t,n),mean=n*p,sd=Math.sqrt(n*p*(1-p));
+    const ymax=niceMax(100*Math.max(...P)*1.15),nw=narrowOf(svg),xt=[];const st=n<=12?1:n<=30?(nw?5:2):n<=60?(nw?10:5):10;for(let k=0;k<=n;k+=st)xt.push(k);
+    const F=frame(svg,{x0:-0.6,x1:n+0.6,y1:ymax,yt:ticks(ymax),fy:pct,xt,xl:`late deliveries in the day (out of ${n})`,yl:"% of days"});
+    const {sx,sy,FS}=F;const bw=Math.max(1,(sx(1)-sx(0))*0.8);
+    for(let k=0;k<=n;k++){const on=k>=t,y=sy(100*P[k]);if(P[k]>1e-6)el("rect",{x:sx(k)-bw/2,y,width:bw,height:Math.max(0.5,F.B-y),fill:on?"var(--point)":"var(--mean)","fill-opacity":on?.9:.55},svg);}
+    el("line",{x1:sx(mean),x2:sx(mean),y1:F.T,y2:F.B,stroke:"var(--sample)","stroke-width":3,"stroke-dasharray":"7 5"},svg);
+    const lr=mean>n*0.6;txt(svg,sx(mean)+(lr?-8:8),F.T+FS*0.5,"mean n × p = "+f1(mean,1),Object.assign({"text-anchor":lr?"end":"start","font-size":FS*0.9,"font-weight":700,style:"fill:var(--sample)"},halo(5)));
+    txt(svg,F.R-4,F.T+FS*2,`at least ${t}: ${fp(tail)}`,Object.assign({"text-anchor":"end","font-size":FS*1.05,"font-weight":800,style:"fill:var(--point)"},halo(6)));
+    $("b-n-o").textContent=n;$("b-p-o").textContent=f1(100*p,0)+"%";$("b-t-o").textContent=t+" late";
+    $("b-big").innerHTML=`<div><b style="color:var(--sample)">${f1(mean,1)}</b><span>late per day on average (n × p)</span></div><div><b>± ${f1(sd,2)}</b><span>standard deviation, √(n × p × (1 − p))</span></div><div><b style="color:var(--point)">${fp(tail)}</b><span>of days with ${t} or more late</span></div><div><b>${f1(250*tail,1)}</b><span>such days in a year of 250 workdays</span></div><div><b>$${f1(mean*15,0)}</b><span>average penalty per day, at $15 per delay</span></div>`;
+    let m;
+    if(n===20&&Math.abs(p-0.1)<1e-9&&t===6)m=`With 20 deliveries and p = 10%, the most common is 1 or 2 delays (27% and 28.5% of days), and <b>6 or more only happen on ${fp(tail)} of days</b>: about 3 a year. If one day 6 arrive late, it's most likely not bad luck: something went wrong (a traffic jam, a broken-down truck, a badly planned route).`;
+    else if(n===20&&Math.abs(p-0.1)<1e-9)m=`With p = 10%, ${t} or more delays happen on ${fp(tail)} of days (${oneIn(tail)}). The mean is still 2: changing the threshold doesn't change the shape, only which part you shade.`;
+    else if(p>=0.4&&n>=15)m=`With n = ${n} and p = ${f1(100*p,0)}%, the binomial already looks like a <b>bell</b> around ${f1(mean,1)}: when n × p and n × (1 − p) are large, the binomial looks very much like a normal with the same mean and standard deviation. ${t} or more: ${fp(tail)}.`;
+    else if(p<=0.05&&n>=30)m=`With many tries and a small p (${n} deliveries, ${f1(100*p,0)}%), the binomial stays pressed to the left and hardly depends on n anymore: only on the mean, ${f1(mean,1)}. That shape is the <b>Poisson</b> of idea 4. ${t} or more: ${fp(tail)}.`;
+    else m=`With ${n} deliveries and p = ${f1(100*p,0)}%, on average ${f1(mean,1)} arrive late per day, with a standard deviation of ${f1(sd,2)}. ${t} or more: ${fp(tail)} of days (${f1(250*tail,1)} a year). Change p and watch the whole shape move.`;
+    $("b-msg").innerHTML=m;}
+  [in_,ip,it].forEach(i=>i.addEventListener("input",draw));window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 4: Poisson ---------- */
+(function(){const svg=$("ps"),il=$("p-l"),it=$("p-t");let cmp=0;const CN=[0,10,50,500];
+  chips($("p-cmp"),["No comparison","Binomial with n = 10","n = 50","n = 500"],i=>{cmp=i;draw();});
+  function draw(){const l=+il.value,t=+it.value,km=Math.max(12,Math.ceil(l+4.5*Math.sqrt(l))),P=pois(l,km),tail=1-sum(P,0,t-1);
+    let Bn=null,n=CN[cmp];if(cmp&&l/n<1)Bn=binom(n,l/n);
+    const top=Math.max(...P,...(Bn?Bn.slice(0,km+1):[0]));const ymax=niceMax(100*top*1.15),nw=narrowOf(svg),xt=[];const st=km<=12?1:km<=26?(nw?4:2):5;for(let k=0;k<=km;k+=st)xt.push(k);
+    const F=frame(svg,{x0:-0.6,x1:km+0.6,y1:ymax,yt:ticks(ymax),fy:pct,xt,xl:"braking alerts in the day",yl:"% of days"});
+    const {sx,sy,FS}=F;const bw=(sx(1)-sx(0))*0.75;
+    for(let k=0;k<=km;k++){const on=k>=t,y=sy(100*P[k]);el("rect",{x:sx(k)-bw/2,y,width:bw,height:Math.max(0.5,F.B-y),fill:on?"var(--point)":"var(--mean)","fill-opacity":on?.9:.55},svg);}
+    if(Bn)for(let k=0;k<=km&&k<=n;k++){el("circle",{cx:sx(k),cy:sy(100*Bn[k]),r:F.nw?8:7,fill:"none",stroke:"var(--sample)","stroke-width":3},svg);}
+    el("line",{x1:sx(l),x2:sx(l),y1:F.T,y2:F.B,stroke:"var(--sample)","stroke-width":3,"stroke-dasharray":"7 5"},svg);
+    const lr=l>km*0.6;txt(svg,sx(l)+(lr?-8:8),F.T+FS*0.5,"mean λ = "+f1(l,1),Object.assign({"text-anchor":lr?"end":"start","font-size":FS*0.9,"font-weight":700,style:"fill:var(--sample)"},halo(5)));
+    txt(svg,F.R-4,F.T+FS*2,`at least ${t}: ${fp(tail)}`,Object.assign({"text-anchor":"end","font-size":FS*1.05,"font-weight":800,style:"fill:var(--point)"},halo(6)));
+    let tv=0;if(Bn){for(let k=0;k<=Math.max(km,n);k++)tv+=Math.abs((Bn[k]||0)-(k<=km?P[k]:0));tv/=2;}
+    if(Bn)txt(svg,F.R-4,F.T+FS*3.3,`binomial ${n} × ${f1(l/n,3)}: off by ${f1(100*tv,1)}%`,Object.assign({"text-anchor":"end","font-size":FS*0.85,style:"fill:var(--sample)","font-weight":700},halo(5)));
+    $("p-l-o").textContent=f1(l,1);$("p-t-o").textContent=t+" alerts";
+    $("p-big").innerHTML=`<div><b style="color:var(--sample)">${f1(l,1)}</b><span>average alerts per day (λ)</span></div><div><b>${f1(l,1)}</b><span>variance: in the Poisson, equal to the mean</span></div><div><b style="color:var(--point)">${fp(tail)}</b><span>of days with ${t} or more alerts</span></div><div><b>${oneIn(tail)}</b><span>days, by pure chance</span></div>`;
+    let m;
+    if(cmp&&l/n>=1)m=`With n = ${n} tries you can't have a mean of ${f1(l,1)}: p would be greater than 1. Pick a larger n.`;
+    else if(cmp===1)m=`A binomial with only 10 tries and p = ${f1(l/10,2)} looks like the Poisson, but not quite (it's off by ${f1(100*tv,1)}%): with 10 tries there can never be more than 10 alerts, and it has fewer days with 0. Try n = 50 and n = 500.`;
+    else if(cmp)m=`With ${n} tries and p = ${f1(l/n,4).replace(/0+$/,"")} the rings almost touch the bars: it's off by only ${f1(100*tv,2)}%. <b>The Poisson is a binomial with a huge number of tries and a tiny p</b>: a truck brakes hundreds of times a day and each braking has a very small probability of being harsh. That's why you don't need to know n: the mean is enough.`;
+    else if(Math.abs(l-2)<1e-9&&t===7)m=`A driver with λ = 2 alerts on average has days with none (${fp(P[0])}) and days with 3 or 4, all normal. But <b>7 or more only happens on ${fp(tail)} of days</b>, ${oneIn(tail)}. If it happens, that day is worth a look: a stretch of roadworks, a new driver or an oversensitive sensor. Press "Binomial with n = 10" to compare.`;
+    else if(l>=8)m=`With λ = ${f1(l,1)} the Poisson becomes almost symmetric and looks like a bell around ${f1(l,1)}, with standard deviation √λ = ${f1(Math.sqrt(l),2)}. ${t} or more: ${fp(tail)}.`;
+    else if(l<1)m=`With λ = ${f1(l,1)} the most common thing is <b>to have no alerts at all</b> (${fp(P[0])} of days). It's the shape of very rare events, like a truck's serious breakdowns in a month.`;
+    else m=`With λ = ${f1(l,1)}, ${t} or more alerts happen on ${fp(tail)} of days. The mean and the variance are both ${f1(l,1)}: the bigger λ is, the wider the shape.`;
+    $("p-msg").innerHTML=m;}
+  [il,it].forEach(i=>i.addEventListener("input",draw));window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 5: long tails ---------- */
+(function(){const svg=$("cl"),is=$("c-s"),it=$("c-t");const mu=Math.log(12);
+  function draw(){const s=+is.value,T=+it.value,mean=12*Math.exp(s*s/2),sd=mean*Math.sqrt(Math.exp(s*s)-1);
+    const pr=1-lncdf(T,mu,s),pn=1-ncdf(T,mean,sd),neg=ncdf(0,mean,sd),q95=Math.exp(mu+1.6448536*s),q95n=mean+1.6448536*sd;
+    const peak=Math.max(lnpdf(Math.exp(mu-s*s),mu,s),npdf(mean,mean,sd));const ymax=niceMax(100*peak*1.12);
+    const F=frame(svg,{x0:-30,x1:120,y1:ymax,yt:ticks(ymax),fy:v=>f1(v,0),xt:[-30,0,30,60,90,120],xl:"minutes stopped",yl:"% of stops per minute",H:[400,500]});
+    const {sx,sy,FS}=F;
+    /* impossible zone */
+    const pid="hatch8";const pat=el("pattern",{id:pid,width:10,height:10,patternUnits:"userSpaceOnUse",patternTransform:"rotate(45)"},el("defs",null,svg));el("line",{x1:0,y1:0,x2:0,y2:10,stroke:"var(--warn)","stroke-width":2.5,"stroke-opacity":.5},pat);
+    el("rect",{x:sx(-30),y:F.T,width:sx(0)-sx(-30),height:F.B-F.T,fill:`url(#${pid})`},svg);
+    txt(svg,sx(-15),F.T+FS*0.2+14,"impossible",Object.assign({"text-anchor":"middle","font-size":FS*0.85,style:"fill:var(--warn)","font-weight":700},halo(5)));
+    const N=360,path=(f,a,b)=>{let d="";for(let i=0;i<=N;i++){const x=a+(b-a)*i/N;d+=(i?"L":"M")+sx(x).toFixed(1)+" "+sy(Math.min(ymax,100*f(x))).toFixed(1);}return d;};
+    const fl=x=>lnpdf(x,mu,s),fn=x=>npdf(x,mean,sd);
+    if(T<120)el("path",{d:path(fl,T,120)+`L${sx(120)} ${F.B}L${sx(T)} ${F.B}Z`,fill:"var(--point)","fill-opacity":.75},svg);
+    el("path",{d:path(fn,-30,120),fill:"none",stroke:"var(--sample)","stroke-width":3,"stroke-dasharray":"9 6"},svg);
+    el("path",{d:path(fl,0.01,120),fill:"none",stroke:"var(--mean)","stroke-width":3.5},svg);
+    el("line",{x1:sx(T),x2:sx(T),y1:F.T,y2:F.B,stroke:"var(--point)","stroke-width":2},svg);
+    const vl=(x,t,dy,anchor)=>{el("line",{x1:sx(x),x2:sx(x),y1:F.T+dy-FS,y2:F.B,stroke:"var(--ink)","stroke-width":1.6,"stroke-dasharray":"3 4"},svg);txt(svg,sx(x)+(anchor==="end"?-6:6),F.T+dy,t,Object.assign({"text-anchor":anchor,"font-size":FS*0.85,class:"t-ink","font-weight":700},halo(5)));};
+    vl(12,"median 12",FS*2.2,"end");vl(mean,"mean "+f1(mean,1),FS*3.5,"start");
+    $("c-s-o").textContent=f1(s,2);$("c-t-o").textContent=T+" min";
+    $("c-big").innerHTML=`<div><b>${f1(mean,1)} min</b><span>mean (the median is 12 min)</span></div><div><b style="color:var(--point)">${fp(pr)}</b><span>of stops last more than ${T} min (real shape)</span></div><div><b style="color:var(--sample)">${fp(pn)}</b><span>according to the bell with the same mean and σ</span></div><div><b style="color:var(--warn)">${fp(neg)}</b><span>of stops "under 0 min" according to the bell</span></div><div><b>${f1(q95,0)} min</b><span>95% of stops last less (the bell would say ${f1(q95n,0)})</span></div>`;
+    let m;
+    if(s<=0.25)m=`With such a short tail, the real shape is almost a bell: mean (${f1(mean,1)}) and median (12) nearly match, and the normal is quite close (${fp(pr)} versus ${fp(pn)} of stops longer than ${T} min). Make the tail longer.`;
+    else{const r=pn>0?pr/pn:Infinity;
+      m=`With this tail, the mean (${f1(mean,1)} min) is already above the median (12): a few very long stops pull it up. The bell with the same mean and standard deviation gets it wrong on both sides: it gives ${fp(neg)} of stops with negative minutes, and says ${fp(pn)} last more than ${T} min, when in reality it's ${fp(pr)}${r>1.5&&isFinite(r)?`, <b>${f1(r,r<10?1:0)} times more</b>`:""}.`;
+      if(Math.abs(s-0.8)<1e-9&&T===60)m+=` If a customer has 1,000 stops a year, the bell expects about 3 longer than an hour; in reality there will be about 22.`;}
+    $("c-msg").innerHTML=m;}
+  [is,it].forEach(i=>i.addEventListener("input",draw));window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 6: which one applies ---------- */
+(function(){const svg=$("dq"),box=$("q-cases");
+  const OPT=["Normal","Binomial","Poisson","Long tail"];
+  const CASES=[
+    ["Average highway speed","The average speed of each highway trip, in km/h.",0,"It's measured and it's the sum of many small effects (traffic, hills, wind, driver): a bell around about 82 km/h."],
+    ["Trucks failing inspection","Of the 12 trucks going through their annual inspection this month, how many fail.",1,"It's counted, and there's a fixed number of tries (12), each with a similar probability of failing: binomial."],
+    ["Flat tires this week","How many flat tires the whole fleet has in a week.",2,"You count separate events in an interval, with no clear maximum number of tries: Poisson. Its mean and its variance should be similar."],
+    ["Time to sign the delivery note","Minutes a customer takes to sign the delivery note.",3,"It's measured, it can't go below 0, and sometimes it shoots up (the person in charge isn't there, there's a line): long tail."],
+    ["Scale difference","Difference between the declared weight of the load and what the scale shows, in kg.",0,"It's measured and it's the sum of small errors (pallets, moisture, the scale itself), some up and some down: normal around 0."],
+    ["Cost of a repair","Cost in dollars of each repair at the maintenance shop.",3,"It's measured in dollars, it can't be negative and a few repairs (an engine, a gearbox) cost far more than the typical ones: long tail."],
+    ["Roadside assistance calls","Calls the roadside assistance service receives in an hour.",2,"You count separate events in an interval (an hour), and each driver calls independently: Poisson."],
+    ["Days with a late departure","Of the month's 22 workdays, on how many a truck leaves the depot late.",1,"It's counted, with a fixed number of tries (22 days), each with its own probability of leaving late: binomial."]];
+  const ans=new Array(CASES.length).fill(-1);let last=-1;
+  CASES.forEach((c,i)=>{const d=document.createElement("div");d.className="case";d.innerHTML=`<h3>${c[0]}</h3><p class="d">${c[1]}</p><div class="btns"></div><p class="ans"></p>`;box.appendChild(d);
+    const bs=OPT.map((o,j)=>{const b=document.createElement("button");b.type="button";b.textContent=o;b.onclick=()=>{ans[i]=j;last=i;bs.forEach((y,k)=>{y.className=k===c[2]?"ok":(k===j?"no":"");});
+      d.querySelector(".ans").innerHTML=(j===c[2]?`<b class="ok">Right!</b> `:`<b class="no">It's ${c[2]===3?"a long tail":OPT[c[2]].toLowerCase()}.</b> `)+c[3];draw();};d.querySelector(".btns").appendChild(b);return b;});});
+  function draw(){const nw=narrowOf(svg);const W=nw?600:900,H=nw?400:340,FS=nw?22:15;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const ans_=last>=0?CASES[last][2]:-1;
+    /* nodes: [x, y, text, path] */
+    const P=nw?{q0:[300,40],q1:[150,180],q2:[450,180],l0:[78,340],l1:[222,340],l2:[372,340],l3:[516,340]}:{q0:[450,40],q1:[230,150],q2:[670,150],l0:[120,280],l1:[340,280],l2:[560,280],l3:[780,280]};
+    const leaf=[["l2","Normal"],["l0","Binomial"],["l1","Poisson"],["l3","Long tail"]];
+    const path=ans_<0?[]:ans_===0?["q0","q2","l2"]:ans_===1?["q0","q1","l0"]:ans_===2?["q0","q1","l1"]:["q0","q2","l3"];
+    const on=(a,b)=>path.includes(a)&&path.includes(b);
+    const E=[["q0","q1","count"],["q0","q2","measure"],["q1","l0",nw?"fixed n":"n tries"],["q1","l1",nw?"over time":"events over time"],["q2","l2",nw?"sum":"sum of effects"],["q2","l3",nw?"shoots up":"multiplies / ≥ 0"]];
+    E.forEach(([a,b,t])=>{const A=P[a],Bp=P[b],o=on(a,b);el("line",{x1:A[0],y1:A[1]+22,x2:Bp[0],y2:Bp[1]-22,stroke:o?"var(--point)":"var(--muted)","stroke-width":o?4:1.8,"stroke-opacity":o?1:.6},svg);
+      let lx=(A[0]+Bp[0])/2+(Bp[0]<A[0]?-8:8),an=Bp[0]<A[0]?"end":"start";const tw=t.length*FS*0.85*0.6;if(an==="start"&&lx+tw>W-4){lx=W-4;an="end";}if(an==="end"&&lx-tw<4){lx=4;an="start";}
+      txt(svg,lx,(A[1]+Bp[1])/2+4,t,Object.assign({"text-anchor":an,"font-size":FS*0.85,class:o?"t-ink":null,"font-weight":o?700:400},halo(5)));});
+    const box_=(k,t,leafC)=>{const [x,y]=P[k],o=path.includes(k);const lines=t.split("\n");const w=Math.max(...lines.map(s=>s.length))*FS*0.6+26,h=lines.length*FS*1.2+16;
+      el("rect",{x:x-w/2,y:y-h/2,width:w,height:h,rx:leafC?h/2:10,fill:leafC?"var(--mean)":"var(--surface)","fill-opacity":leafC?(o?.9:.16):1,stroke:o?"var(--point)":"var(--line)","stroke-width":o?3.5:1.5},svg);
+      lines.forEach((s,i)=>txt(svg,x,y-(lines.length-1)*FS*0.6+i*FS*1.2+FS*0.35,s,{"text-anchor":"middle","font-size":FS,"font-weight":leafC?700:400,class:"t-ink",style:leafC&&o?"fill:var(--surface)":null}));};
+    box_("q0","Count or measure?");box_("q1",nw?"Fixed\ntries?":"Is there a fixed\nnumber of tries?");box_("q2",nw?"Sum or\nshoots up?":"Sum of effects or\ncan it shoot up?");
+    leaf.forEach(([k,t])=>box_(k,t,true));
+    const done=ans.filter(a=>a>=0).length,ok=ans.filter((a,i)=>a===CASES[i][2]).length;
+    $("q-msg").innerHTML=done===0?"Pick a shape on any card. You don't have to get it right the first time: each answer explains why.":done<CASES.length?`You have ${ok} of ${done} right. ${done<4?"Keep going with the other cards.":"Notice that the first question is almost always enough: is it counted or measured?"}`:`You've done all ${CASES.length}: <b>${ok} right</b>. ${ok===CASES.length?"All of them!":""} Remember that the diagram gives a first hunch: then you have to check it by drawing the data, as in the toy.`;}
+  window.addEventListener("resize",draw);draw();})();
+})();
+</script>
+</body>
+</html>
