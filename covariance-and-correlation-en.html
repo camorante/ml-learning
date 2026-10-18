@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Covariance and correlation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content;max-width:100%}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec p b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.rowb{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.drag svg{touch-action:none;cursor:grab}
+.rscale{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.rscale div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:6px 6px 8px;display:grid;gap:2px;text-align:center;font-size:.85rem;color:var(--muted)}
+.rscale svg{width:100%;height:auto;display:block}
+.rscale b{color:var(--ink);font-family:var(--f-mono);font-weight:500}
+@media (max-width:620px){.rscale{grid-template-columns:repeat(3,minmax(0,1fr))}.seg{border-radius:14px}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#en" target="_self">← Main menu</a> · The math under ML · topic 10 · explained with drawings · <a href="covariance-and-correlation-technical-en.html" target="_self">see the technical version</a> · <a href="math-under-ml-en.html" target="_self">all topics</a> · <a href="covarianza-y-correlacion-es.html" target="_self">en español</a></p>
+  <h1>Covariance and correlation</h1>
+  <p class="lede">Do trucks that carry more load burn more fuel? Do drivers with more years of experience brake hard less often? Two numbers tell you whether two columns of data move together, in which direction and how strongly. What they never tell you is why.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="situ col">
+    <p class="eyebrow">The setup</p>
+    <p>A trucking company has a table with <strong>one row per truck</strong> and one month of data: the average load, the fuel consumption, the hours the engine runs while the truck is standing still (<strong>idling</strong>), the money spent on diesel, the driver's years of experience, the harsh braking events…</p>
+    <p>Each <strong>pair of columns</strong> can be drawn as a <strong>scatter plot</strong>: each point is a truck, with one column across and the other one up. The question is always the same: when one column is above normal, is the other one usually above normal too (they move together), usually below (they move in opposite directions), or does it not care?</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="Scatter plot of two fleet columns with the cross of the means"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each point is one of the 120 trucks. With the cross on, the two gray lines are the <b>mean</b> of each column and they split the chart into four zones. In the <b style="color:var(--mean)">blue</b> zones (top right and bottom left) the two columns "agree": both above their mean or both below. In the <b style="color:var(--sample)">purple</b> ones, one is above and the other below. The rectangles go from the cross to each truck (they are explained in idea 1).</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>Which two columns?</h3>
+      <p>Four pairs from the same fleet. Each one moves in a different way.</p>
+      <div class="chips" id="t-q" role="group" aria-label="Pair of columns"></div>
+    </div>
+    <div class="dec">
+      <h3>What to draw on top?</h3>
+      <p>Start with <b>the cross of the means</b>: it is the key piece. The <b>rectangles</b> are the covariance calculation turned into a drawing.</p>
+      <div class="seg" role="group" aria-label="What to draw"><button type="button" id="t-m0" aria-pressed="false">Just the trucks</button><button type="button" id="t-m1" aria-pressed="true">The cross of the means</button><button type="button" id="t-m2" aria-pressed="false">The rectangles</button></div>
+    </div>
+    <div class="dec">
+      <h3>The two numbers</h3>
+      <p>The <b>covariance</b> has the right sign (plus or minus) but its units are weird. The <b>correlation r</b> always goes from −1 to 1: 1 is a straight line going up, −1 one going down, and 0, no line at all.</p>
+    </div>
+  </div>
+  <div class="big3" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Try this, in order:</strong></p>
+    <ol class="try">
+      <li>With "Load and consumption" and the cross: almost 8 out of 10 trucks fall in the blue zones. The cloud rises to the right and r = 0.74.</li>
+      <li>Switch to "Experience and braking": now the purple zones win and r is negative, −0.65. More experience, less harsh braking.</li>
+      <li>Try "Day of the month and consumption": half and half, r = 0.02. No relationship.</li>
+      <li>Turn on "The rectangles" and compare "Load and consumption" with "Idling and fuel spend": the covariance of the second is more than a hundred times larger, but the clearer relationship is the first one. Covariance depends on the units; r doesn't (idea 2).</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">What you just saw</p>
+    <h2>Two numbers for "they move together"</h2>
+    <p>To know whether two columns move together you don't need to look truck by truck. It's enough to check <strong>which side of its mean</strong> each truck falls on in each column:</p>
+    <ul>
+      <li><strong>The covariance</strong> adds up, with a sign, how much the two columns "agree" on each truck. If it comes out positive, they move together; negative, in opposite directions; close to zero, there is no clear direction. Its problem: it comes in weird units (tonnes times liters, hours times dollars) and its size doesn't say whether the relationship is strong.</li>
+      <li><strong>The correlation r</strong> is the covariance without units. It always goes from −1 to 1 and can be compared across pairs: 0.74 between load and consumption is a clearer relationship than 0.52 between idling and fuel spend, even though the covariance says the opposite.</li>
+    </ul>
+    <p>A rough guide: below 0.1 (positive or negative) there is nothing; around 0.3, something weak; around 0.5, moderate; from 0.7 up, strong. But the number alone is not enough: always look at the cloud, because r <strong>only sees straight lines</strong> (idea 3), a single truck can change everything (idea 4) and, above all, <strong>it doesn't say what causes what</strong> (idea 5).</p>
+    <div class="rscale" id="rscale" aria-label="Five example clouds with different correlations"></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 6</p>
+    <h2>Rectangles with a sign: this is how covariance is computed</h2>
+    <p>We take just <strong>8 trucks</strong>, with their average load (tonnes) and their consumption (liters per 100 km). For each truck we look at <strong>how far it is from the mean</strong> in load and in consumption (these are the deviations from <a href="mean-variance-and-standard-deviation-en.html" target="_self">topic 7</a>) and we <strong>multiply</strong> the two. If it is off to the same side in both (more load and more consumption, or less and less), the product is positive. If it is off to opposite sides, negative.</p>
+    <p>That product is exactly the <strong>area of a rectangle</strong> that goes from the cross of the means to the truck. All the areas are added up with their sign and divided by n − 1 = 7 (the same n − 1 as in topic 7). The result is the <strong>covariance</strong>.</p>
+  </div>
+  <figure class="fig drag"><svg id="cv" role="img" aria-label="Eight trucks with their rectangles from the cross of the means; they can be dragged"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The gray cross marks the means (at the start, 15 tonnes and 32 L/100 km). Each rectangle goes from the cross to a truck: <b style="color:var(--mean)">blue</b> if its product is positive (it counts in favor of "they move together") and <b style="color:var(--sample)">purple</b> if it is negative (it counts against). <b>Drag any truck</b> with the mouse or your finger and watch its rectangle, the cross and the covariance change.</p>
+  <div class="rowb col"><button type="button" id="cv-re">↺ Back to the 8 starting trucks</button></div>
+  <div class="big3 col" id="cv-big"></div>
+  <p class="qcard col" id="cv-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 6</p>
+    <h2>Removing the units: the correlation r</h2>
+    <p>The covariance of the 8 trucks is 18.6, in "tonnes times liters per 100 km", which is nothing you can picture. Worse: if the load is recorded in <strong>kilograms</strong> instead of tonnes, all the rectangles stretch 1,000 times and the covariance becomes 18,571. Same trucks, same relationship, a different number.</p>
+    <p>The fix is to measure both columns with the same yardstick: turn each value into a <strong>z</strong>, that is, into "how many standard deviations it is from its mean" (<a href="mean-variance-and-standard-deviation-en.html" target="_self">topic 7</a>). The covariance of the z's has no units and always falls between −1 and 1: it is the <strong>Pearson correlation, r</strong>. It is the same as dividing the covariance by the two standard deviations.</p>
+  </div>
+  <figure class="fig"><svg id="un" role="img" aria-label="The eight trucks in different units and in z, with the best-fitting line"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> These are the 8 trucks from idea 1. When you change the units, the numbers on the axes change, but the points don't move: the relationship is the same. In "In z", both axes measure standard deviations and the cross sits at 0. The <b style="color:var(--mean)">blue</b> line is the line that best fits the points (the one from <a href="linear-and-polynomial-regression-en.html" target="_self">linear regression</a>).</p>
+  <div class="decs">
+    <div class="dec"><h3>In which units?</h3><div class="seg" role="group" aria-label="Units"><button type="button" id="u-0" aria-pressed="true">tonnes and L/100 km</button><button type="button" id="u-1" aria-pressed="false">kilograms and L/100 km</button><button type="button" id="u-2" aria-pressed="false">tonnes and liters per km</button><button type="button" id="u-3" aria-pressed="false">In z (no units)</button></div></div>
+    <div class="dec"><h3>The line</h3><p>The best-fitting line has a slope that comes from r. Turn it on and switch to "In z".</p><div class="rowb"><button type="button" id="u-l" aria-pressed="false">Show the best-fitting line</button></div></div>
+  </div>
+  <div class="big3 col" id="u-big"></div>
+  <p class="qcard col" id="u-msg"></p>
+  <div class="col stack">
+    <p>Another way to see r, which comes from <a href="dot-product-and-cosine-en.html" target="_self">topic 2</a>: put the 8 load deviations in one arrow of 8 numbers and the 8 consumption deviations in another. r is the <strong>cosine of the angle</strong> between the two arrows. If they point the same way, r = 1; if they point in opposite directions, −1; if they form a right angle, 0. That's why r never leaves the range −1 to 1.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 6</p>
+    <h2>r only sees straight lines</h2>
+    <p>A truck's consumption depends a lot on its <strong>average speed</strong>: at traffic-jam pace it burns a huge amount (starting, braking, engine running while stopped); around 50 km/h it burns the least; and faster than that it burns more again, because pushing the air costs fuel. The relationship is very strong, but it is shaped like a <strong>U</strong>, not a line. And r only measures how much the points look like a straight line.</p>
+  </div>
+  <figure class="fig"><svg id="vel" role="img" aria-label="Consumption by average speed for 160 trips, shaped like a U"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each point is a trip. With the sliders you choose which trips go into the calculation: the ones inside show in <b style="color:var(--point)">orange</b> over the shaded band; the ones outside, in gray. The <b style="color:var(--mean)">blue</b> line is the best line for the trips inside.</p>
+  <div class="controls col">
+    <div class="slider"><label for="v-lo">Trips from <output id="v-lo-o"></output></label><input type="range" id="v-lo" min="10" max="80" step="5" value="10"></div>
+    <div class="slider"><label for="v-hi">to <output id="v-hi-o"></output></label><input type="range" id="v-hi" min="20" max="90" step="5" value="90"></div>
+  </div>
+  <div class="big3 col" id="v-big"></div>
+  <p class="qcard col" id="v-msg"></p>
+  <div class="col stack">
+    <p>So <strong>r ≈ 0 does not mean "no relationship"</strong>; it means "no straight-line relationship". And the other way around, a high r doesn't guarantee that a line is a good idea either: there is a famous example, <strong>Anscombe's quartet</strong>, with four very different clouds of points (a line with noise, a curve, a perfect line with one stray point and a vertical column with one loose point) that have exactly the same r, 0.82. The only defense is to draw the cloud.</p>
+    <p>One consequence: if two things are <strong>independent</strong> (knowing one doesn't change what you expect of the other, <a href="conditional-probability-and-independence-en.html" target="_self">topic 9</a>), their covariance is 0. But not the other way around: here the covariance is almost 0 and consumption depends heavily on speed.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 6</p>
+    <h2>A single truck can create or destroy a correlation</h2>
+    <p>The covariance adds up rectangles, and the rectangle of a truck very far from the cross is huge: it can weigh more than all the others combined. A single <strong>bad record</strong> (a flow sensor that goes haywire, a misplaced decimal point) is enough to make a correlation appear that doesn't exist, or make one that does exist vanish.</p>
+    <p>A sturdier version is the <strong>Spearman correlation</strong>: each value is replaced by its <strong>rank</strong> in the column (1st, 2nd… 21st) and r is computed with the ranks. An absurd value can only be "the last one"; it can't be "ten times the last one".</p>
+  </div>
+  <div class="chips col" id="at-q" role="group" aria-label="Scenario"></div>
+  <figure class="fig drag"><svg id="at" role="img" aria-label="Twenty trucks and an outlier truck that can be dragged"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The 20 <b style="color:var(--point)">orange</b> points are normal trucks. The <b style="color:var(--warn)">red point with a ring</b> is an outlier record: <b>drag it</b> wherever you like. The <b style="color:var(--mean)">blue</b> line is the best line with the outlier; the dashed gray one, without it. With "Show the ranks", each axis shows each truck's rank in its column: what Spearman uses.</p>
+  <div class="rowb col"><div class="seg" role="group" aria-label="Values or ranks"><button type="button" id="at-v0" aria-pressed="true">Show the values</button><button type="button" id="at-v1" aria-pressed="false">Show the ranks</button></div><button type="button" id="at-re">↺ Put it back where it was</button></div>
+  <div class="big3 col" id="at-big"></div>
+  <p class="qcard col" id="at-msg"></p>
+  <div class="col stack">
+    <p>What to do: <strong>look at the cloud</strong> before believing an r; check whether the odd point is an error (<a href="outliers-en.html" target="_self">outliers topic</a>); also compute Spearman as a second opinion, and if the two don't look alike, be suspicious. What you should not do is delete a point just because it spoils the correlation you were expecting.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 6</p>
+    <h2>Correlation is not causation</h2>
+    <p>In the fleet, older trucks burn more fuel: r = 0.60, and the line says each year of age adds 0.62 L/100 km. Replace the old ones to save diesel? First, a question: <strong>what else is different about the old trucks?</strong> In this company, old trucks are sent to city delivery (89% of those over 10 years old) and new ones to the highway (only 7% of those under 5 years old go to the city). And city driving burns much more.</p>
+  </div>
+  <figure class="fig"><svg id="cf" role="img" aria-label="Consumption by truck age, whole fleet or split by route type"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each point is a truck: its age across and its consumption up. In "Whole fleet", the <b style="color:var(--mean)">blue</b> line is the best line for all of them. When split, the <b style="color:var(--point)">city</b> trucks show in orange and the <b style="color:var(--sample)">highway</b> ones in purple, each group with its own line.</p>
+  <div class="seg col" role="group" aria-label="Grouping"><button type="button" id="cf-0" aria-pressed="true">Whole fleet</button><button type="button" id="cf-1" aria-pressed="false">Split by route type</button></div>
+  <div class="big3 col" id="cf-big"></div>
+  <p class="qcard col" id="cf-msg"></p>
+  <div class="col stack">
+    <p>The route type is a <strong>confounding variable</strong>: it pushes both columns at once (it decides which trucks go to the city and how much they burn), and it creates a correlation between them without one causing the other. There are more ways for a correlation to fool you:</p>
+  </div>
+  <div class="decs">
+    <div class="dec"><h3>Selection bias</h3><p>If you only study the trucks still in the fleet after 12 years, the ones that broke down a lot have already been sold. Among those that remain, age <b>seems</b> not to increase breakdowns. The missing data counts too.</p></div>
+    <div class="dec"><h3>The cause runs backwards</h3><p>The trucks that visit the maintenance shop most have more breakdowns. It's not that the shop causes them: the breakdowns cause the visits. The correlation is the same in both directions; the arrow is added by whoever reads it.</p></div>
+    <div class="dec"><h3>Chance from looking a lot</h3><p>With few trucks and many pairs of columns, some pair comes out with a striking r by pure chance (idea 6). If you search through 36 pairs, the best "relationship" may mean nothing.</p></div>
+  </div>
+  <div class="col stack">
+    <p>How do you prove a cause? The most reliable way is an <strong>experiment</strong>: change one thing on purpose in a group of randomly chosen trucks and compare it with another, similar group where it isn't changed (an A/B test). If you can't, compare within similar groups (like when splitting by route) or use a model that accounts for the known confounding variables, knowing that the unknown ones are still there.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 6 of 6</p>
+    <h2>Many columns at once: the correlation matrix</h2>
+    <p>With 9 columns there are 36 pairs. Instead of 36 clouds, each r goes into a table: the <strong>correlation matrix</strong>. The diagonal is always 1 (each column with itself) and the table is symmetric (the r of A with B is the r of B with A). Two of the columns are <strong>pure chance</strong>: the letter of the license plate and the day of the month the driver was born.</p>
+  </div>
+  <figure class="fig"><svg id="mx" role="img" aria-label="Correlation matrix of nine fleet columns"></svg></figure>
+  <p class="howto col"><b>How to read the table.</b> Each cell is the r of its row's column with the column of its number. <b style="color:var(--mean)">Blue</b>: they move together; <b style="color:var(--sample)">purple</b>: in opposite directions; the more intense, the stronger. <b>Tap a cell</b> to see its scatter plot below. (On a phone, the almost-white cells, below 0.15, have no number.)</p>
+  <div class="seg col" role="group" aria-label="How many trucks"><button type="button" id="mx-0" aria-pressed="true">500 trucks</button><button type="button" id="mx-1" aria-pressed="false">Only 15 trucks</button></div>
+  <figure class="fig"><svg id="mxs" role="img" aria-label="Scatter plot of the pair chosen in the matrix"></svg></figure>
+  <p class="qcard col" id="mx-msg"></p>
+  <div class="col stack">
+    <p>Three things you can read in the matrix:</p>
+    <ul>
+      <li><strong>Nearly duplicated columns.</strong> Diesel liters and diesel dollars have r = 1.00: they are the same information (the liters times the price). If you put both in a <a href="linear-and-polynomial-regression-en.html" target="_self">linear regression</a>, the model can't tell which one to credit with the effect and its weights become unstable. This is called <strong>multicollinearity</strong>, and the usual fix is to keep just one.</li>
+      <li><strong>Groups that move together.</strong> The km, the liters and the dollars form one block; age and idling, another. <a href="pca-en.html" target="_self">Principal component analysis (PCA)</a> starts from this matrix (or its cousin, the covariance matrix) and looks for its <a href="eigenvectors-and-eigenvalues-en.html" target="_self">eigenvectors</a>: the directions that summarize each block in a single new column.</li>
+      <li><strong>Chance with little data.</strong> With 500 trucks, the chance columns don't go above 0.07 with anything. With only 15, the license plate letter comes out with r = 0.48 with the truck's age. Pure coincidence: with little data, r moves around a lot, and among 36 pairs there is always some surprise.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The full recipe</h2>
+    <ol class="steps">
+      <li><div><strong>Draw the scatter plot</strong> with the cross of the means before computing anything.</div></li>
+      <li><div><strong>The covariance</strong> is the mean of the products of the deviations (dividing by n − 1). Its sign says whether they move together or in opposite directions; its size depends on the units.</div></li>
+      <li><div><strong>The correlation r</strong> is the covariance of the z's: no units, between −1 and 1. r² says what share of the variation goes in a straight line with the other column.</div></li>
+      <li><div><strong>r only sees lines</strong>: a U or a curve can give r ≈ 0 with a very strong relationship.</div></li>
+      <li><div><strong>Watch out for outliers</strong>: a single one can create or destroy r. Also compute Spearman (r of the ranks) and compare.</div></li>
+      <li><div><strong>With little data and many pairs</strong>, be suspicious of the most striking r: it may be chance.</div></li>
+      <li><div><strong>Before talking about causes</strong>, look for confounding variables, missing data and whether the arrow could run backwards. To prove a cause, run an experiment.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where it shows up in fleet telemetry</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 32h28M8 32V8"/><circle cx="14" cy="26" r="2"/><circle cx="19" cy="22" r="2"/><circle cx="24" cy="19" r="2"/><circle cx="29" cy="13" r="2"/></svg><h3>Price per tonne</h3><p>The line for load and consumption (0.485 L/100 km per tonne) says what each extra tonne costs: over 100,000 km a year, 485 liters, about $800 at $1.65/L. It is useful for pricing, as long as the relationship is measured within similar routes.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="7" y="7" width="26" height="26" rx="2"/><path d="M7 16h26M7 25h26M16 7v26M25 7v26"/></svg><h3>Choosing columns for a model</h3><p>Before training, the correlation matrix warns you about duplicated columns (liters and dollars, gross weight and load): drop one or summarize them with PCA so the model stays stable.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 28l8-8 6 5 13-13"/><path d="M27 12h6v6"/></svg><h3>Signals before a breakdown</h3><p>What rises along with engine breakdowns: temperature, idling hours, cold starts? Correlations point to where to look; the maintenance shop and an experiment (changing the oil earlier in half the fleet) tell you whether it's a cause.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6L34 32H6Z"/><path d="M20 16v8M20 28v1"/></svg><h3>Dashboards that mislead</h3><p>"Drivers who took the training use 8% less fuel"… but the ones who went to the training were the highway drivers. Before crediting the savings (and budgeting $12,000 for more courses), compare within each route type.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Connections</p>
+    <h2>With the models of the ML series and the other topics</h2>
+    <p>The correlation is the covariance of the z's from <a href="mean-variance-and-standard-deviation-en.html" target="_self">topic 7</a> and the cosine between arrows from <a href="dot-product-and-cosine-en.html" target="_self">topic 2</a>. The independence of <a href="conditional-probability-and-independence-en.html" target="_self">topic 9</a> implies covariance 0, but not the other way around. In the ML series, the slope of <a href="linear-and-polynomial-regression-en.html" target="_self">linear regression</a> with a single column is r times the ratio of the standard deviations, and its r² is this topic's r squared; <a href="pca-en.html" target="_self">PCA</a> looks for the <a href="eigenvectors-and-eigenvalues-en.html" target="_self">eigenvectors</a> of the covariance matrix; and the <a href="kalman-filter-en.html" target="_self">Kalman filter</a> carries its own covariance matrix to know how the position and speed errors move together. In "Preparing the data", <a href="exploratory-data-analysis-en.html" target="_self">exploratory analysis</a> starts with scatter plots and matrices like these, <a href="outliers-en.html" target="_self">outliers</a> are the ones that create correlations, and <a href="preparing-features-en.html" target="_self">scaling</a> doesn't change r (but it does change the covariance).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>Where it helps and where it misleads</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Where it helps</h3><ul class="pc">
+      <li>A quick, comparable number to find which columns move together among hundreds.</li>
+      <li>The correlation matrix sums up a whole table at a glance and warns you about duplicated columns.</li>
+      <li>It is the basis of linear regression, PCA and many other techniques.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Where it misleads</h3><ul class="pc">
+      <li>It only sees straight-line relationships: a U or a curve goes unnoticed.</li>
+      <li>A single extreme data point can create it or destroy it.</li>
+      <li>It says nothing about causes: a confounding variable, a selection bias or chance give equally pretty correlations.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Scatter plot</dt><dd>A drawing of two columns: each row (each truck) is a point.</dd>
+      <dt>Deviation</dt><dd>How far a value is from the mean of its column, with a sign.</dd>
+      <dt>Covariance</dt><dd>The mean of the products of the deviations of two columns (dividing by n − 1). Positive if they move together, negative if in opposite directions.</dd>
+      <dt>Correlation (Pearson's r)</dt><dd>The covariance without units, between −1 and 1. It measures how much the cloud looks like a straight line.</dd>
+      <dt>r²</dt><dd>r squared: the share of one column's variation that goes in a straight line with the other.</dd>
+      <dt>Spearman</dt><dd>The r of the ranks (1st, 2nd…) instead of the values. It holds up better against outliers and sees any relationship that always goes up or always goes down.</dd>
+      <dt>Confounding variable</dt><dd>A third column that pushes both at once and creates a correlation between them.</dd>
+      <dt>Correlation matrix</dt><dd>A table with the r of each pair of columns. The covariance matrix is the same, but with the covariances.</dd>
+      <dt>Multicollinearity</dt><dd>When several columns in a model say almost the same thing and the model doesn't know which one to give the credit to.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the math behind it</summary>
+    <p style="padding-top:10px">You don't need them to understand the idea:</p>
+    <div class="formula">deviations:    dx = x − mean(x)         dy = y − mean(y)
+covariance:    cov(x, y) = sum(dx · dy) / (n − 1)
+               8 trucks: 130 / 7 = 18.6  (tonnes · L/100 km)
+correlation:   r = cov(x, y) / (sd(x) · sd(y))
+               = 18.6 / (6.19 · 3.25) = 0.92      always between −1 and 1
+               = sum(zx · zy) / (n − 1)            with z = deviation / std. dev.
+               = cosine of the angle between the arrows dx and dy
+line:          slope = r · sd(y) / sd(x) = 0.92 · 3.25 / 6.19
+               = 0.485 L/100 km per tonne
+r² = 0.85:     85% of the variation in consumption goes in line with the load
+Spearman:      r of the ranks;  8 trucks: 0.91</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in one minute</h2>
+    <p>An animated recap: the scatter plot and its cross, the signed rectangles that add up to the covariance, the unit-free r, the U that r can't see and the confounding variable that creates a correlation. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xACbAAEAAQUBAQAAAAAAAAAAAAAAAQYFBwgCBAMBAQEBAQAAAAAAAAAAAAAAAAABAgMQAAICAQMCAwQFBgsECgAHAQABAwIEEhEFBiEHEzEiFEFRkXFhMoFCFTZSI3V0crFTkhYkMzW0swihNCW1skPDwTdEcxd2VKOihJNig4IRAQEBAAICAwEAAAAAAAAAAAARAUEhsTGBAhLB/8AAEQgCHAPAAwEiAAIRAAMRAP/aAAwDAQACEQMRAD8AwiADo5gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkFVAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAf/2Q==" aria-label="Animation: covariance and correlation">
+      <source src="covariance-and-correlation-with-audio-en.mp4" type="video/mp4">
+      Your browser can't play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"toy":{"carga":[[25.0,8.6,22.2,7.3,15.3,7.0,19.2,22.5,13.4,25.1,22.2,11.4,16.7,20.6,22.2,24.5,7.2,20.4,7.1,23.9,9.0,22.8,10.7,25.3,15.4,11.1,10.2,17.3,11.3,18.9,7.4,9.5,23.1,17.2,9.8,7.3,7.0,9.5,12.4,18.3,22.4,21.1,11.5,7.3,14.1,13.6,16.6,12.2,17.9,6.5,9.1,20.9,25.7,21.8,22.5,21.5,14.1,20.3,16.7,13.9,10.0,23.0,5.5,22.0,23.4,13.3,22.3,11.5,15.4,16.1,8.2,11.3,10.1,14.1,18.8,19.0,15.5,14.2,15.2,11.1,7.8,10.6,18.3,5.4,17.9,10.1,8.1,14.8,11.8,6.1,19.6,21.4,5.0,17.8,9.5,13.4,21.4,15.7,4.3,4.4,12.6,23.7,9.1,13.8,7.2,21.8,12.4,11.9,9.7,22.4,13.6,5.1,21.7,9.6,8.0,9.1,16.0,25.2,10.3,14.0],[39.7,26.4,39.4,27.2,35.9,25.6,29.0,37.1,30.5,36.5,37.8,27.4,29.0,31.2,30.7,31.6,24.3,31.7,26.3,32.8,28.1,37.3,28.7,37.7,29.2,30.2,30.2,30.8,25.5,32.7,27.4,32.1,34.2,36.5,22.3,26.4,25.8,27.3,28.4,32.5,39.0,33.7,32.3,26.9,30.8,24.2,32.0,31.2,29.5,25.2,25.9,39.4,33.8,32.5,27.8,30.2,31.0,30.3,24.7,29.7,28.7,35.6,27.1,32.9,42.3,28.7,35.7,25.9,29.6,27.6,28.1,28.1,25.9,25.3,34.3,35.1,33.4,30.3,32.8,31.4,28.7,32.5,32.2,26.8,28.6,34.0,25.7,31.8,31.1,24.6,33.3,36.1,25.9,31.7,27.6,28.5,33.9,32.5,27.0,28.7,30.1,34.2,30.4,31.5,29.9,35.1,31.3,30.7,30.4,32.4,30.3,26.8,39.0,28.4,28.9,27.9,26.4,39.6,30.6,34.0]],"ralenti":[[30.9,15.5,71.3,41.6,49.3,60.2,11.5,22.0,58.9,67.9,32.2,43.2,76.5,53.2,78.9,61.1,53.6,35.3,37.9,38.7,37.5,53.3,9.9,16.8,51.0,44.8,25.8,8.3,14.9,77.4,38.2,17.4,11.4,64.4,15.7,38.9,38.8,45.6,79.5,42.5,10.8,58.4,61.0,68.2,5.5,74.6,57.5,55.7,56.5,47.4,42.2,11.1,42.9,57.3,53.1,28.6,39.4,66.3,53.5,73.0,42.5,43.3,25.4,50.8,8.2,47.0,62.1,60.2,45.9,36.8,19.1,32.4,7.6,64.2,74.7,32.2,12.0,52.5,33.9,78.3,58.0,7.9,47.7,36.6,67.2,51.0,6.7,40.3,72.4,47.0,23.8,8.3,63.5,12.1,47.6,76.2,65.7,5.4,40.4,78.4,30.2,56.3,73.4,36.4,21.8,67.7,74.2,40.6,55.3,65.4,5.9,52.1,31.5,47.4,68.1,21.4,8.6,47.7,76.3,22.2],[3882.0,3853.0,4098.0,4228.0,4246.0,4157.0,3983.0,3759.0,4347.0,4146.0,4047.0,4033.0,4303.0,4087.0,4239.0,4162.0,4048.0,3958.0,4109.0,4111.0,4155.0,4320.0,3767.0,3711.0,4052.0,4261.0,3999.0,3679.0,4183.0,4287.0,3847.0,3855.0,3960.0,4086.0,3945.0,4131.0,4059.0,4281.0,4199.0,4282.0,3862.0,3976.0,3857.0,4058.0,3935.0,4339.0,3655.0,4122.0,3995.0,4193.0,4000.0,3986.0,4327.0,4149.0,4093.0,4154.0,4102.0,4143.0,3894.0,4149.0,3841.0,4104.0,4083.0,4115.0,4189.0,3932.0,4210.0,4150.0,3922.0,4119.0,4092.0,4187.0,3906.0,4250.0,4112.0,4237.0,4197.0,4136.0,4070.0,4072.0,4141.0,3881.0,4127.0,3854.0,4422.0,4136.0,4079.0,4134.0,4157.0,4361.0,4154.0,3728.0,4158.0,3918.0,3984.0,4514.0,4000.0,4135.0,3827.0,4413.0,3952.0,3819.0,4240.0,4118.0,3864.0,4330.0,3971.0,4226.0,4211.0,4420.0,3871.0,4239.0,3950.0,4212.0,4217.0,4103.0,3760.0,4167.0,4268.0,4204.0]],"exper":[[12.9,1.3,28.2,16.9,22.4,4.9,14.3,24.4,29.5,9.7,11.9,25.0,4.8,6.7,25.1,26.6,25.5,1.8,13.7,27.2,20.8,3.5,21.7,7.2,3.3,6.1,27.9,7.9,14.1,20.3,3.3,22.8,4.9,26.5,10.6,21.1,21.0,4.0,5.2,23.7,13.1,13.1,9.8,25.7,5.6,14.7,25.8,7.4,12.4,18.7,14.0,28.3,4.7,6.7,3.4,12.0,2.1,8.5,29.8,5.4,9.9,28.3,15.8,26.6,29.8,14.8,22.7,18.9,1.4,23.6,5.3,6.3,9.7,20.8,2.5,13.3,25.5,21.3,18.1,26.7,10.8,3.4,10.6,8.7,21.5,23.4,15.7,4.3,14.0,26.4,15.1,27.5,29.6,5.3,27.8,4.4,14.9,10.8,27.7,12.2,12.7,28.4,6.4,8.8,15.3,6.4,15.7,5.2,10.4,22.2,14.9,9.4,11.0,8.1,25.6,21.1,3.6,3.2,13.1,11.0],[4.9,11.1,4.48,4.32,4.22,3.7,5.92,2.49,2.14,9.63,5.97,3.49,6.35,8.84,5.33,2.84,1.74,8.31,6.7,0.9,7.04,6.87,5.21,6.41,7.15,9.33,4.08,5.11,6.95,6.6,8.08,6.55,6.59,5.7,7.39,5.41,7.36,9.34,7.52,5.5,5.52,7.39,9.29,6.27,6.82,5.92,5.33,8.56,5.52,5.93,7.05,6.28,8.48,7.61,6.61,4.6,10.03,7.52,2.86,9.52,7.94,3.68,7.25,3.51,4.73,6.89,4.18,4.92,7.53,6.14,7.8,6.2,8.35,5.99,8.54,6.91,3.79,4.19,7.07,2.35,4.57,6.2,8.41,5.67,4.62,3.56,4.47,7.87,6.21,7.28,5.66,4.38,6.81,10.23,4.92,9.59,6.22,8.34,4.4,5.46,9.43,3.85,8.74,6.59,4.3,5.02,0.9,9.0,4.32,4.13,6.26,4.89,6.15,8.1,3.95,6.06,4.08,9.31,7.95,4.83]],"dia":[[20.0,20.0,30.0,5.0,2.0,28.0,16.0,17.0,8.0,15.0,10.0,22.0,9.0,28.0,25.0,6.0,3.0,4.0,12.0,28.0,20.0,28.0,11.0,24.0,3.0,15.0,18.0,11.0,28.0,30.0,29.0,5.0,8.0,30.0,25.0,3.0,18.0,30.0,8.0,26.0,24.0,7.0,14.0,28.0,7.0,25.0,10.0,27.0,15.0,29.0,16.0,28.0,3.0,13.0,24.0,15.0,12.0,10.0,6.0,3.0,24.0,14.0,18.0,7.0,10.0,11.0,23.0,25.0,18.0,1.0,8.0,1.0,4.0,26.0,17.0,19.0,4.0,26.0,15.0,14.0,26.0,23.0,27.0,4.0,9.0,27.0,20.0,22.0,22.0,7.0,1.0,16.0,11.0,4.0,25.0,13.0,2.0,25.0,1.0,21.0,5.0,19.0,21.0,25.0,30.0,24.0,23.0,12.0,12.0,21.0,21.0,29.0,2.0,18.0,10.0,27.0,22.0,28.0,13.0,13.0],[29.5,28.9,25.5,29.3,29.3,29.8,36.5,31.6,31.0,32.1,30.1,35.0,34.9,30.1,34.3,33.8,38.3,35.0,28.6,31.0,33.9,33.4,35.0,31.7,32.6,35.5,33.4,32.0,37.8,31.8,32.4,30.0,32.7,27.9,35.7,26.7,34.1,30.0,32.9,35.6,32.0,33.2,30.5,31.3,34.9,30.2,34.1,32.5,31.0,34.3,29.7,32.8,28.8,31.4,28.9,32.4,34.1,34.4,33.0,32.6,30.9,31.1,29.7,36.9,31.8,31.6,32.3,30.0,35.9,30.9,29.6,36.2,34.8,33.6,30.8,35.4,32.0,32.6,34.7,32.4,30.9,26.8,34.7,26.5,30.0,29.7,30.5,30.8,32.8,30.9,25.0,31.6,28.7,30.6,28.5,31.2,30.9,33.5,32.6,33.9,28.1,34.9,30.4,32.6,33.2,33.4,31.3,28.3,33.6,34.7,34.6,34.5,35.7,34.0,30.9,33.6,29.2,31.7,32.1,34.5]]},"vel":[[79.2,78.4,74.9,30.9,16.2,85.7,59.1,10.2,82.8,88.8,32.9,75.1,16.6,45.1,75.4,42.7,51.4,19.4,75.1,49.8,29.9,72.1,88.3,53.1,69.0,89.4,12.4,57.9,87.4,19.4,27.8,54.0,67.8,54.2,53.8,14.1,69.1,35.7,15.9,86.7,62.8,46.5,68.6,48.2,20.0,58.4,69.8,69.5,54.1,84.3,85.7,80.0,39.7,31.4,52.4,62.3,22.8,54.8,45.1,10.1,43.5,42.0,87.1,14.4,84.3,82.7,58.0,25.0,73.3,22.9,35.7,63.3,44.0,46.9,34.3,13.0,38.9,76.1,76.4,16.5,54.2,38.3,41.9,89.0,74.7,50.6,50.6,83.4,40.0,72.6,68.4,69.0,46.5,64.8,77.0,33.7,71.1,48.6,52.7,47.2,40.0,70.2,41.3,24.5,73.0,42.0,56.3,88.6,61.8,52.0,32.7,66.7,86.8,66.7,71.6,35.5,35.1,38.6,48.3,81.5,47.3,24.1,52.7,30.8,60.9,37.1,86.1,45.0,56.6,56.8,43.1,88.2,13.4,69.5,31.1,14.9,24.4,70.1,82.7,72.0,32.8,49.7,19.5,43.6,30.6,12.5,33.3,84.3,52.5,31.9,19.1,81.8,17.3,13.1,19.0,70.2,84.7,17.7,61.0,62.2],[33.6,33.1,31.4,31.4,35.2,34.3,29.3,40.4,35.4,36.6,33.5,31.6,31.6,26.8,30.4,29.6,30.2,31.1,33.5,27.5,31.3,32.0,36.9,29.1,31.0,35.4,36.4,30.5,37.1,36.8,32.8,30.0,32.6,29.4,27.5,32.7,32.4,30.7,35.8,35.3,30.2,31.3,31.1,27.7,33.0,31.0,29.6,27.8,26.3,33.3,36.3,33.6,28.6,29.2,28.9,29.6,32.0,28.8,28.2,39.1,26.4,29.5,34.7,36.2,34.6,34.8,30.0,32.4,32.9,31.0,31.2,29.6,29.6,30.9,31.6,38.2,26.9,31.3,33.6,33.3,28.9,31.7,30.4,35.5,32.6,29.8,29.1,34.4,29.7,29.7,30.8,29.6,29.5,30.6,31.6,31.1,31.6,29.0,29.9,28.7,29.2,31.1,29.3,33.6,28.8,28.9,26.8,35.8,30.0,29.0,31.6,30.7,32.5,29.0,33.1,31.9,30.2,27.7,31.6,31.4,29.3,32.2,29.2,29.4,29.0,31.0,34.8,27.4,29.1,29.2,29.0,35.3,36.2,30.6,29.3,35.3,32.1,31.1,32.2,30.4,30.9,30.0,34.0,29.3,31.7,37.1,32.4,35.4,28.3,31.2,31.4,34.1,33.8,35.8,34.4,31.1,33.3,33.8,28.6,29.7]],"at":[[[40.0,44.5,56.7,33.2,45.2,36.9,51.2,43.6,31.3,42.6,32.7,25.8,28.1,36.3,24.6,51.8,52.9,24.7,42.9,39.6],[31.2,32.9,29.9,30.6,33.5,32.1,29.7,32.0,35.1,29.6,33.3,33.2,31.7,33.0,30.9,34.5,34.8,30.6,31.7,32.2]],[[18.5,19.8,9.5,23.6,15.7,17.4,18.1,18.7,7.6,7.4,11.4,8.4,19.4,14.5,9.3,13.3,9.5,19.5,13.2,21.3],[31.8,32.5,30.6,34.3,33.4,31.6,33.4,35.0,27.7,26.1,29.0,29.8,34.0,32.2,28.8,31.0,28.5,32.3,31.4,34.9]]],"at0":[[72,52],[27,21]],"conf":[[13.1,13.0,12.4,4.7,2.1,14.3,9.6,1.0,13.7,14.8,5.0,12.4,2.2,7.1,12.4,6.7,8.2,2.6,12.4,8.0,4.5,11.9,14.7,8.5,11.3,14.9,1.4,9.4,14.5,2.6,4.1,8.7,11.1,8.7,8.7,1.7,11.3,5.5,2.0,14.4,10.2,7.4,11.3,7.7,2.7,9.5,11.5,11.4,8.7,14.0,14.2,13.2,6.2,4.7,8.4,10.2,3.2,8.8,7.1,1.0,6.9,6.6,14.5,1.8,14.0,13.7,9.4,3.6,12.1,3.3,5.5,10.3,7.0,7.5,5.2,1.5,6.1,12.6,12.6,2.1,8.7,6.0,6.6,14.8,12.3,8.1,8.1,13.8,6.3,11.9,11.2,11.3,7.4,10.6,12.7,5.1,11.7,7.7,8.5,7.5,6.2,11.5,6.5,3.5,12.0,6.6,9.1,14.8,10.1,8.3,5.0,10.9,14.4,10.9,11.8,5.5,5.4,6.0,7.7,13.5,7.5,3.5,8.5,4.6,9.9,5.7,14.3,7.1,9.2,9.2,6.8,14.7,1.6,11.4,4.7,1.9,3.5,11.5,13.7,11.9,5.0,8.0,2.7,6.9,4.6,1.4,5.1,14.0,8.4,4.8,2.6,13.6,2.3,1.5,2.6,11.5,14.1,2.3,9.9,10.1,8.4,1.1,10.7,7.0,14.0,15.0,9.9,2.6,5.4,9.8,13.2,6.9,6.1,9.5,13.0,3.7,9.3,9.6,7.7,6.0,14.3,12.4,3.2,1.0,4.6,6.9,3.3,5.7,10.5,11.4,12.5,12.4,5.5,8.5,11.3,9.6,9.1,12.4,14.2,13.6,4.8,2.7,5.0,12.2,5.4,11.4,9.3,14.9,2.7,12.6,1.6,10.0,8.5,4.4,4.7,6.4,7.8,3.2,7.2,2.2,8.0,8.6,6.4,7.9,9.0,8.3,3.5,4.1,4.7,15.0,8.0,10.9,3.8,8.3,7.1,3.8,4.1,4.4,11.3,11.4],[1,1,1,0,0,1,1,0,1,1,0,1,0,1,1,0,1,0,1,0,0,1,1,1,1,1,0,0,1,0,0,1,1,1,1,0,1,1,0,1,1,1,1,0,0,1,1,1,1,1,0,1,0,0,1,1,0,1,0,0,0,1,1,0,1,1,1,0,1,0,1,0,0,0,1,0,0,1,1,0,1,0,0,1,0,0,1,1,0,1,1,1,1,0,1,0,1,0,1,1,1,1,0,1,0,0,0,1,1,1,1,1,1,1,0,0,1,0,0,1,1,0,1,0,1,0,1,0,0,1,1,1,0,0,1,0,0,1,1,1,0,1,0,1,0,0,0,1,0,0,0,1,0,0,0,1,1,0,1,1,0,0,1,1,1,1,1,1,0,1,1,0,0,1,1,0,1,0,1,0,1,1,0,0,0,1,0,0,0,1,1,1,0,1,1,1,1,0,1,1,0,0,0,1,0,1,0,1,0,1,0,1,0,1,0,0,0,0,0,0,0,1,0,1,1,1,0,0,0,1,0,1,0,1,1,0,0,0,1,1],[36.4,36.6,37.9,27.9,30.2,35.7,36.0,28.0,44.7,39.8,32.4,39.0,29.6,37.6,38.0,30.8,38.6,32.8,32.2,29.0,31.2,36.9,37.2,40.2,37.8,40.7,29.9,30.4,35.6,26.4,29.2,37.6,36.9,35.1,38.7,30.1,37.5,36.1,33.0,40.2,38.1,37.3,38.0,33.1,35.1,37.5,36.7,34.2,42.5,35.5,31.6,38.4,32.4,28.5,34.6,37.8,30.7,39.6,27.0,29.2,29.5,35.1,37.2,31.4,37.4,34.9,38.1,31.6,38.5,31.4,34.5,30.8,31.1,29.3,37.4,28.6,32.2,37.0,35.8,30.3,37.7,31.2,28.5,36.3,30.7,34.0,38.3,35.1,30.3,36.1,34.2,36.3,36.5,30.8,39.9,32.1,39.0,29.2,37.8,37.4,40.0,36.3,29.0,40.2,31.0,29.2,30.3,37.8,37.8,39.0,38.2,37.2,36.6,34.4,29.2,32.1,37.9,28.8,29.6,36.0,38.0,33.6,40.8,32.2,38.9,29.6,35.3,30.0,29.2,39.0,37.8,36.5,30.8,35.3,35.9,32.1,31.1,37.3,36.2,37.6,30.4,38.9,31.3,38.1,28.8,30.6,29.2,35.6,31.6,28.8,27.9,37.7,26.5,29.9,30.8,36.8,37.9,33.9,40.1,39.2,31.1,29.1,37.3,37.0,37.6,37.7,36.1,40.4,28.1,38.2,39.4,30.0,28.8,37.6,41.0,31.1,37.0,31.1,37.1,26.6,37.9,39.4,32.1,29.9,27.5,39.7,29.7,31.3,32.0,38.1,37.4,36.4,29.2,37.6,36.7,38.1,34.0,28.2,37.4,36.2,29.0,27.9,31.2,40.4,28.2,39.5,27.4,37.7,26.4,38.3,30.0,37.7,32.2,38.5,29.9,28.5,30.0,28.7,29.2,32.6,31.5,38.0,31.1,34.8,37.6,34.4,28.7,30.6,30.6,38.7,30.2,37.5,29.9,39.9,39.8,27.3,30.1,32.2,36.9,37.8]],"mat":[[10648.0,6888.0,9622.0,10881.0,9131.0,8387.0,10099.0,9731.0,7737.0,8580.0,9971.0,4509.0,9175.0,9888.0,7190.0,8057.0,5830.0,9202.0,11770.0,6390.0,7703.0,11133.0,8411.0,7372.0,9346.0,4247.0,5230.0,10971.0,5266.0,4236.0,11411.0,10022.0,11819.0,10078.0,11382.0,6755.0,10037.0,5315.0,10591.0,9858.0,5531.0,5472.0,5350.0,10551.0,9315.0,6247.0,9235.0,9488.0,9511.0,11968.0,10760.0,7440.0,4377.0,5829.0,4598.0,10276.0,10347.0,5714.0,11588.0,6585.0,7727.0,8648.0,11984.0,11175.0,5155.0,11148.0,5626.0,10424.0,9372.0,5213.0,4429.0,11435.0,4039.0,5181.0,11796.0,9576.0,8513.0,7629.0,8578.0,7702.0,4529.0,5844.0,6511.0,7970.0,7148.0,9773.0,10426.0,10148.0,7687.0,7139.0,4186.0,6828.0,10296.0,6795.0,6287.0,5304.0,9065.0,8006.0,4369.0,5935.0,4614.0,5228.0,6061.0,4602.0,11913.0,9070.0,4943.0,8205.0,7174.0,5550.0,7304.0,8533.0,4794.0,11638.0,7970.0,4618.0,9484.0,11584.0,4130.0,9454.0,10710.0,7565.0,4607.0,10060.0,6665.0,6423.0,10160.0,4039.0,5971.0,11254.0,5271.0,4580.0,4747.0,8157.0,6993.0,8104.0,11319.0,5928.0,10149.0,8646.0,9013.0,4222.0,4382.0,5213.0,7536.0,6926.0,6389.0,10926.0,8534.0,6696.0,8870.0,10961.0,5552.0,7198.0,5696.0,8098.0,5052.0,6720.0,11965.0,11356.0,4105.0,6783.0,10505.0,10704.0,6513.0,9271.0,10105.0,7229.0,4916.0,10283.0,9878.0,8494.0,10241.0,11921.0,5766.0,4051.0,8998.0,5520.0,10940.0,10081.0,7767.0,10277.0,11559.0,9788.0,6151.0,7674.0,4649.0,9028.0,6640.0,5105.0,5882.0,6511.0,10484.0,4155.0,5336.0,6116.0,10636.0,4877.0,11879.0,10268.0,7327.0,8993.0,9447.0,10283.0,5954.0,11032.0,9736.0,4791.0,4112.0,9137.0,10543.0,9351.0,10461.0,4022.0,11408.0,6945.0,7294.0,10301.0,8544.0,7519.0,4728.0,11295.0,8682.0,4188.0,8216.0,9372.0,7732.0,8848.0,5475.0,11989.0,7914.0,4390.0,6011.0,10785.0,9903.0,8465.0,6035.0,9831.0,10557.0,4906.0,4575.0,10062.0,9118.0,10007.0,5485.0,11212.0,7598.0,10174.0,5770.0,6993.0,6921.0,7299.0,10954.0,8476.0,10387.0,9022.0,10181.0,7892.0,4227.0,8124.0,4973.0,4130.0,10775.0,8453.0,8464.0,8546.0,7597.0,5987.0,7698.0,8099.0,9670.0,7331.0,6044.0,9086.0,9579.0,5462.0,11319.0,10288.0,6286.0,10903.0,9719.0,5958.0,5655.0,11813.0,10916.0,4626.0,5226.0,11568.0,9348.0,8920.0,4483.0,9774.0,8300.0,9448.0,10075.0,9212.0,9237.0,11420.0,9847.0,7619.0,10781.0,9821.0,8783.0,6879.0,6907.0,11513.0,9298.0,9159.0,7866.0,9842.0,11785.0,5428.0,8205.0,9253.0,5856.0,6804.0,5336.0,4901.0,8201.0,7181.0,10294.0,9407.0,10346.0,7178.0,11978.0,9012.0,6620.0,11048.0,9500.0,11492.0,6422.0,11345.0,7137.0,4700.0,4199.0,7737.0,8875.0,6054.0,5067.0,5540.0,5476.0,4396.0,5185.0,5058.0,7242.0,8632.0,8900.0,6833.0,6672.0,6098.0,10672.0,10599.0,7656.0,8563.0,6439.0,8839.0,11178.0,11433.0,8806.0,6367.0,10256.0,5871.0,5958.0,6944.0,8374.0,8197.0,8120.0,8553.0,4119.0,11057.0,11742.0,4028.0,5691.0,7676.0,10620.0,5212.0,8259.0,7862.0,10081.0,8100.0,6809.0,7063.0,9911.0,7303.0,11271.0,9084.0,6445.0,7937.0,4655.0,10605.0,10646.0,6570.0,6554.0,6843.0,7432.0,10101.0,8911.0,10979.0,8240.0,10196.0,10068.0,5662.0,5075.0,5960.0,7446.0,4212.0,5116.0,9027.0,7138.0,8092.0,8423.0,7871.0,5026.0,11455.0,11419.0,5873.0,7494.0,8463.0,9680.0,8640.0,10288.0,9636.0,5478.0,6231.0,7961.0,6666.0,7146.0,6665.0,11529.0,6220.0,8557.0,7145.0,5548.0,8910.0,4590.0,10091.0,6713.0,9483.0,4699.0,6508.0,10685.0,5413.0,9989.0,7412.0,9974.0,5486.0,11148.0,7066.0,5305.0,11209.0,9129.0,7406.0,11698.0,5040.0,7844.0,9327.0,9059.0,11630.0,5316.0,9587.0,5078.0,5954.0,10896.0,5851.0,5301.0,4021.0,7943.0,10540.0,5709.0,4165.0,6359.0,5578.0,4302.0,4239.0,7824.0,7148.0,5618.0,9617.0,10652.0,8658.0,4601.0,11146.0,9970.0,6920.0,9656.0,6025.0,5291.0,11255.0,10993.0,6600.0,10054.0,4715.0,6595.0,10053.0,5654.0,4287.0,9151.0,10973.0,9241.0,11980.0],[3635.0,2228.0,3495.0,3499.0,3090.0,2835.0,3777.0,3356.0,2930.0,2751.0,3504.0,1581.0,2881.0,3656.0,2017.0,2906.0,2327.0,3120.0,3992.0,1986.0,2840.0,4373.0,2400.0,2395.0,3339.0,1443.0,2132.0,3571.0,1991.0,1621.0,4163.0,3784.0,4432.0,4185.0,3769.0,2333.0,3797.0,1950.0,3296.0,3069.0,1967.0,1924.0,1820.0,3710.0,3506.0,2277.0,3188.0,3761.0,3342.0,4558.0,3762.0,2178.0,1605.0,2056.0,1662.0,3706.0,2986.0,2262.0,4749.0,1929.0,2778.0,3158.0,4686.0,3627.0,1705.0,3674.0,1921.0,4115.0,2732.0,1867.0,1537.0,4202.0,1478.0,2297.0,4466.0,3311.0,2430.0,2226.0,2526.0,2439.0,1659.0,2309.0,2348.0,3233.0,2575.0,3608.0,4030.0,3807.0,2516.0,2629.0,1284.0,2174.0,3471.0,2767.0,2109.0,1859.0,3086.0,2990.0,1466.0,2025.0,1696.0,1587.0,2181.0,1892.0,3841.0,3324.0,2000.0,2741.0,2380.0,1544.0,2529.0,3266.0,1751.0,4248.0,2380.0,1747.0,3248.0,3885.0,1574.0,3776.0,3200.0,2141.0,1806.0,3143.0,2173.0,2021.0,3858.0,1546.0,2350.0,3914.0,1862.0,1556.0,1681.0,3060.0,2526.0,3035.0,3848.0,2139.0,3016.0,3074.0,2946.0,1405.0,1663.0,1868.0,2792.0,2586.0,2686.0,3439.0,3065.0,2473.0,3068.0,3736.0,1901.0,2811.0,1993.0,2788.0,1865.0,2653.0,3808.0,4270.0,1782.0,2613.0,4044.0,3247.0,2283.0,2886.0,3870.0,2304.0,1608.0,2715.0,3219.0,3472.0,3507.0,4475.0,1674.0,1280.0,3628.0,1954.0,3632.0,3540.0,2814.0,3468.0,4111.0,3680.0,2437.0,3054.0,1750.0,2914.0,2520.0,1907.0,1947.0,2591.0,3673.0,1684.0,1773.0,2633.0,3812.0,1873.0,3753.0,3151.0,2543.0,2996.0,4063.0,3382.0,2348.0,3827.0,3743.0,1629.0,1326.0,2292.0,4016.0,3317.0,2826.0,1336.0,3557.0,2285.0,2608.0,4049.0,3460.0,2518.0,1880.0,3867.0,2605.0,1257.0,3146.0,4008.0,2544.0,2854.0,2022.0,3940.0,2835.0,1658.0,2101.0,3475.0,3411.0,3002.0,1672.0,3780.0,3619.0,1731.0,1605.0,3263.0,3596.0,3366.0,2102.0,3558.0,2893.0,4077.0,2144.0,2267.0,2246.0,2696.0,3979.0,3023.0,3565.0,3051.0,3001.0,2328.0,1344.0,2763.0,1783.0,1449.0,3449.0,2774.0,2617.0,3043.0,2846.0,2445.0,2275.0,2340.0,3667.0,2326.0,2259.0,3107.0,3846.0,2453.0,3402.0,3324.0,1997.0,3427.0,3035.0,2136.0,1829.0,3463.0,2975.0,1759.0,1973.0,3774.0,3036.0,3070.0,1553.0,2890.0,2622.0,3554.0,3346.0,2470.0,3448.0,3641.0,3734.0,2696.0,3508.0,3551.0,3387.0,2344.0,2435.0,3085.0,2743.0,3430.0,2581.0,3159.0,4413.0,2105.0,2924.0,3418.0,1772.0,2033.0,1791.0,1734.0,2333.0,2887.0,3493.0,3156.0,3389.0,2241.0,4503.0,3419.0,2382.0,3474.0,3296.0,4343.0,2582.0,4340.0,2372.0,1548.0,1508.0,2345.0,3182.0,2457.0,1698.0,2034.0,1744.0,1638.0,1837.0,1626.0,2680.0,3036.0,3149.0,2591.0,2906.0,1960.0,3603.0,3692.0,2410.0,2865.0,2352.0,2339.0,3366.0,3936.0,3077.0,2550.0,3953.0,2176.0,2076.0,2761.0,2562.0,2687.0,2588.0,3226.0,1475.0,3129.0,3219.0,1421.0,1958.0,2723.0,3588.0,1703.0,3207.0,2655.0,3384.0,2510.0,2744.0,2696.0,2929.0,2325.0,4422.0,3106.0,2154.0,3113.0,1499.0,3703.0,3624.0,2664.0,2198.0,2552.0,2934.0,3918.0,2514.0,3862.0,2793.0,3518.0,3688.0,1943.0,2114.0,1910.0,2896.0,1801.0,1903.0,2819.0,2268.0,3245.0,2815.0,3144.0,1683.0,4166.0,4331.0,1873.0,2392.0,3356.0,3851.0,3305.0,3581.0,2772.0,2207.0,2033.0,2831.0,2239.0,2670.0,2599.0,3332.0,2177.0,3158.0,2365.0,1845.0,3293.0,1436.0,3363.0,2471.0,3334.0,1686.0,2007.0,3805.0,1745.0,3221.0,2893.0,3068.0,2018.0,4048.0,2416.0,1924.0,3445.0,3216.0,2915.0,4318.0,1990.0,2835.0,3413.0,2895.0,4044.0,2296.0,3534.0,1929.0,2054.0,3863.0,2254.0,1660.0,1241.0,2716.0,3994.0,1624.0,1470.0,2090.0,2026.0,1404.0,1653.0,2655.0,2238.0,1687.0,3026.0,3349.0,3070.0,1736.0,3922.0,2553.0,2778.0,3062.0,2281.0,1913.0,2745.0,2844.0,2201.0,3413.0,1414.0,2190.0,3599.0,1748.0,1526.0,3192.0,3405.0,3492.0,3855.0],[6045.0,3716.0,5748.0,5833.0,5058.0,4833.0,5970.0,5523.0,4874.0,4616.0,5959.0,2609.0,4698.0,6051.0,3302.0,4807.0,3802.0,4985.0,6736.0,3215.0,4749.0,7343.0,3943.0,4038.0,5388.0,2351.0,3526.0,6003.0,3239.0,2627.0,6924.0,6321.0,7155.0,7033.0,6419.0,3903.0,6376.0,3302.0,5366.0,5122.0,3208.0,3192.0,3010.0,6085.0,5652.0,3686.0,5092.0,6087.0,5438.0,7657.0,6267.0,3622.0,2602.0,3338.0,2727.0,6217.0,4779.0,3662.0,7883.0,3164.0,4664.0,5249.0,7628.0,5916.0,2779.0,6020.0,3225.0,6752.0,4471.0,3139.0,2548.0,7155.0,2462.0,3755.0,7499.0,5440.0,4046.0,3703.0,4283.0,4133.0,2746.0,3837.0,3825.0,5271.0,4273.0,5991.0,6523.0,6325.0,4121.0,4413.0,2074.0,3645.0,5728.0,4490.0,3485.0,3042.0,4961.0,4803.0,2459.0,3332.0,2841.0,2693.0,3578.0,3098.0,6154.0,5507.0,3240.0,4405.0,3916.0,2587.0,4192.0,5224.0,2999.0,7158.0,3957.0,2947.0,5333.0,6466.0,2642.0,6243.0,5418.0,3497.0,2999.0,5208.0,3506.0,3276.0,6222.0,2620.0,3894.0,6296.0,3045.0,2521.0,2845.0,4919.0,4270.0,4962.0,6399.0,3488.0,4783.0,5170.0,4920.0,2338.0,2772.0,3147.0,4516.0,4221.0,4462.0,5563.0,4994.0,3990.0,5143.0,6061.0,3187.0,4680.0,3311.0,4564.0,3116.0,4259.0,6373.0,6829.0,2982.0,4306.0,6636.0,5415.0,3789.0,4744.0,6394.0,3662.0,2684.0,4417.0,5377.0,5707.0,5881.0,7276.0,2720.0,2125.0,5959.0,3169.0,6026.0,5719.0,4562.0,5726.0,6754.0,6044.0,4027.0,4934.0,2891.0,4793.0,4151.0,3123.0,3101.0,4343.0,5847.0,2747.0,2928.0,4466.0,6127.0,3101.0,6190.0,5216.0,4118.0,5002.0,6602.0,5515.0,3844.0,6347.0,6071.0,2682.0,2179.0,3748.0,6440.0,5456.0,4682.0,2203.0,5970.0,3755.0,4374.0,6699.0,5724.0,4241.0,3096.0,6292.0,4360.0,2086.0,5091.0,6510.0,4220.0,4770.0,3311.0,6582.0,4633.0,2791.0,3325.0,5804.0,5694.0,4962.0,2695.0,6216.0,5811.0,2901.0,2561.0,5386.0,5832.0,5335.0,3465.0,6053.0,4876.0,6644.0,3537.0,3762.0,3792.0,4450.0,6747.0,4979.0,5922.0,5037.0,4944.0,3859.0,2215.0,4741.0,2850.0,2472.0,5802.0,4617.0,4430.0,5151.0,4646.0,3944.0,3945.0,3939.0,6125.0,4037.0,3725.0,5093.0,6495.0,4080.0,5613.0,5436.0,3318.0,5557.0,5152.0,3462.0,2988.0,5695.0,4811.0,3004.0,3219.0,6333.0,4917.0,5341.0,2597.0,4869.0,4336.0,5947.0,5453.0,4074.0,5762.0,5875.0,6102.0,4582.0,5913.0,5885.0,5715.0,3894.0,4139.0,5066.0,4430.0,5624.0,4415.0,5104.0,7280.0,3495.0,4750.0,5695.0,2906.0,3395.0,2947.0,2922.0,3813.0,4599.0,6012.0,5363.0,5593.0,3700.0,7338.0,5852.0,3866.0,5841.0,5516.0,7094.0,4399.0,7014.0,3964.0,2555.0,2509.0,3740.0,5232.0,4106.0,2732.0,3382.0,2942.0,2754.0,2964.0,2741.0,4331.0,5084.0,5014.0,4226.0,4644.0,3337.0,6026.0,5938.0,3892.0,4790.0,3903.0,3830.0,5548.0,6528.0,5029.0,4059.0,6394.0,3615.0,3461.0,4633.0,4293.0,4425.0,4249.0,5467.0,2380.0,5097.0,5450.0,2379.0,3177.0,4338.0,5748.0,2834.0,5227.0,4424.0,5393.0,4197.0,4464.0,4459.0,5009.0,3866.0,7418.0,5014.0,3495.0,4993.0,2520.0,6002.0,6016.0,4533.0,3550.0,4206.0,4700.0,6523.0,4133.0,6482.0,4638.0,5923.0,5905.0,3137.0,3540.0,3173.0,4750.0,2924.0,3106.0,4553.0,3767.0,5249.0,4634.0,5039.0,2842.0,6879.0,7087.0,3050.0,3833.0,5562.0,6431.0,5604.0,5891.0,4454.0,3576.0,3362.0,4593.0,3578.0,4507.0,4225.0,5445.0,3721.0,5102.0,3938.0,3088.0,5429.0,2349.0,5498.0,4083.0,5413.0,2843.0,3418.0,6002.0,2913.0,5302.0,4780.0,5094.0,3318.0,6711.0,3914.0,3222.0,5789.0,5357.0,4915.0,7048.0,3332.0,4783.0,5572.0,4796.0,6620.0,3750.0,6032.0,3188.0,3352.0,6374.0,3737.0,2891.0,2098.0,4447.0,6635.0,2691.0,2412.0,3446.0,3334.0,2339.0,2790.0,4300.0,3653.0,2765.0,5075.0,5429.0,4995.0,2903.0,6355.0,4067.0,4663.0,5010.0,3802.0,3110.0,4403.0,4556.0,3780.0,5855.0,2398.0,3745.0,5913.0,2900.0,2418.0,5248.0,5696.0,5748.0,6638.0],[8.8,11.1,18.2,12.4,20.4,11.2,21.4,10.7,14.7,13.8,21.2,18.3,12.2,18.9,6.9,17.9,22.3,19.4,19.0,8.0,10.8,23.3,8.1,10.6,19.0,13.6,23.2,19.4,20.4,12.9,22.7,21.0,20.3,23.2,21.9,12.9,21.1,16.0,7.3,9.2,19.7,17.9,6.1,13.1,22.1,19.0,12.4,22.3,15.0,22.4,15.4,7.1,12.7,19.4,12.7,19.3,10.0,21.9,16.3,11.2,18.1,23.8,16.9,6.8,6.6,13.5,6.2,23.3,11.5,19.4,9.2,14.7,16.4,22.9,18.4,13.9,6.1,7.8,11.6,8.0,23.1,15.7,9.2,22.7,18.6,15.4,20.7,19.9,13.1,16.4,9.6,16.1,11.7,22.9,13.9,9.4,18.5,21.5,10.5,6.5,15.1,7.7,19.6,21.6,11.0,23.4,19.3,10.9,11.8,8.5,10.6,23.3,13.8,19.4,7.9,20.1,7.6,11.6,19.2,22.6,11.5,8.2,23.0,9.0,6.1,9.4,17.7,12.6,21.7,20.2,16.4,12.2,18.8,22.1,14.2,22.1,19.1,20.8,10.2,15.7,14.9,10.9,22.2,17.7,20.4,15.3,18.2,15.1,22.4,18.3,14.6,19.8,20.2,21.6,17.5,17.8,21.4,22.0,12.3,21.8,21.6,21.2,22.5,15.2,19.1,9.3,17.0,8.4,11.0,8.1,12.2,21.4,13.6,22.1,12.8,6.6,21.5,16.1,10.8,12.4,17.6,19.7,14.1,13.9,23.9,23.1,18.7,7.6,20.2,17.3,7.3,17.5,21.0,21.5,15.1,22.6,21.3,14.8,14.1,13.4,23.4,19.4,23.2,13.8,22.2,12.0,19.8,19.9,11.3,6.8,21.3,13.1,7.0,12.9,8.3,7.0,18.5,22.3,19.5,11.3,21.8,17.5,11.8,8.9,22.3,21.9,10.7,11.9,21.0,6.2,18.6,18.0,14.2,18.0,13.1,21.3,8.1,22.8,18.7,11.2,8.3,12.3,22.7,6.3,15.6,15.2,22.4,21.9,19.9,11.9,10.7,12.5,23.2,22.6,12.3,23.9,11.0,11.9,6.5,16.5,16.9,8.6,9.6,6.8,7.1,17.7,16.6,21.1,6.0,7.0,21.8,10.9,17.2,13.3,21.4,23.5,7.8,8.4,17.9,12.0,11.6,11.0,12.4,8.9,8.6,13.8,22.2,8.0,17.2,18.8,20.2,10.8,9.2,20.0,11.1,6.5,20.5,14.2,21.8,8.4,11.7,22.9,17.8,11.0,21.4,7.3,12.6,18.7,12.2,12.2,19.5,23.7,18.5,15.6,11.0,8.0,15.6,11.2,9.8,17.9,8.0,7.9,17.8,7.2,23.9,12.1,13.5,8.1,19.6,19.9,14.2,21.1,23.7,12.8,17.6,6.1,23.2,21.5,10.8,13.3,8.9,19.7,14.1,11.6,20.5,11.0,12.3,16.1,23.4,7.8,12.7,20.6,7.5,9.1,23.2,6.3,8.9,18.8,16.6,22.2,15.1,20.6,14.2,13.4,10.8,15.0,10.5,21.7,21.1,10.6,6.2,16.8,19.1,9.4,19.3,12.0,21.5,21.6,7.0,6.1,16.9,22.5,7.8,9.7,20.0,11.9,8.6,16.1,8.8,13.4,19.2,14.8,19.4,22.1,16.3,23.1,7.0,6.8,18.1,19.8,9.0,11.8,18.0,12.9,22.3,19.2,18.0,11.8,15.8,16.5,9.6,17.7,9.2,21.0,16.9,10.5,6.6,18.4,18.9,19.7,7.5,8.4,20.5,13.0,18.1,8.8,21.1,20.9,6.8,20.2,14.9,17.3,8.2,10.8,15.9,15.8,14.1,11.1,18.9,8.8,22.2,11.7,14.8,15.1,14.2,19.1,18.9,10.4,17.0,10.5,9.1,23.5,20.8,16.9,10.5,21.7,14.9,12.8,20.9,20.7,20.6,19.4,20.4,8.3,11.7,9.7,20.0,23.6,8.5,13.6,10.1,18.3,8.7,23.5,15.9,9.2,6.5,8.4,9.2,18.1,14.4,16.2,7.9,21.6,11.9,16.6,15.4,9.5,8.3,7.5,11.5,7.4,13.6,11.4,14.0,14.4,10.2,10.7,17.4,17.5],[35.6,2.0,28.7,42.5,40.9,66.5,13.4,29.4,36.4,62.0,34.3,32.0,41.8,44.6,14.4,61.2,29.9,34.9,19.9,41.1,20.2,34.9,21.1,44.5,59.1,7.7,54.2,38.6,42.4,46.1,43.7,37.7,44.4,66.3,26.4,21.5,50.8,21.9,35.0,32.1,42.6,28.6,34.0,38.6,37.4,29.4,47.6,82.2,45.2,18.4,57.4,19.0,14.0,57.4,47.7,30.1,28.0,39.3,59.0,23.6,45.8,40.0,54.3,60.9,46.1,42.2,47.8,2.0,24.7,46.9,50.1,55.4,35.7,51.6,53.8,51.8,4.5,37.3,20.9,59.9,23.7,46.3,51.8,33.5,27.3,39.0,35.2,60.0,45.7,28.5,24.9,6.4,56.5,32.9,33.0,69.3,32.0,31.3,52.8,43.5,32.8,27.1,19.3,49.5,17.8,16.6,60.6,33.2,42.6,30.6,17.1,25.5,27.8,59.5,21.9,11.0,34.0,15.5,23.6,52.1,48.8,35.0,62.3,26.7,48.2,40.0,35.8,41.0,35.2,35.6,30.6,25.2,46.5,5.2,29.0,27.8,52.9,10.4,23.8,2.0,34.7,38.8,27.5,37.2,5.6,56.9,55.5,23.8,12.3,25.8,32.8,52.6,37.7,28.1,54.1,55.6,44.2,34.1,13.9,35.8,76.2,30.5,28.9,34.4,36.0,14.4,80.3,29.8,15.7,37.9,30.2,54.8,48.7,33.8,17.1,41.4,46.6,27.8,40.4,41.8,31.9,17.0,46.7,37.2,24.5,51.9,44.0,18.9,68.4,64.8,33.8,69.0,14.0,59.0,24.0,52.6,31.5,60.2,12.3,48.3,46.6,26.4,45.6,40.6,54.3,64.2,49.5,16.8,47.0,14.6,25.3,34.9,40.0,33.9,51.4,62.8,32.9,36.1,43.3,17.4,29.4,22.5,2.0,28.2,13.8,57.0,22.8,44.6,5.3,57.3,15.8,60.1,28.4,9.6,40.9,27.7,22.4,39.7,43.1,45.0,56.1,25.7,34.6,49.8,65.4,22.5,27.5,52.5,57.6,25.8,76.9,39.2,25.4,27.0,50.6,34.4,38.6,21.5,47.9,43.2,29.5,49.6,36.8,23.9,54.9,49.9,50.5,51.9,25.2,56.1,16.3,16.6,29.4,31.6,46.7,63.9,26.4,51.1,10.8,45.2,32.7,75.9,36.9,4.0,32.9,38.7,26.3,44.4,53.4,33.4,40.8,44.4,43.7,47.7,14.6,29.3,37.0,31.7,35.9,48.5,59.8,31.0,41.6,43.4,39.8,22.3,27.7,35.9,14.8,38.5,26.9,24.8,9.9,32.8,33.6,50.2,38.3,54.3,57.8,25.7,39.1,32.9,36.8,26.0,27.1,58.7,58.3,50.2,43.3,42.8,60.6,53.8,37.3,43.2,53.9,28.5,4.3,34.3,37.8,48.5,17.8,57.3,33.5,47.1,37.2,38.7,49.5,48.0,62.8,49.3,43.8,51.5,41.2,68.4,37.1,38.8,12.9,42.7,36.3,28.4,32.4,10.1,41.6,76.9,27.1,11.9,20.8,56.0,48.0,42.8,59.7,50.3,17.8,63.7,17.2,51.0,38.6,5.4,25.7,35.9,50.7,39.6,31.6,42.2,55.8,37.5,35.6,65.5,53.8,38.0,18.2,55.9,7.0,34.5,34.6,22.9,3.3,76.2,9.7,25.6,45.0,32.0,22.5,29.9,33.3,51.7,32.4,26.1,38.4,67.5,19.0,27.1,40.3,49.3,42.7,43.4,38.1,36.4,38.1,39.0,59.1,10.9,25.1,28.4,30.1,52.8,27.3,24.4,52.4,35.1,56.0,38.9,16.4,55.7,22.5,30.1,24.7,40.5,36.6,28.6,18.3,22.9,41.5,48.2,11.0,49.2,17.6,37.0,34.7,2.0,29.8,35.3,36.0,40.4,55.3,24.8,21.0,45.2,91.0,15.3,38.0,41.1,33.2,55.7,26.2,44.6,10.5,50.5,17.8,31.8,18.1,33.4,31.2,28.1,23.8,27.4,40.1,43.0,41.8,43.1,47.8,45.5,10.9,41.1,41.3,43.1,30.7,2.0,32.4,56.0,49.6,30.2,32.0,68.6,40.5,31.5,71.8,48.7,33.9,34.1],[7.9,3.2,10.6,14.7,1.3,11.7,8.0,7.4,12.3,11.7,2.9,8.2,6.5,5.7,1.6,14.3,2.2,3.4,9.4,10.6,13.1,5.7,5.2,4.7,10.7,3.8,7.9,11.2,5.4,11.4,12.9,9.7,13.9,13.8,2.7,6.3,10.8,3.7,4.4,9.9,8.7,9.1,10.9,7.0,3.5,3.6,13.2,14.6,12.2,13.1,14.1,2.7,5.4,11.7,8.3,6.8,6.5,9.0,12.5,6.7,4.8,7.9,13.5,10.4,13.3,6.7,12.4,6.8,3.1,12.1,14.7,9.8,10.0,12.0,13.8,12.4,2.4,10.7,3.4,10.0,4.0,9.1,13.6,14.1,9.9,7.8,3.6,10.3,13.7,11.3,3.2,1.8,10.0,8.3,6.9,13.2,4.0,12.7,13.3,15.0,13.3,8.5,8.1,11.5,4.5,1.5,13.8,7.9,13.7,5.0,2.5,2.9,5.4,14.1,3.5,1.3,9.2,10.2,3.2,11.1,3.4,5.5,13.2,13.5,6.3,7.4,1.4,12.8,5.3,6.7,7.7,3.5,4.7,1.9,6.5,1.6,8.1,2.1,9.4,2.4,5.8,10.2,4.3,9.0,3.5,11.7,11.9,9.5,1.0,8.5,10.7,5.8,3.6,10.0,5.4,14.2,10.6,11.2,1.7,8.5,10.6,10.8,8.3,2.2,6.7,2.0,13.2,6.0,1.6,9.5,1.9,12.5,8.1,4.9,1.1,2.3,13.1,6.6,5.4,3.6,7.9,1.3,13.2,11.9,4.1,10.5,7.5,12.5,14.2,13.1,12.2,14.6,4.4,10.0,4.7,12.1,4.0,14.9,3.4,4.5,7.9,1.8,4.8,9.5,4.5,12.4,2.3,2.3,10.8,7.2,1.1,10.7,13.4,1.5,14.8,13.6,11.9,11.6,9.3,11.1,10.5,1.9,2.4,2.3,3.5,13.5,5.9,4.1,3.6,11.4,7.0,11.6,4.9,6.4,7.0,7.2,2.8,9.9,6.7,14.2,13.8,8.7,10.2,11.5,14.3,1.4,5.2,12.7,14.4,7.8,10.0,11.2,9.4,3.5,11.7,6.9,11.9,1.1,10.0,14.2,9.2,12.8,7.0,8.1,3.0,8.4,4.9,8.7,10.2,5.2,7.0,3.6,2.7,8.6,8.2,14.9,3.3,4.7,3.8,8.4,1.5,14.6,2.6,1.1,2.3,10.1,1.7,7.9,8.3,8.1,6.4,4.9,5.6,7.3,5.4,1.4,1.4,7.1,4.4,14.6,14.0,2.9,14.1,7.4,6.1,7.7,4.5,8.7,4.2,2.5,6.8,1.6,6.7,6.6,13.4,11.7,9.9,10.6,8.3,12.2,8.3,6.9,10.8,7.3,3.9,14.7,14.1,8.0,10.7,4.7,14.6,9.5,2.2,6.8,10.1,7.1,3.5,12.9,5.3,12.5,1.4,9.5,1.8,3.1,13.5,10.8,10.7,7.4,11.2,10.9,2.0,6.9,8.1,13.8,4.9,5.3,2.0,14.1,10.8,1.7,11.4,4.9,10.4,11.7,2.5,1.6,2.2,13.3,6.7,8.0,8.2,9.1,4.1,13.3,1.7,7.4,7.0,4.1,12.9,8.0,12.8,2.5,1.8,1.7,11.8,7.2,12.4,12.7,9.3,2.5,3.1,10.2,4.1,3.4,6.4,1.2,8.4,14.7,1.5,7.2,13.9,9.2,11.8,1.1,7.6,13.7,14.6,1.1,8.5,14.0,3.5,14.5,9.0,11.4,4.1,6.6,13.0,7.1,14.4,5.6,2.8,1.8,10.4,11.8,6.7,12.9,5.3,12.9,14.2,4.3,9.5,6.7,8.3,12.1,4.3,13.6,4.0,9.9,7.2,9.9,3.2,2.6,9.2,11.6,4.3,8.9,7.7,7.1,8.1,3.3,10.3,8.8,6.9,11.7,14.8,3.9,3.3,7.8,12.2,1.3,10.9,7.7,11.1,12.3,3.9,1.7,2.4,14.0,5.0,3.9,3.8,13.8,10.8,8.2,1.9,9.5,6.3,12.4,11.8,13.1,13.2,2.8,1.6,10.2,9.2,8.6,8.5,2.6,2.4,13.4,8.8,1.9,11.6,15.0,11.2,3.0,12.3,6.4,10.8,5.8],[2.17,4.58,2.75,2.75,2.8,3.79,1.24,4.49,3.72,2.62,1.63,4.9,3.0,3.31,3.39,5.13,5.96,2.67,4.96,5.11,4.05,4.07,3.21,4.72,3.56,6.32,4.1,3.38,5.53,5.99,1.35,5.64,2.64,2.8,3.49,2.36,1.8,4.04,1.59,5.31,4.44,4.56,4.91,4.32,4.54,3.69,5.23,5.01,6.25,3.32,3.39,3.64,3.46,4.36,3.27,3.22,5.2,5.97,5.17,2.7,5.31,4.34,3.45,4.5,5.12,3.56,3.68,5.87,3.38,5.87,4.21,2.26,5.73,4.48,4.3,3.86,4.76,5.62,2.43,4.96,2.28,3.77,3.69,2.5,4.27,3.02,2.08,5.5,3.67,3.9,4.31,5.17,3.9,3.8,7.41,6.15,4.1,1.68,5.22,4.32,4.24,3.5,5.67,6.28,2.48,1.87,3.05,3.7,3.04,4.23,5.14,4.78,4.63,1.39,4.93,5.44,2.49,3.46,6.0,6.01,3.71,5.21,4.65,4.25,4.65,5.66,2.11,5.24,2.04,1.79,3.78,3.76,4.74,4.44,5.51,4.4,3.6,4.94,4.9,3.57,6.8,6.3,4.88,2.22,3.76,4.02,4.89,3.76,6.23,3.05,3.79,4.08,6.02,2.78,6.42,3.4,4.04,4.69,4.13,3.76,5.83,4.61,4.51,2.79,4.54,4.22,3.66,5.19,4.0,2.75,4.89,4.06,3.98,3.84,5.88,3.86,5.49,3.24,4.16,1.79,3.7,3.03,3.45,3.93,3.03,3.79,4.34,4.0,3.6,3.5,4.56,5.26,0.86,6.05,4.71,5.37,2.76,3.78,3.93,3.07,3.33,3.66,4.94,4.69,6.18,3.17,1.64,6.44,5.08,2.26,2.56,2.99,1.81,5.09,3.48,4.77,4.94,3.77,1.95,3.25,5.42,2.96,3.67,3.95,4.34,3.27,4.29,4.44,6.62,3.73,3.55,3.33,6.62,4.58,1.44,4.02,5.6,3.1,3.55,3.77,5.86,4.18,2.55,3.63,3.21,3.96,2.56,4.14,3.59,3.13,5.39,4.15,3.25,3.8,1.71,4.17,2.51,4.82,6.53,5.15,4.42,3.76,5.33,3.64,4.43,1.75,3.07,4.28,2.63,4.24,2.73,4.2,2.58,4.45,4.49,4.93,1.94,1.26,3.09,2.86,2.49,3.99,6.17,2.27,1.17,6.21,5.42,5.12,4.22,4.04,5.77,4.32,6.74,2.35,3.13,3.37,2.41,6.37,4.21,4.98,4.66,2.56,4.46,5.52,3.67,5.53,4.8,5.37,4.55,2.62,1.23,5.49,4.57,4.59,2.85,7.23,3.82,3.83,5.31,3.51,5.22,4.59,2.5,1.85,3.17,4.56,3.31,4.13,3.75,2.86,5.08,3.36,5.16,0.99,3.3,5.03,5.13,6.86,6.06,6.23,5.41,4.06,4.34,5.57,3.99,3.0,5.9,3.61,4.84,3.04,3.94,3.09,2.57,6.31,4.22,3.83,3.64,4.52,2.99,5.33,3.71,1.92,4.48,1.4,3.63,2.36,3.27,3.86,4.33,3.98,3.29,6.56,3.34,3.72,2.87,3.16,4.01,5.09,4.12,4.73,4.43,3.76,2.25,3.78,2.5,3.94,4.95,4.12,6.27,3.81,2.68,3.95,6.1,3.72,4.57,3.29,5.29,1.75,6.5,3.53,3.04,6.34,4.77,4.71,2.67,5.71,5.01,2.66,2.75,2.91,6.0,4.82,3.61,2.33,1.84,6.65,5.25,3.79,4.87,2.51,4.5,5.14,3.38,3.63,5.36,5.95,3.03,2.74,4.54,4.35,4.42,4.74,6.12,1.31,4.54,4.21,4.71,2.54,3.58,7.25,1.62,7.34,3.62,3.97,2.26,5.19,3.61,4.51,4.55,2.47,3.17,3.45,2.49,4.85,3.1,5.16,3.02,2.93,5.14,4.11,4.51,5.22,4.58,3.44,5.21,5.4,3.54,3.26,4.65,4.88,3.37,4.93,4.48,7.01,4.01,5.68,3.45,3.74,2.11,3.04,6.46,4.07,1.82,4.9,2.29,4.61,5.74,3.34,2.7,5.85,3.47,6.16,5.66,4.33,3.62,5.34,3.16,3.88,3.94,3.28],[22.0,14.0,16.0,25.0,2.0,22.0,25.0,25.0,15.0,3.0,4.0,17.0,15.0,5.0,13.0,8.0,6.0,21.0,11.0,14.0,5.0,7.0,18.0,16.0,21.0,2.0,23.0,19.0,4.0,26.0,23.0,25.0,17.0,1.0,8.0,2.0,15.0,25.0,3.0,1.0,11.0,15.0,4.0,3.0,23.0,20.0,3.0,3.0,16.0,25.0,3.0,13.0,2.0,17.0,9.0,17.0,26.0,2.0,21.0,11.0,16.0,14.0,22.0,12.0,2.0,14.0,15.0,10.0,19.0,22.0,23.0,15.0,2.0,3.0,25.0,2.0,7.0,15.0,16.0,18.0,14.0,23.0,6.0,18.0,8.0,4.0,26.0,19.0,17.0,26.0,25.0,18.0,18.0,15.0,10.0,17.0,18.0,24.0,10.0,25.0,3.0,2.0,2.0,20.0,23.0,4.0,9.0,9.0,15.0,25.0,17.0,12.0,16.0,2.0,15.0,5.0,10.0,23.0,14.0,12.0,10.0,9.0,7.0,12.0,26.0,18.0,26.0,6.0,19.0,2.0,7.0,7.0,12.0,24.0,12.0,18.0,17.0,4.0,22.0,16.0,13.0,24.0,13.0,16.0,3.0,20.0,17.0,23.0,11.0,26.0,12.0,2.0,1.0,15.0,15.0,21.0,7.0,3.0,5.0,24.0,26.0,24.0,12.0,9.0,3.0,18.0,25.0,18.0,22.0,10.0,13.0,15.0,6.0,4.0,6.0,22.0,12.0,22.0,21.0,25.0,19.0,25.0,21.0,11.0,18.0,8.0,19.0,22.0,22.0,19.0,19.0,13.0,8.0,4.0,26.0,18.0,7.0,24.0,24.0,3.0,1.0,15.0,13.0,1.0,19.0,20.0,7.0,15.0,20.0,20.0,26.0,19.0,3.0,5.0,2.0,5.0,16.0,26.0,22.0,11.0,20.0,19.0,10.0,7.0,11.0,15.0,23.0,23.0,15.0,5.0,12.0,23.0,4.0,6.0,19.0,15.0,22.0,21.0,13.0,6.0,5.0,25.0,1.0,21.0,11.0,8.0,16.0,22.0,14.0,24.0,1.0,26.0,23.0,14.0,12.0,21.0,2.0,3.0,22.0,8.0,18.0,8.0,23.0,13.0,14.0,5.0,24.0,18.0,21.0,16.0,8.0,20.0,24.0,22.0,13.0,13.0,15.0,25.0,7.0,17.0,26.0,20.0,1.0,20.0,6.0,26.0,24.0,2.0,20.0,17.0,26.0,15.0,4.0,8.0,20.0,18.0,6.0,14.0,12.0,13.0,21.0,6.0,15.0,12.0,26.0,21.0,13.0,7.0,9.0,11.0,26.0,3.0,20.0,16.0,24.0,6.0,9.0,13.0,19.0,15.0,9.0,2.0,21.0,3.0,11.0,13.0,16.0,11.0,13.0,20.0,10.0,23.0,3.0,13.0,6.0,20.0,19.0,21.0,9.0,12.0,19.0,1.0,15.0,19.0,1.0,22.0,10.0,12.0,26.0,26.0,15.0,14.0,6.0,11.0,16.0,26.0,19.0,5.0,19.0,19.0,23.0,4.0,24.0,1.0,5.0,8.0,9.0,12.0,9.0,1.0,5.0,17.0,25.0,15.0,14.0,17.0,3.0,11.0,25.0,11.0,17.0,15.0,10.0,19.0,17.0,19.0,18.0,17.0,24.0,8.0,20.0,18.0,20.0,22.0,21.0,13.0,12.0,14.0,5.0,20.0,6.0,20.0,12.0,19.0,14.0,13.0,17.0,20.0,6.0,15.0,18.0,7.0,9.0,14.0,19.0,3.0,18.0,15.0,12.0,25.0,11.0,23.0,15.0,2.0,23.0,18.0,11.0,12.0,3.0,19.0,26.0,15.0,4.0,14.0,15.0,17.0,3.0,24.0,14.0,19.0,12.0,10.0,17.0,7.0,20.0,26.0,8.0,13.0,15.0,9.0,17.0,13.0,21.0,15.0,14.0,7.0,6.0,12.0,16.0,6.0,14.0,11.0,8.0,18.0,13.0,22.0,14.0,22.0,24.0,13.0,26.0,17.0,20.0,13.0,16.0,4.0,13.0,4.0,23.0,14.0,7.0,25.0,10.0,10.0,1.0,11.0,3.0,5.0,21.0,20.0,26.0,24.0,2.0,19.0,23.0,16.0,8.0,4.0,21.0,20.0],[10.0,21.0,23.0,23.0,17.0,7.0,22.0,29.0,16.0,17.0,16.0,11.0,7.0,12.0,9.0,10.0,27.0,8.0,9.0,22.0,30.0,24.0,27.0,15.0,17.0,11.0,31.0,18.0,27.0,16.0,19.0,11.0,16.0,3.0,8.0,28.0,11.0,14.0,26.0,23.0,5.0,9.0,19.0,13.0,4.0,1.0,26.0,13.0,9.0,2.0,6.0,11.0,31.0,15.0,26.0,10.0,9.0,20.0,10.0,17.0,22.0,29.0,23.0,30.0,24.0,5.0,21.0,10.0,31.0,13.0,18.0,5.0,15.0,18.0,26.0,13.0,25.0,16.0,12.0,19.0,16.0,21.0,3.0,4.0,31.0,12.0,23.0,5.0,4.0,24.0,26.0,17.0,10.0,3.0,25.0,27.0,13.0,14.0,1.0,22.0,10.0,24.0,19.0,16.0,20.0,9.0,26.0,2.0,6.0,26.0,31.0,8.0,26.0,22.0,7.0,17.0,14.0,26.0,2.0,5.0,27.0,7.0,12.0,8.0,11.0,19.0,17.0,30.0,13.0,12.0,29.0,19.0,27.0,30.0,3.0,15.0,22.0,17.0,18.0,2.0,5.0,31.0,3.0,9.0,14.0,13.0,23.0,24.0,17.0,12.0,6.0,27.0,10.0,18.0,19.0,27.0,10.0,19.0,18.0,10.0,19.0,10.0,24.0,10.0,20.0,2.0,20.0,28.0,17.0,16.0,26.0,9.0,11.0,3.0,16.0,3.0,10.0,6.0,14.0,25.0,8.0,17.0,7.0,27.0,25.0,25.0,19.0,4.0,5.0,27.0,24.0,4.0,21.0,15.0,2.0,13.0,22.0,22.0,12.0,1.0,23.0,16.0,15.0,29.0,17.0,10.0,12.0,22.0,30.0,10.0,29.0,20.0,4.0,1.0,24.0,29.0,22.0,28.0,15.0,4.0,11.0,18.0,28.0,28.0,27.0,15.0,16.0,3.0,12.0,8.0,5.0,7.0,15.0,11.0,10.0,21.0,19.0,28.0,18.0,23.0,22.0,11.0,15.0,30.0,20.0,24.0,8.0,29.0,10.0,22.0,30.0,31.0,2.0,6.0,12.0,6.0,8.0,22.0,22.0,19.0,20.0,4.0,3.0,30.0,22.0,5.0,17.0,12.0,16.0,8.0,6.0,4.0,27.0,3.0,9.0,2.0,13.0,24.0,10.0,7.0,27.0,15.0,17.0,10.0,3.0,3.0,20.0,25.0,20.0,3.0,27.0,16.0,12.0,8.0,1.0,17.0,28.0,9.0,3.0,15.0,28.0,22.0,2.0,5.0,23.0,24.0,30.0,24.0,30.0,13.0,12.0,31.0,15.0,18.0,21.0,23.0,10.0,3.0,23.0,6.0,9.0,13.0,5.0,1.0,29.0,30.0,13.0,20.0,4.0,1.0,4.0,21.0,11.0,13.0,7.0,3.0,21.0,25.0,8.0,17.0,6.0,24.0,19.0,20.0,10.0,28.0,30.0,20.0,19.0,1.0,26.0,3.0,22.0,5.0,4.0,3.0,29.0,23.0,24.0,25.0,5.0,15.0,14.0,8.0,15.0,18.0,25.0,28.0,6.0,4.0,1.0,13.0,31.0,14.0,6.0,5.0,28.0,4.0,4.0,8.0,15.0,15.0,23.0,14.0,20.0,9.0,30.0,7.0,20.0,5.0,24.0,1.0,13.0,3.0,5.0,15.0,30.0,13.0,25.0,7.0,16.0,27.0,10.0,15.0,3.0,13.0,18.0,31.0,25.0,21.0,11.0,15.0,22.0,27.0,3.0,4.0,15.0,27.0,20.0,18.0,30.0,13.0,2.0,24.0,5.0,14.0,12.0,21.0,6.0,11.0,26.0,5.0,20.0,28.0,29.0,13.0,28.0,1.0,12.0,21.0,22.0,22.0,11.0,11.0,9.0,13.0,14.0,21.0,12.0,12.0,15.0,24.0,25.0,1.0,7.0,1.0,7.0,5.0,1.0,28.0,31.0,31.0,5.0,20.0,30.0,15.0,13.0,5.0,3.0,10.0,13.0,24.0,27.0,3.0,15.0,4.0,9.0,17.0,1.0,15.0,11.0,15.0,14.0,16.0,31.0,19.0,24.0,28.0,24.0,4.0,1.0,28.0,13.0,14.0,7.0,5.0,1.0,1.0,11.0,3.0]],"names":["km in the month","liters","diesel $","average load","idling","truck age","harsh braking events","license plate letter","driver's birth day"],"ex8":[[6.0,9.0,11.0,14.0,16.0,19.0,21.0,24.0],[27.0,30.0,29.0,33.0,31.0,35.0,36.0,35.0]]};
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g,",");s=fr?i+"."+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const fs=(v,d)=>(v>0&&+v.toFixed(d??1)!==0?"+":"")+f1(v,d);
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+const redraws=[];window.addEventListener("resize",()=>redraws.forEach(g=>g()));
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+/* ---- statistics ---- */
+const mean=a=>a.reduce((s,v)=>s+v,0)/a.length;
+const cov=(a,b)=>{const ma=mean(a),mb=mean(b);let s=0;for(let i=0;i<a.length;i++)s+=(a[i]-ma)*(b[i]-mb);return s/(a.length-1);};
+const sd=a=>Math.sqrt(cov(a,a));
+const corr=(a,b)=>{const d=sd(a)*sd(b);return d>0?cov(a,b)/d:0;};
+const ranks=a=>{const o=a.map((v,i)=>[v,i]).sort((p,q)=>p[0]-q[0]),r=new Array(a.length);let i=0;while(i<o.length){let j=i;while(j+1<o.length&&o[j+1][0]===o[i][0])j++;for(let k=i;k<=j;k++)r[o[k][1]]=(i+j)/2+1;i=j+1;}return r;};
+const spear=(a,b)=>corr(ranks(a),ranks(b));
+const line=(a,b)=>{const s=cov(a,b)/cov(a,a);return [mean(b)-s*mean(a),s];};
+const strength=r=>{const a=Math.abs(r);return a<0.1?"none":a<0.3?"weak":a<0.5?"weak-to-moderate":a<0.7?"moderate":a<0.9?"strong":"very strong";};
+const tk=(a,b,n)=>{const raw=(b-a)/n,p=10**Math.floor(Math.log10(raw)),m=raw/p,st=(m<1.5?1:m<3?2:m<7?5:10)*p,out=[];for(let v=Math.ceil(a/st-1e-9)*st;v<=b+1e-9;v+=st)out.push(+v.toFixed(10));return out;};
+/* frame of a scatter chart */
+function frame(svg,o){const nw=narrowOf(svg),W=nw?600:900,H=nw?(o.H?o.H[1]:560):(o.H?o.H[0]:420),FS=nw?24:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+  const L=nw?(o.Ln??92):(o.Ld??72),R=W-(nw?24:16),T=nw?50:32,B=H-(nw?72:50);
+  const sx=x=>L+(x-o.x0)/(o.x1-o.x0)*(R-L),sy=y=>B-(y-o.y0)/(o.y1-o.y0)*(B-T);
+  const ix=px=>o.x0+(px-L)/(R-L)*(o.x1-o.x0),iy=py=>o.y0+(B-py)/(B-T)*(o.y1-o.y0);
+  const g=el("g",null,svg),fx=o.fx||(v=>f1(v,0)),fy=o.fy||(v=>f1(v,0));
+  for(const v of o.yt){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},g);txt(g,L-8,sy(v)+FS*0.3,fy(v),{"text-anchor":"end","font-size":FS*0.8});}
+  for(const v of o.xt){el("line",{x1:sx(v),x2:sx(v),y1:T,y2:B,class:"g-line","stroke-opacity":.55},g);const s=fx(v),over=sx(v)+s.length*FS*0.8*0.31>W-6;txt(g,over?W-6:sx(v),B+FS+4,s,{"text-anchor":over?"end":"middle","font-size":FS*0.8});}
+  el("line",{x1:L,x2:R,y1:B,y2:B,class:"g-axis"},g);
+  txt(g,R,H-8,o.xl,{"text-anchor":"end","font-size":FS*0.85,class:"t-ink"});
+  if(o.yl)txt(g,L,T-16,o.yl,{"font-size":FS*0.8});
+  return {W,H,FS,L,R,T,B,sx,sy,ix,iy,nw,g};}
+const range=(a,padf,n)=>{const lo=Math.min(...a),hi=Math.max(...a),p=(hi-lo)*(padf??0.06);const x0=lo-p,x1=hi+p;return {x0,x1,t:tk(x0,x1,n)};};
+/* drag points: pick(q) returns the nearest index or −1; move(k,q) */
+function draggable(svg,pick,move){let k=-1;const pt=e=>{const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;const m=svg.getScreenCTM();return m?p.matrixTransform(m.inverse()):null;};
+  svg.addEventListener("pointerdown",e=>{const q=pt(e);if(!q)return;k=pick(q);if(k>=0){svg.setPointerCapture(e.pointerId);e.preventDefault();}});
+  svg.addEventListener("pointermove",e=>{if(k<0)return;const q=pt(e);if(q)move(k,q);});
+  const up=()=>{k=-1;};svg.addEventListener("pointerup",up);svg.addEventListener("pointercancel",up);}
+const dot=(g,x,y,r,fill,extra)=>el("circle",Object.assign({cx:x,cy:y,r,fill,stroke:"var(--point-ring)","stroke-width":r>6?2.5:1.5},extra||{}),g);
+
+/* ---------- toy ---------- */
+(function(){const svg=$("toy");let cur=0,mode=1;
+  const P=[{k:"carga",name:"Load and consumption",xl:"average load (tonnes)",yl:"consumption (L/100 km)",u:"tonnes × L/100 km",dc:1},
+    {k:"ralenti",name:"Idling and fuel spend",xl:"idling hours in the month",yl:"diesel spend ($ per month)",u:"hours × $",dc:0},
+    {k:"exper",name:"Experience and braking",xl:"driver's years of experience",yl:"harsh braking events per 1,000 km",u:"years × braking events",dc:2},
+    {k:"dia",name:"Day of the month and consumption",xl:"day of the month of the refuel",yl:"consumption (L/100 km)",u:"days × L/100 km",dc:2}];
+  chips($("t-q"),P.map(p=>p.name),i=>{cur=i;draw();});
+  seg(["t-m0","t-m1","t-m2"],i=>{mode=i;draw();});
+  function draw(){const p=P[cur],[x,y]=D.toy[p.k],n=x.length,mx=mean(x),my=mean(y),c=cov(x,y),r=corr(x,y);
+    const nw=narrowOf(svg),rx=range(x,0.05,nw?4:7),ry=range(y,0.06,nw?4:5);
+    const F=frame(svg,{x0:rx.x0,x1:rx.x1,y0:ry.x0,y1:ry.x1,xt:rx.t,yt:ry.t,xl:p.xl,yl:p.yl,fy:v=>f1(v,ry.t[1]-ry.t[0]<1?1:0),fx:v=>f1(v,0),H:[440,600],Ln:p.k==="ralenti"?100:86,Ld:p.k==="ralenti"?82:66});
+    const {sx,sy}=F,X=sx(mx),Y=sy(my);
+    if(mode===1){[[X,F.R,F.T,Y,1],[F.L,X,Y,F.B,1],[F.L,X,F.T,Y,0],[X,F.R,Y,F.B,0]].forEach(([a,b,t,bt,ok])=>el("rect",{x:a,y:t,width:b-a,height:bt-t,fill:ok?"var(--mean)":"var(--sample)","fill-opacity":.08},svg));}
+    if(mode===2){for(let i=0;i<n;i++){const pr=(x[i]-mx)*(y[i]-my),a=sx(x[i]),b=sy(y[i]);el("rect",{x:Math.min(a,X),y:Math.min(b,Y),width:Math.abs(a-X),height:Math.abs(b-Y),fill:pr>0?"var(--mean)":"var(--sample)","fill-opacity":.07,stroke:pr>0?"var(--mean)":"var(--sample)","stroke-opacity":.35,"stroke-width":1},svg);}}
+    if(mode>0){el("line",{x1:X,x2:X,y1:F.T,y2:F.B,stroke:"var(--muted)","stroke-width":2.5,"stroke-dasharray":"7 5"},svg);el("line",{x1:F.L,x2:F.R,y1:Y,y2:Y,stroke:"var(--muted)","stroke-width":2.5,"stroke-dasharray":"7 5"},svg);
+      txt(svg,X+6,F.T+F.FS*0.75,"mean "+f1(mx,1),Object.assign({"font-size":F.FS*0.78,class:"t-ink"},halo(5)));txt(svg,F.R-4,Y-8,"mean "+f1(my,p.dc),Object.assign({"font-size":F.FS*0.78,"text-anchor":"end",class:"t-ink"},halo(5)));}
+    let agree=0;for(let i=0;i<n;i++){const pr=(x[i]-mx)*(y[i]-my);if(pr>0)agree++;dot(svg,sx(x[i]),sy(y[i]),nw?7:5.5,mode===1?(pr>0?"var(--mean)":"var(--sample)"):"var(--point)",{"fill-opacity":.9});}
+    $("t-big").innerHTML=`<div><b style="color:${r>=0?"var(--mean)":"var(--sample)"}">${f1(r,2)}</b><span>correlation r (between −1 and 1)</span></div><div><b>${f1(100*agree/n,0)}%</b><span>of the trucks in the "agree" zones (blue)</span></div><div><b>${f1(c,Math.abs(c)<100?2:0)}</b><span>covariance, in ${p.u}</span></div>`;
+    const msgs=[`The cloud rises to the right: trucks that carry more load burn more fuel. ${f1(100*agree/n,0)} out of 100 are in blue zones and r = <b>${f1(r,2)}</b>, a strong relationship. It is not a perfect line (load doesn't explain everything: the route, the driver and the wind count too), so r doesn't reach 1.`,
+      `More idling hours, more fuel spend, but with a lot of scatter: r = <b>${f1(r,2)}</b>, moderate. One hour with the engine running while stopped burns about 2.5 L (about $4), little next to a month's $4,000 of diesel. The covariance, ${f1(c,0)} hours × $, is huge only because dollar amounts are big numbers.`,
+      `The cloud <b>falls</b> to the right: more years of experience, fewer harsh braking events. The points gather in the purple zones (only ${f1(100*agree/n,0)} out of 100 in the blue ones), so the covariance is negative and r = <b>${f1(r,2)}</b>.`,
+      `Nothing: the day of the month you refuel has nothing to do with consumption. Half the trucks in blue zones and half in purple ones, the rectangles cancel out and r = <b>${f1(r,2)}</b>. An r this close to 0 with 120 trucks is what pure chance gives.`];
+    $("t-msg").innerHTML=msgs[cur]+(mode===0?" Press \"The cross of the means\" to see the four zones.":mode===2?" The blue rectangles add in favor and the purple ones against: the covariance is the sum of all of them, divided by n − 1.":"");}
+  redraws.push(draw);draw();})();
+
+/* ---------- r scale ---------- */
+(function(){const box=$("rscale"),rr=[-0.9,-0.5,0,0.5,0.9],rnd=mulberry32(5),Z=[];for(let i=0;i<60;i++)Z.push([gauss(rnd),gauss(rnd)]);
+  /* whiten so the sample r is exact */
+  const a=Z.map(z=>z[0]),b0=Z.map(z=>z[1]),ma=mean(a),sa=sd(a),za=a.map(v=>(v-ma)/sa),[i0,s0]=line(za,b0),e=b0.map((v,i)=>v-i0-s0*za[i]),se=sd(e),ze=e.map(v=>v/se);
+  rr.forEach(r=>{const d=document.createElement("div"),s=el("svg",{viewBox:"0 0 100 100"});d.appendChild(s);
+    el("rect",{x:2,y:2,width:96,height:96,rx:6,fill:"none",stroke:"var(--line)"},s);
+    za.forEach((x,i)=>{const y=r*x+Math.sqrt(1-r*r)*ze[i];el("circle",{cx:50+x*16,cy:50-y*16,r:2.6,fill:"var(--point)"},s);});
+    const lb=document.createElement("span");lb.innerHTML=`r = <b>${f1(r,1)}</b><br>${r===0?"nothing":Math.abs(r)>0.8?"strong":"moderate"}${r<0?", opposite":r>0?", together":""}`;d.appendChild(lb);box.appendChild(d);});})();
+
+/* ---------- idea 1: rectangles ---------- */
+(function(){const svg=$("cv"),X=D.ex8[0].slice(),Y=D.ex8[1].slice();let F=null;
+  const xo=D.ex8[0],yo=D.ex8[1];
+  function draw(){F=frame(svg,{x0:0,x1:30,y0:24,y1:40,xt:[0,5,10,15,20,25,30],yt:[24,28,32,36,40],xl:"average load (tonnes)",yl:"consumption (L/100 km)",H:[440,580]});
+    const {sx,sy,FS}=F,mx=mean(X),my=mean(Y),cx=sx(mx),cy=sy(my);let pos=0,neg=0,big=0;
+    const pr=X.map((x,i)=>(x-mx)*(Y[i]-my));pr.forEach((p,i)=>{if(p>0)pos+=p;else neg+=p;if(Math.abs(p)>Math.abs(pr[big]))big=i;});
+    X.forEach((x,i)=>{const a=sx(x),b=sy(Y[i]),p=pr[i];el("rect",{x:Math.min(a,cx),y:Math.min(b,cy),width:Math.abs(a-cx),height:Math.abs(b-cy),fill:p>0?"var(--mean)":"var(--sample)","fill-opacity":.18,stroke:p>0?"var(--mean)":"var(--sample)","stroke-width":1.5},svg);});
+    el("line",{x1:cx,x2:cx,y1:F.T,y2:F.B,stroke:"var(--muted)","stroke-width":2.5,"stroke-dasharray":"7 5"},svg);el("line",{x1:F.L,x2:F.R,y1:cy,y2:cy,stroke:"var(--muted)","stroke-width":2.5,"stroke-dasharray":"7 5"},svg);
+    X.forEach((x,i)=>{const a=sx(x),b=sy(Y[i]);dot(svg,a,b,F.nw?13:10,"var(--point)");txt(svg,a,b+FS*0.3,String(i+1),{"text-anchor":"middle","font-size":FS*0.72,"font-weight":700,style:"fill:var(--surface)"});});
+    txt(svg,cx+6,F.T+FS*0.75,"mean "+f1(mx,1)+" t",Object.assign({"font-size":FS*0.78,class:"t-ink"},halo(5)));txt(svg,F.R-4,cy-8,"mean "+f1(my,1)+" L",Object.assign({"font-size":FS*0.78,"text-anchor":"end",class:"t-ink"},halo(5)));
+    const c=(pos+neg)/(X.length-1),r=corr(X,Y);
+    $("cv-big").innerHTML=`<div><b style="color:var(--mean)">${fs(pos,1)}</b><span>sum of the blue rectangles</span></div><div><b style="color:var(--sample)">${f1(neg,1)}</b><span>sum of the purple rectangles</span></div><div><b>${f1(c,1)}</b><span>covariance = (${f1(pos,1)} ${neg<0?"− "+f1(-neg,1):"+ 0"}) / 7, in tonnes × L/100 km</span></div>`;
+    const moved=X.some((v,i)=>Math.abs(v-xo[i])>1e-9||Math.abs(Y[i]-yo[i])>1e-9),dx=X[big]-mx,dy=Y[big]-my;
+    let m=`The biggest rectangle belongs to <b>truck ${big+1}</b>: it is ${fs(dx,1)} t away from the mean load and ${fs(dy,1)} L/100 km away from the mean consumption, and ${fs(dx,1)} × ${fs(dy,1)} = <b>${fs(pr[big],1)}</b>. `;
+    if(!moved)m+=`Look at truck 1: it carries much less load and burns much less than the mean. Two "less" give a positive product, so it also counts in favor. Only trucks 4 and 5 subtract, and very little: the covariance comes out at ${f1(c,1)} and the correlation (idea 2), ${f1(r,2)}.`;
+    else if(c<0)m+=`Now the purple weighs more and the covariance is <b>negative</b> (${f1(c,1)}): with this data, more load would go with less consumption. Notice that when you move a truck the cross moves too, because the mean changes.`;
+    else if(Math.abs(pr[big])>0.6*pos)m+=`That single truck contributes more than half of all the blue: a point very far from the cross weighs a lot (idea 4). The covariance is ${f1(c,1)}.`;
+    else m+=`The covariance is ${f1(c,1)} and r = ${f1(r,2)}. Notice that when you move a truck the cross moves too, because the mean changes.`;
+    $("cv-msg").innerHTML=m;}
+  draggable(svg,q=>{let k=-1,best=F.nw?44:30;X.forEach((x,i)=>{const d=Math.hypot(F.sx(x)-q.x,F.sy(Y[i])-q.y);if(d<best){best=d;k=i;}});return k;},
+    (k,q)=>{X[k]=Math.round(Math.max(0.5,Math.min(29.5,F.ix(q.x)))*2)/2;Y[k]=Math.round(Math.max(24.5,Math.min(39.5,F.iy(q.y)))*2)/2;draw();});
+  $("cv-re").onclick=()=>{xo.forEach((v,i)=>{X[i]=v;Y[i]=yo[i];});draw();};
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 2: units ---------- */
+(function(){const svg=$("un"),X=D.ex8[0],Y=D.ex8[1];let mode=0,showL=false;
+  const mx=mean(X),my=mean(Y),sxv=sd(X),syv=sd(Y),r=corr(X,Y),c=cov(X,Y),[a0,b0]=line(X,Y);
+  seg(["u-0","u-1","u-2","u-3"],i=>{mode=i;draw();});
+  const bl=$("u-l");bl.onclick=()=>{showL=!showL;bl.setAttribute("aria-pressed",String(showL));draw();};
+  function draw(){const kx=[1,1000,1,1][mode],ky=[1,1,0.01,1][mode],z=mode===3;
+    const tx=z?(v=>(v-mx)/sxv):(v=>v*kx),ty=z?(v=>(v-my)/syv):(v=>v*ky);
+    const o=z?{x0:-2.2,x1:2.2,y0:-2.2,y1:2.2,xt:[-2,-1,0,1,2],yt:[-2,-1,0,1,2],fx:v=>f1(v,0),fy:v=>f1(v,0),xl:"load in z (standard deviations)",yl:"consumption in z"}
+      :{x0:0,x1:30*kx,y0:24*ky,y1:40*ky,xt:(mode===1&&narrowOf(svg)?[0,10,20,30]:[0,5,10,15,20,25,30]).map(v=>v*kx),yt:[24,28,32,36,40].map(v=>v*ky),fx:v=>f1(v,0),fy:v=>f1(v,mode===2?2:0),xl:mode===1?"average load (kilograms)":"average load (tonnes)",yl:mode===2?"consumption (liters per km)":"consumption (L/100 km)"};
+    o.H=[420,560];o.Ln=mode===1?92:96;o.Ld=72;
+    const F=frame(svg,o),{sx,sy,FS}=F;
+    el("line",{x1:sx(tx(mx)),x2:sx(tx(mx)),y1:F.T,y2:F.B,stroke:"var(--muted)","stroke-width":2,"stroke-dasharray":"7 5"},svg);el("line",{x1:F.L,x2:F.R,y1:sy(ty(my)),y2:sy(ty(my)),stroke:"var(--muted)","stroke-width":2,"stroke-dasharray":"7 5"},svg);
+    if(showL){const xa=z?-2.2:0,xb=z?2.2:30*kx,f=z?(t=>r*t):(t=>(a0+b0*(t/kx))*ky);
+      const g=el("g",{"clip-path":"none"},svg);el("line",{x1:sx(xa),x2:sx(xb),y1:sy(Math.max(o.y0,Math.min(o.y1,f(xa)))),y2:sy(Math.max(o.y0,Math.min(o.y1,f(xb)))),stroke:"var(--mean)","stroke-width":3.5},g);
+      if(z){el("line",{x1:sx(-2.2),x2:sx(2.2),y1:sy(-2.2),y2:sy(2.2),stroke:"var(--muted)","stroke-width":1.5,"stroke-dasharray":"3 5"},svg);txt(svg,sx(1.55),sy(2.05),"slope 1",Object.assign({"font-size":FS*0.75,"text-anchor":"end"},halo(5)));txt(svg,sx(2.1),sy(-1.95),"blue line: slope r = "+f1(r,2),Object.assign({"font-size":FS*0.8,"text-anchor":"end","font-weight":700,style:"fill:var(--mean)"},halo(5)));}}
+    X.forEach((x,i)=>dot(svg,sx(tx(x)),sy(ty(Y[i])),F.nw?11:8,"var(--point)"));
+    const cu=[c,c*1000,c*0.01,r][mode],un=["tonnes × L/100 km","kilograms × L/100 km","tonnes × L/km","no units: it is r"][mode];
+    $("u-big").innerHTML=`<div><b>${f1(cu,mode===2?3:mode===1?0:mode===3?2:1)}</b><span>covariance, in ${un}</span></div><div><b style="color:var(--mean)">${f1(r,2)}</b><span>correlation r, in any units</span></div><div><b>${f1(100*r*r,0)}%</b><span>r² : the share of the variation in consumption that goes in a straight line with the load</span></div>`;
+    const sl=[`${f1(b0,3)} L/100 km per tonne`,`${f1(b0/1000,6)} L/100 km per kilogram`,`${f1(b0/100,5)} liters per km per tonne`][mode];
+    let m;
+    if(z)m=`In z, both columns measure the same thing (standard deviations) and the covariance of the z's is directly r = <b>${f1(r,2)}</b>.${showL?` The best-fitting line has slope r: for each extra standard deviation of load, consumption goes up ${f1(r,2)} standard deviations, a bit less than the diagonal with slope 1. And r² = ${f1(r*r,2)}: ${f1(100*r*r,0)}% of how much consumption varies among these 8 trucks goes in line with the load; the remaining ${f1(100-100*r*r,0)}% comes from other things.`:" Turn on the line."}`;
+    else m=`In ${["tonnes and L/100 km","kilograms and L/100 km","tonnes and liters per km"][mode]} the covariance is <b>${f1(cu,mode===2?3:mode===1?0:1)}</b>${mode===1?": 1,000 times more than in tonnes":mode===2?": 100 times less":""}. But r is still <b>${f1(r,2)}</b>: dividing by the two standard deviations, which also change units, leaves a number with no units.${showL?` The line rises ${sl}${mode===0?": over 100,000 km a year, each extra tonne of average load is about 485 liters, about $800 at $1.65/L":""}. That slope is r × (sd of consumption / sd of load) = ${f1(r,2)} × ${f1(syv*ky,mode===2?4:2)} / ${f1(sxv*kx,mode===1?0:2)}.`:" Turn on the line and try \"In z\"."}`;
+    $("u-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 3: the U ---------- */
+(function(){const svg=$("vel"),[V,C]=D.vel,ilo=$("v-lo"),ihi=$("v-hi");
+  function draw(){let lo=+ilo.value,hi=+ihi.value;if(hi-lo<10){if(this===ilo){hi=lo+10;ihi.value=hi;}else{lo=hi-10;ilo.value=lo;}}
+    const F=frame(svg,{x0:5,x1:95,y0:26,y1:42,xt:[10,20,30,40,50,60,70,80,90],yt:[26,30,34,38,42],xl:"average trip speed (km/h)",yl:"consumption (L/100 km)",H:[420,560]}),{sx,sy}=F;
+    el("rect",{x:sx(lo),y:F.T,width:sx(hi)-sx(lo),height:F.B-F.T,fill:"var(--point)","fill-opacity":.07},svg);
+    const ins=[],xi=[],yi=[];V.forEach((v,i)=>{const on=v>=lo&&v<=hi;if(on){xi.push(v);yi.push(C[i]);}ins.push(on);});
+    V.forEach((v,i)=>{if(!ins[i])dot(svg,sx(v),sy(C[i]),F.nw?6:4.5,"var(--muted)",{"fill-opacity":.35,"stroke-width":0});});
+    V.forEach((v,i)=>{if(ins[i])dot(svg,sx(v),sy(C[i]),F.nw?7:5.5,"var(--point)");});
+    const r=xi.length>2?corr(xi,yi):0,[a,b]=line(xi,yi);
+    el("line",{x1:sx(lo),x2:sx(hi),y1:sy(a+b*lo),y2:sy(a+b*hi),stroke:"var(--mean)","stroke-width":4,"stroke-linecap":"round"},svg);
+    $("v-lo-o").textContent=lo+" km/h";$("v-hi-o").textContent=hi+" km/h";
+    $("v-big").innerHTML=`<div><b style="color:${r>=0?"var(--mean)":"var(--sample)"}">${f1(r,2)}</b><span>correlation r of the trips inside</span></div><div><b>${xi.length}</b><span>trips inside (out of ${V.length})</span></div><div><b>${fs(10*b,2)}</b><span>L/100 km for every extra 10 km/h, according to the line</span></div>`;
+    let m;
+    if(lo<=15&&hi>=85)m=`With all the trips, r = <b>${f1(r,2)}</b>: according to r, speed "has nothing to do" with consumption. And the best-fitting line is almost flat. Yet look at the cloud: at 10 km/h trucks burn about 37 L/100 km, at 50 km/h about 29 and at 90 km/h 37 again. The relationship is very strong, but U-shaped. Move "to" down to 50 km/h.`;
+    else if(hi<=55)m=`Only slow trips (from ${lo} to ${hi} km/h): here the cloud falls almost in a straight line and r = <b>${f1(r,2)}</b>. In the city, going faster (fewer jams) saves fuel. Now try 50 to 90 km/h.`;
+    else if(lo>=45)m=`Only fast trips (from ${lo} to ${hi} km/h): the cloud rises and r = <b>${f1(r,2)}</b>. On the open road, more speed burns more. The same pair of columns gives a very negative, almost zero or very positive r depending on which piece you look at.`;
+    else m=`From ${lo} to ${hi} km/h, r = <b>${f1(r,2)}</b> (${strength(r)} relationship${Math.abs(r)>=0.1?(r>0?", positive":", negative"):""}). ${Math.abs(r)<0.3?"When the range includes the bottom of the U, the two halves cancel out.":"One side of the U weighs more than the other."}`;
+    $("v-msg").innerHTML=m;}
+  ilo.addEventListener("input",draw);ihi.addEventListener("input",draw);redraws.push(draw);draw.call(null);})();
+
+/* ---------- idea 4: outlier ---------- */
+(function(){const svg=$("at");let sc=0,view=0,F=null;const O=D.at0.map(p=>p.slice());
+  const S=[{name:"No relationship: driver age and consumption",xl:"driver age (years)",yl:"consumption (L/100 km)",x0:18,x1:80,y0:20,y1:60,xt:[20,30,40,50,60,70,80],yt:[20,30,40,50,60]},
+    {name:"With a relationship: load and consumption",xl:"average load (tonnes)",yl:"consumption (L/100 km)",x0:0,x1:30,y0:15,y1:40,xt:[0,5,10,15,20,25,30],yt:[15,20,25,30,35,40]}];
+  chips($("at-q"),S.map(s=>s.name),i=>{sc=i;draw();});
+  seg(["at-v0","at-v1"],i=>{view=i;draw();});
+  $("at-re").onclick=()=>{O[sc]=D.at0[sc].slice();draw();};
+  function draw(){const s=S[sc],[bx,by]=D.at[sc],X=bx.concat([O[sc][0]]),Y=by.concat([O[sc][1]]),n=X.length;
+    const r=corr(X,Y),r0=corr(bx,by),rho=spear(X,Y);
+    let px=X,py=Y,o=s;
+    if(view===1){px=ranks(X);py=ranks(Y);o={xl:"rank in "+s.xl.replace(/ \(.*\)/,""),yl:"rank in consumption",x0:0,x1:22,y0:0,y1:22,xt:[1,5,10,15,21],yt:[1,5,10,15,21]};}
+    F=frame(svg,Object.assign({H:[440,580]},o));const {sx,sy}=F;
+    const fitl=(xx,yy,col,w,dash)=>{const [a,b]=line(xx,yy);el("line",{x1:sx(o.x0),x2:sx(o.x1),y1:sy(a+b*o.x0),y2:sy(a+b*o.x1),stroke:col,"stroke-width":w,"stroke-dasharray":dash||null},svg);};
+    const clip="cl-at";const cp=el("clipPath",{id:clip},el("defs",null,svg));el("rect",{x:F.L,y:F.T,width:F.R-F.L,height:F.B-F.T},cp);
+    const g=el("g",{"clip-path":`url(#${clip})`},svg);
+    const fl=(xx,yy,col,w,dash)=>{const [a,b]=line(xx,yy);el("line",{x1:sx(o.x0),x2:sx(o.x1),y1:sy(a+b*o.x0),y2:sy(a+b*o.x1),stroke:col,"stroke-width":w,"stroke-dasharray":dash||null},g);};
+    fl(px.slice(0,n-1),py.slice(0,n-1),"var(--muted)",2.5,"8 6");fl(px,py,"var(--mean)",4);
+    for(let i=0;i<n-1;i++)dot(svg,sx(px[i]),sy(py[i]),F.nw?9:7,"var(--point)");
+    const ox=sx(px[n-1]),oy=sy(py[n-1]);el("circle",{cx:ox,cy:oy,r:F.nw?22:17,fill:"none",stroke:"var(--warn)","stroke-width":2.5,"stroke-dasharray":"4 3"},svg);dot(svg,ox,oy,F.nw?12:10,"var(--warn)");
+    const lab=view?"outlier":"outlier: drag it";const right=ox<F.L+(F.R-F.L)*0.62;
+    txt(svg,ox+(right?1:-1)*(F.nw?30:24),oy+F.FS*0.3,lab,Object.assign({"text-anchor":right?"start":"end","font-size":F.FS*0.8,"font-weight":700,style:"fill:var(--warn)"},halo(5)));
+    $("at-big").innerHTML=`<div><b style="color:var(--mean)">${f1(r,2)}</b><span>r with the outlier</span></div><div><b style="color:var(--muted)">${f1(r0,2)}</b><span>r of the 20 trucks, without it</span></div><div><b style="color:var(--point)">${f1(rho,2)}</b><span>Spearman (r of the ranks) with the outlier</span></div>`;
+    const d=r-r0;let m;
+    if(Math.abs(d)<0.1)m=`Right now the outlier barely changes anything: r = ${f1(r,2)} with it and ${f1(r0,2)} without it. Drag it far from the cloud, toward a corner.`;
+    else if(sc===0&&r>0.3)m=`The 20 trucks have no relationship (r = ${f1(r0,2)}), but with a single absurd record r rises to <b>${f1(r,2)}</b>: it looks as if older drivers burn more. It is the huge rectangle of a single point. Spearman stays at <b>${f1(rho,2)}</b>, because in ranks that truck is only "the last one" in both columns. ${view?"":"Press \"Show the ranks\"."}`;
+    else if(sc===0&&r<-0.3)m=`A single point now creates a <b>negative</b> correlation of ${f1(r,2)} where there was nothing. Spearman, ${f1(rho,2)}, barely flinches.`;
+    else if(sc===1&&r<r0-0.2)m=`The 20 trucks have a very clear relationship (r = ${f1(r0,2)}), and a single badly recorded entry sinks it to <b>${f1(r,2)}</b>. Spearman holds up better: <b>${f1(rho,2)}</b>. ${view?"In ranks, the outlier is just one more point out of place.":"Press \"Show the ranks\"."}`;
+    else m=`With the outlier, r = ${f1(r,2)}; without it, ${f1(r0,2)}; Spearman, ${f1(rho,2)}. A point far from the cross drags the blue line toward it.`;
+    $("at-msg").innerHTML=m;}
+  draggable(svg,q=>{const n=D.at[sc][0].length,[bx,by]=D.at[sc];if(view===1)return -1;const d=Math.hypot(F.sx(O[sc][0])-q.x,F.sy(O[sc][1])-q.y);return d<(F.nw?50:36)?0:-1;},
+    (k,q)=>{const s=S[sc];O[sc][0]=Math.round(Math.max(s.x0+0.5,Math.min(s.x1-0.5,F.ix(q.x))));O[sc][1]=Math.round(Math.max(s.y0+0.5,Math.min(s.y1-0.5,F.iy(q.y))));draw();});
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 5: confounding ---------- */
+(function(){const svg=$("cf"),[E,K,C]=D.conf;let mode=0;
+  seg(["cf-0","cf-1"],i=>{mode=i;draw();});
+  const pick=k=>{const x=[],y=[];E.forEach((e,i)=>{if(K[i]===k){x.push(e);y.push(C[i]);}});return [x,y];};
+  const [xc,yc]=pick(1),[xa,ya]=pick(0),r=corr(E,C),rc=corr(xc,yc),ra=corr(xa,ya);
+  function draw(){const F=frame(svg,{x0:0,x1:16,y0:24,y1:44,xt:[0,2,4,6,8,10,12,14,16],yt:[24,28,32,36,40,44],xl:"truck age (years)",yl:"consumption (L/100 km)",H:[420,560]}),{sx,sy}=F;
+    const seg2=(xx,yy,col,w)=>{const [a,b]=line(xx,yy),lo=Math.min(...xx),hi=Math.max(...xx);el("line",{x1:sx(lo),x2:sx(hi),y1:sy(a+b*lo),y2:sy(a+b*hi),stroke:col,"stroke-width":w,"stroke-linecap":"round"},svg);};
+    E.forEach((e,i)=>dot(svg,sx(e),sy(C[i]),F.nw?7:5.5,mode?(K[i]?"var(--point)":"var(--sample)"):"var(--point)",{"fill-opacity":.85}));
+    if(mode===0)seg2(E,C,"var(--mean)",4.5);
+    else{seg2(xc,yc,"var(--point)",4.5);seg2(xa,ya,"var(--sample)",4.5);
+      txt(svg,sx(15.6),sy(mean(yc))-F.FS*1.4,"city",Object.assign({"text-anchor":"end","font-size":F.FS*0.95,"font-weight":700,style:"fill:var(--point)"},halo(5)));
+      txt(svg,sx(0.4),sy(mean(ya))+F.FS*2.2,"highway",Object.assign({"font-size":F.FS*0.95,"font-weight":700,style:"fill:var(--sample)"},halo(5)));}
+    $("cf-big").innerHTML=`<div><b style="color:var(--mean)">${f1(r,2)}</b><span>r of age and consumption across the whole fleet</span></div><div><b style="color:var(--point)">${f1(rc,2)}</b><span>r with only the city trucks</span></div><div><b style="color:var(--sample)">${f1(ra,2)}</b><span>r with only the highway trucks</span></div>`;
+    $("cf-msg").innerHTML=mode===0?`Looking at the whole fleet, the relationship seems clear: r = <b>${f1(r,2)}</b> and the line rises 0.62 L/100 km per year. According to the line, replacing a 12-year-old truck with a 1-year-old one would save 0.62 × 11 ≈ 6.8 L/100 km: at 100,000 km a year, about 6,800 liters, more than $11,000 a year per truck. Press "Split by route type".`
+      :`Within each route type, age barely matters: r = ${f1(rc,2)} in the city and ${f1(ra,2)} on the highway, both lines almost flat. The difference is between the two groups: city trucks burn about 37.6 L/100 km and highway trucks 30.2, and the old ones are almost all in the city. A new truck sent to urban delivery would burn the same as the old one: the promised savings don't exist.`;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 6: matrix ---------- */
+(function(){const svg=$("mx"),sv=$("mxs");let nset=0,sel=[5,4];
+  const NM=["km in the month","liters","diesel $","average load","idling hours","truck age","harsh braking","plate letter","driver birth day"];
+  const LONG=D.names,M=D.mat;
+  seg(["mx-0","mx-1"],i=>{nset=i;draw();});
+  const cols=()=>{const n=nset?15:M[0].length;return M.map(c=>c.slice(0,n));};
+  function draw(){const C=cols(),k=C.length,R=[];for(let i=0;i<k;i++){R.push([]);for(let j=0;j<k;j++)R[i].push(i===j?1:corr(C[i],C[j]));}
+    const nw=narrowOf(svg),W=nw?600:900,FS=nw?19:14,LW=nw?248:250,top=nw?40:34,ch=nw?42:40,H=top+k*ch+8;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const cw=(W-LW-6)/k;
+    for(let j=0;j<k;j++)txt(svg,LW+cw*(j+0.5),top-12,String(j+1),{"text-anchor":"middle","font-size":FS*0.9,class:"t-ink","font-weight":700});
+    for(let i=0;i<k;i++){txt(svg,LW-10,top+ch*(i+0.5)+FS*0.32,(i+1)+"  "+NM[i],{"text-anchor":"end","font-size":FS*0.9,class:i>=7?"":"t-ink"});
+      for(let j=0;j<k;j++){const r=R[i][j],x=LW+cw*j,y=top+ch*i,on=(sel[0]===i&&sel[1]===j)||(sel[0]===j&&sel[1]===i);
+        const rc=el("rect",{x:x+1.5,y:y+1.5,width:cw-3,height:ch-3,rx:4,fill:r>=0?"var(--mean)":"var(--sample)","fill-opacity":(0.05+0.85*Math.abs(r)).toFixed(3),stroke:on?"var(--ink)":"none","stroke-width":on?3:0,style:"cursor:pointer"},svg);
+        if(!(nw&&Math.abs(r)<0.15))txt(svg,x+cw/2,y+ch/2+FS*0.28,i===j?"1":f1(r,nw?1:2),{"text-anchor":"middle","font-size":FS*(nw?0.7:0.8),style:"pointer-events:none;fill:"+(Math.abs(r)>0.5?"var(--surface)":"var(--ink)"),"font-weight":Math.abs(r)>0.5?700:400});
+        rc.addEventListener("click",()=>{if(i===j){$("mx-msg").innerHTML=`The diagonal is always 1: it is "${LONG[i]}" compared with itself. Tap a cell off the diagonal.`;return;}sel=[i,j];draw();});}}
+    /* cloud of the chosen pair */
+    const [i,j]=sel,x=C[j],y=C[i],rx=range(x,0.05,nw?4:6),ry=range(y,0.06,4);
+    const F=frame(sv,{x0:rx.x0,x1:rx.x1,y0:ry.x0,y1:ry.x1,xt:rx.t,yt:ry.t,xl:NM[j],yl:NM[i],fx:v=>f1(v,rx.t[1]-rx.t[0]<1?1:0),fy:v=>f1(v,ry.t[1]-ry.t[0]<1?1:0),H:[340,470],Ln:100,Ld:78});
+    x.forEach((v,t)=>dot(sv,F.sx(v),F.sy(y[t]),F.nw?(nset?10:5):(nset?8:3.5),"var(--point)",{"fill-opacity":nset?1:.7}));
+    const r=R[i][j];txt(sv,F.R-4,F.T+F.FS*0.4,"r = "+f1(r,2),Object.assign({"text-anchor":"end","font-size":F.FS*1.05,"font-weight":800,style:`fill:${r>=0?"var(--mean)":"var(--sample)"}`},halo(6)));
+    const key=[Math.min(i,j),Math.max(i,j)].join(","),n=x.length,noise=i>=7||j>=7;let m=`"${LONG[i]}" and "${LONG[j]}" with ${n} trucks: r = <b>${f1(r,2)}</b>, ${strength(r)} relationship${Math.abs(r)>=0.1?(r>0?", positive":", negative"):""}. `;
+    if(key==="1,2")m+=`Liters and dollars are almost the same column (the liters times the diesel price, which barely changes). Putting both in a model is <b>multicollinearity</b>: keep just one.`;
+    else if(key==="0,1"||key==="0,2")m+=`More kilometers, more liters: as expected. It isn't r = 1 because each truck burns a different amount per kilometer (load, age, idling).`;
+    else if(key==="4,5")m+=`Old trucks spend more hours idling. Careful: this doesn't say whether it's because of age or because they do routes with more waiting.`;
+    else if(key==="0,6")m+=`The ones that drive more km (mostly highway) have fewer harsh braking events per 1,000 km. Possible confounding again: the route type.`;
+    else if(noise&&nset===1&&Math.abs(r)>0.2)m+=`One of the two columns is <b>pure chance</b>. With only 15 trucks, chance gives an r like this quite often; switch to 500 trucks and watch it stay at almost 0.`;
+    else if(noise)m+=`One of the two columns is pure chance${nset?"":": with 500 trucks, its r stays very close to 0, as it should"}.`;
+    else if(nset===1)m+=`With only 15 trucks, any r moves around a lot from one sample to another: compare it with the one for 500 trucks.`;
+    $("mx-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+})();
+</script>
+</body>
+</html>

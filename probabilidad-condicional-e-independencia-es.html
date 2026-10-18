@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Probabilidad condicional e independencia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 div.on{border-color:var(--point);box-shadow:inset 0 0 0 1px var(--point)}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.case{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:8px;align-content:start}
+.case h3{font-size:1rem}
+.case p.d{font-size:.92rem;color:var(--muted)}
+.case .ans{font-size:.9rem;color:var(--muted);min-height:1.2em}
+.case .ans b.ok{color:var(--good)}.case .ans b.no{color:var(--warn)}
+.case .btns{gap:6px}
+.case .btns button{padding:5px 11px;font-size:.86rem}
+.case .btns button.ok{background:var(--good);border-color:var(--good);color:var(--surface)}
+.case .btns button.no{border-color:var(--warn);color:var(--warn)}
+.ab{font-size:.95rem}
+.ab b{color:var(--ink)}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#es" target="_self">← Menú principal</a> · Las matemáticas debajo del ML · tema 9 · explicado con dibujos · <a href="probabilidad-condicional-e-independencia-tecnico-es.html" target="_self">ver la versión técnica</a> · <a href="matematicas-del-ml-es.html" target="_self">todos los temas</a> · <a href="conditional-probability-and-independence-en.html" target="_self">in English</a></p>
+  <h1>Probabilidad condicional e independencia</h1>
+  <p class="lede">Una probabilidad cambia cuando ya sabes algo. Si sabes que llovió, una alerta de frenada es más probable; si sabes que hubo alerta, que lloviera también. Calcularlo es fácil: quedarse solo con los casos que encajan con lo que sabes y volver a contar. Equivocarse también es fácil, y este tema enseña las trampas más comunes.</p>
+</header>
+
+<section class="first" aria-label="Juguete interactivo">
+  <div class="situ col">
+    <p class="eyebrow">La situación del juguete</p>
+    <p>Una empresa de transporte revisa <strong>1 000 viajes</strong> de sus camiones. De cada viaje apunta dos cosas: si <strong>llovió</strong> durante el viaje y si el camión dio alguna <strong>alerta de frenada brusca</strong> (el aparato de telemetría avisa cuando el camión frena de golpe).</p>
+    <p>Llovió en 200 viajes. Hubo alerta en 130. Y en 50 viajes pasaron las dos cosas. Con esos recuentos se puede responder a preguntas como: <strong>si sé que llovió, ¿qué probabilidad hay de que haya habido alerta?</strong> Eso es una <strong>probabilidad condicional</strong>: la probabilidad de algo <em>sabiendo</em> otra cosa.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="Mil viajes separados según llovió o no, con los que tuvieron alerta en naranja"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada cuadro es un viaje. A la izquierda, los 200 viajes en los que <b style="color:var(--mean)">llovió</b>; a la derecha, los 800 en los que no. Los cuadros <b style="color:var(--point)">naranjas</b> (arriba en cada bloque) son los viajes con alerta de frenada brusca. Lo que no encaja con lo que sabes se apaga, y lo que cuentas queda rodeado por una línea discontinua.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>¿Qué sabes ya del viaje?</h3>
+      <p>Elige lo que te han contado. Las cifras de abajo se calculan contando solo los viajes que encajan.</p>
+      <div class="chips" id="t-k" role="group" aria-label="Lo que ya sabes"></div>
+    </div>
+    <div class="dec">
+      <h3>Qué miden las cifras</h3>
+      <p><b>Viajes que cuentas</b>: los que encajan con lo que sabes. <b>Con alerta</b> y <b>con lluvia</b>: qué parte de esos viajes tuvo alerta o lluvia. Esa parte es la probabilidad, ya teniendo en cuenta lo que sabes.</p>
+    </div>
+  </div>
+  <div class="big3 col" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Prueba en este orden:</strong></p>
+    <ol class="try">
+      <li>Con «Nada»: de los 1 000 viajes, 130 tienen alerta, un 13 %.</li>
+      <li>Pulsa «Llovió»: solo quedan los 200 de la izquierda, y de ellos 50 tienen alerta. Ahora es un 25 %.</li>
+      <li>Pulsa «No llovió»: 80 de 800, un 10 %. Saber algo puede subir o bajar la probabilidad.</li>
+      <li>Pulsa «Hubo alerta» y mira la lluvia: 50 de 130, un 38,5 %. No es el 25 % de antes, aunque se cuenten los mismos 50 viajes.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Lo que acabas de ver</p>
+    <h2>Saber algo es quedarse con una parte y volver a contar</h2>
+    <p>Una <strong>probabilidad</strong> se puede ver como una parte de los casos: 130 de 1 000 viajes con alerta, un 13 %. Una <strong>probabilidad condicional</strong> es lo mismo, pero contando solo dentro del grupo que encaja con lo que sabes: de los 200 viajes con lluvia, 50 con alerta, un 25 %. Se escribe <strong>P(alerta | lluvia)</strong> y se lee «probabilidad de alerta <em>si</em> llueve» (la raya vertical significa «sabiendo que»).</p>
+    <p>Tres cosas que conviene quedarse:</p>
+    <ul>
+      <li><strong>Lo que sabes cambia el denominador</strong> (el número entre el que se divide): ya no se divide entre 1 000, sino entre los viajes que encajan.</li>
+      <li><strong>El orden importa.</strong> P(alerta | lluvia) = 25 % y P(lluvia | alerta) = 38,5 % cuentan los mismos 50 viajes, pero los dividen entre grupos distintos (200 y 130). Confundirlas es uno de los errores más caros de la estadística.</li>
+      <li><strong>A veces saber no cambia nada.</strong> Si la lluvia no influyera en las alertas, el 13 % seguiría siendo un 13 % al saber que llovió. Eso es la <strong>independencia</strong>.</li>
+    </ul>
+    <p>Las ideas que siguen explican cada pieza, y al final cómo esto lleva directo al <a href="bayes-es.html" target="_self">teorema de Bayes</a>, que no es otra cosa que darle la vuelta a una probabilidad condicional.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 7</p>
+    <h2>«Y» frente a «si»: la misma casilla, tres divisiones</h2>
+    <p>La tabla de abajo es el juguete en números: cada casilla cuenta los viajes que cumplen su fila y su columna a la vez. Una misma casilla da tres probabilidades distintas según <strong>entre qué se divida</strong>. Dividir entre todos los viajes responde a «¿qué parte tiene las dos cosas?» (la probabilidad de A <strong>y</strong> B). Dividir entre su columna o su fila responde a «¿qué parte, <strong>si</strong> ya sé una de las dos?».</p>
+  </div>
+  <figure class="fig"><svg id="tb" role="img" aria-label="Tabla de viajes por lluvia y alerta, con la casilla elegida y el grupo entre el que se divide resaltados"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> La casilla <b style="color:var(--point)">naranja</b> es la que cuentas (el numerador). El recuadro <b style="color:var(--mean)">azul</b> es el grupo entre el que divides (el denominador): todos los viajes, solo su columna o solo su fila. Los totales de los bordes son las sumas de cada fila y columna.</p>
+  <div class="decs">
+    <div class="dec"><h3>¿Qué casilla cuentas?</h3><div class="chips" id="b-cell" role="group" aria-label="Casilla"></div></div>
+    <div class="dec"><h3>¿Entre qué divides?</h3><div class="chips" id="b-div" role="group" aria-label="Denominador"></div><p>Cambia la división sin cambiar la casilla y mira las tres cifras.</p></div>
+  </div>
+  <div class="big3 col" id="b-big"></div>
+  <p class="qcard col" id="b-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 7</p>
+    <h2>El árbol: multiplicar por las ramas y sumar al final</h2>
+    <p>A veces no hay tabla, sino datos sueltos: «este mes llueve en el 20 % de los viajes», «cuando llueve, hay alerta en el 25 %», «cuando no llueve, en el 10 %». Con un <strong>árbol</strong> se rehace la tabla. Primero se reparte por la lluvia y después, dentro de cada rama, por la alerta. Dos reglas bastan:</p>
+    <ul>
+      <li><strong>Regla del producto</strong>: la probabilidad de un camino es la multiplicación de sus ramas. Llueve y hay alerta: 20 % × 25 % = 5 %.</li>
+      <li><strong>Probabilidad total</strong>: la probabilidad de alerta es la suma de todos los caminos que acaban en alerta. 5 % + 8 % = 13 %.</li>
+    </ul>
+  </div>
+  <figure class="fig"><svg id="tr" role="img" aria-label="Árbol de probabilidades: lluvia y después alerta"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Se lee de izquierda a derecha. Cada rama lleva su probabilidad, y su grosor es proporcional a la parte de los viajes que pasa por ella. A la derecha, cada final de camino con su cuenta: los <b style="color:var(--point)">naranjas</b> acaban en alerta. Los cuatro finales suman siempre 100 %.</p>
+  <div class="controls col">
+    <div class="slider"><label for="r-p">Viajes con lluvia este mes <output id="r-p-o"></output></label><input type="range" id="r-p" min="0" max="60" step="5" value="20"></div>
+    <div class="slider"><label for="r-a">Alerta si llueve <output id="r-a-o"></output></label><input type="range" id="r-a" min="0" max="60" step="1" value="25"></div>
+    <div class="slider"><label for="r-b">Alerta si no llueve <output id="r-b-o"></output></label><input type="range" id="r-b" min="0" max="60" step="1" value="10"></div>
+  </div>
+  <div class="big3 col" id="r-big"></div>
+  <p class="qcard col" id="r-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 7</p>
+    <h2>Darle la vuelta no da lo mismo</h2>
+    <p>El sistema de diagnóstico de los camiones avisa cuando detecta algo raro en el motor. El fabricante presume: «si el camión tiene una avería, la alerta salta el <strong>90 %</strong> de las veces». Eso es P(alerta | avería). Pero al jefe de taller le llega una alerta y se pregunta lo contrario: <strong>si salta la alerta, ¿qué probabilidad hay de que haya avería?</strong> Eso es P(avería | alerta), y puede ser muy distinto.</p>
+    <p>Confundir las dos se llama la <strong>falacia del fiscal</strong>: en un juicio, «si fuera inocente, sería muy raro que su ADN coincidiera» no quiere decir «es muy raro que sea inocente».</p>
+  </div>
+  <figure class="fig"><svg id="rv" role="img" aria-label="Mil camiones según tengan avería y salte la alerta"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada cuadro es un camión en una semana. <b style="color:var(--point)">Naranja relleno</b>: tiene avería y saltó la alerta. <b style="color:var(--point)">Naranja hueco</b>: tiene avería y no saltó. <b style="color:var(--sample)">Violeta</b>: saltó la alerta, pero el camión estaba bien (falsa alarma). <b>Gris</b>: sano y sin alerta. Con los botones te quedas solo con las averías o solo con las alertas.</p>
+  <div class="seg col" role="group" aria-label="Mirar desde"><button type="button" id="v-0" aria-pressed="true">Todos</button><button type="button" id="v-1" aria-pressed="false">Solo las averías</button><button type="button" id="v-2" aria-pressed="false">Solo las alertas</button></div>
+  <div class="controls col">
+    <div class="slider"><label for="v-p">Camiones con avería <output id="v-p-o"></output></label><input type="range" id="v-p" min="0.5" max="20" step="0.5" value="2"></div>
+    <div class="slider"><label for="v-s">Alerta si hay avería <output id="v-s-o"></output></label><input type="range" id="v-s" min="50" max="100" step="1" value="90"></div>
+    <div class="slider"><label for="v-f">Alerta sin avería (falsas alarmas) <output id="v-f-o"></output></label><input type="range" id="v-f" min="0" max="30" step="0.5" value="5"></div>
+  </div>
+  <div class="big3 col" id="v-big"></div>
+  <p class="qcard col" id="v-msg"></p>
+  <div class="col stack">
+    <p>Lo que acabas de hacer, contar los camiones con alerta y ver cuántos tienen avería, es exactamente el <strong>teorema de Bayes</strong>: con lo que dice el fabricante (90 % y 5 %) y lo frecuentes que son las averías (2 %) se calcula lo que le importa al taller (26,9 %). La cuenta está en «Para curiosos» y, con calma, en el <a href="bayes-es.html" target="_self">tema de Bayes de la serie ML</a>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 de 7</p>
+    <h2>Independientes: saber una cosa no cambia la otra</h2>
+    <p>Dos cosas son <strong>independientes</strong> si saber que pasó una no cambia la probabilidad de la otra. Con la lluvia y las alertas sería: hay alerta en el mismo porcentaje de viajes llueva o no. Entonces pasa algo cómodo: la tabla «se multiplica». La parte de viajes con lluvia <em>y</em> alerta es la parte con lluvia por la parte con alerta.</p>
+  </div>
+  <figure class="fig"><svg id="mi" role="img" aria-label="Mosaico de viajes por lluvia y alerta"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Es la tabla dibujada con áreas (un <b>mosaico</b>). La columna estrecha son los viajes con lluvia (el 20 %) y la ancha, los demás. Dentro de cada columna, lo <b style="color:var(--point)">naranja</b> es la parte con alerta. La línea discontinua marca la alerta en todos los viajes juntos. Si las dos columnas tienen el naranja a la misma altura, la lluvia no dice nada sobre la alerta: son independientes.</p>
+  <div class="controls col">
+    <div class="slider"><label for="i-a">Alerta si llueve <output id="i-a-o"></output></label><input type="range" id="i-a" min="0" max="50" step="1" value="25"></div>
+    <div class="slider"><label for="i-b">Alerta si no llueve <output id="i-b-o"></output></label><input type="range" id="i-b" min="0" max="50" step="1" value="10"></div>
+  </div>
+  <div class="big3 col" id="i-big"></div>
+  <p class="qcard col" id="i-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 de 7</p>
+    <h2>Independiente no es lo mismo que excluyente</h2>
+    <p>Mucha gente piensa que dos cosas son independientes cuando «no tienen nada que ver» o «no pueden pasar juntas». Lo segundo tiene otro nombre: son <strong>excluyentes</strong> (si pasa una, la otra no puede pasar). Y dos cosas excluyentes son justo lo contrario de independientes: saber que pasó una te dice muchísimo de la otra, que ya es imposible.</p>
+    <p>Practica con estas tarjetas: en cada una, A y B son dos cosas que pueden pasar. Elige qué son.</p>
+  </div>
+  <div class="cases" id="e-cases"></div>
+  <p class="ab col" id="e-ab"></p>
+  <figure class="fig"><svg id="em" role="img" aria-label="Mosaico de la última tarjeta contestada"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> El mismo mosaico de la idea anterior para la última tarjeta que has contestado. La columna de la izquierda es «pasa A»; lo <b style="color:var(--point)">naranja</b>, «pasa B». <b>Independientes</b>: el naranja a la misma altura en las dos columnas. <b>Excluyentes</b>: nada de naranja en la columna de A. <b>Ni una cosa ni otra</b>: alturas distintas, pero con algo de naranja en las dos.</p>
+  <p class="qcard col" id="e-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 6 de 7</p>
+    <h2>Independientes «por dentro»: la independencia condicional</h2>
+    <p>Dos alertas del mismo conductor, la de <strong>frenada brusca</strong> y la de <strong>exceso de velocidad</strong>, parecen ir juntas: los días con frenada brusca hay más excesos de velocidad. Pero la empresa tiene dos tipos de conductores: los <strong>novatos</strong>, que dan muchas alertas de las dos clases, y los <strong>veteranos</strong>, que dan pocas. Si se mira cada tipo por separado, las dos alertas ya no tienen nada que ver. Se dice que son <strong>independientes dado el tipo de conductor</strong>.</p>
+  </div>
+  <div class="seg col" role="group" aria-label="Qué conductores"><button type="button" id="c-0" aria-pressed="true">Todos (1 000 días)</button><button type="button" id="c-1" aria-pressed="false">Solo novatos (300)</button><button type="button" id="c-2" aria-pressed="false">Solo veteranos (700)</button></div>
+  <figure class="fig"><svg id="ci" role="img" aria-label="Mosaico de días de conductor por frenada brusca y exceso de velocidad"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada día de trabajo de un conductor se reparte en dos columnas: días con alguna <b>frenada brusca</b> (izquierda) y sin ella (derecha). Lo <b style="color:var(--point)">naranja</b> es la parte con algún <b>exceso de velocidad</b>. Con todos los conductores juntos, el naranja está más alto en la izquierda. Elige un solo tipo de conductor y mira qué pasa.</p>
+  <div class="big3 col" id="c-big"></div>
+  <p class="qcard col" id="c-msg"></p>
+  <div class="col stack">
+    <p>Esta idea es la base de un modelo de clasificación muy usado, <strong>Naive Bayes</strong> («Bayes ingenuo»): para decidir si un camión tiene una avería con varias señales a la vez, supone que las señales son independientes <em>sabiendo si hay avería o no</em>. Así le basta con multiplicar lo que dice cada señal por separado. Casi nunca es verdad del todo, pero funciona sorprendentemente bien.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 7 de 7</p>
+    <h2>La paradoja de Simpson: gana en todo y pierde en el total</h2>
+    <p>Dos depósitos, <strong>Norte</strong> y <strong>Sur</strong>, hacen 1 000 entregas cada uno. Unas son en <strong>ciudad</strong> (atascos, calles estrechas: es más difícil llegar a tiempo) y otras por <strong>autopista</strong>. El Norte llega a tiempo más a menudo que el Sur en ciudad (75 % frente a 70 %) y también en autopista (95 % frente a 90 %). Y sin embargo, contando todas las entregas juntas, el Sur sale mejor: 86 % frente a 79 %. No hay ningún error de cuentas.</p>
+  </div>
+  <figure class="fig"><svg id="sp" role="img" aria-label="Entregas a tiempo por depósito y tipo de ruta"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Un panel por depósito. Cada barra es un tipo de ruta: <b style="color:var(--mean)">azul</b> ciudad y <b style="color:var(--sample)">violeta</b> autopista. La altura es el % de entregas a tiempo (el eje empieza en 50 % para que se vean las diferencias) y la <b>anchura</b>, cuántas entregas de ese tipo hace el depósito. La línea discontinua es el total del depósito: una media de las dos alturas en la que pesa más la barra más ancha.</p>
+  <div class="controls col">
+    <div class="slider"><label for="s-n">Entregas en ciudad del Norte <output id="s-n-o"></output></label><input type="range" id="s-n" min="0" max="100" step="5" value="80"></div>
+    <div class="slider"><label for="s-s">Entregas en ciudad del Sur <output id="s-s-o"></output></label><input type="range" id="s-s" min="0" max="100" step="5" value="20"></div>
+  </div>
+  <div class="big3 col" id="s-big"></div>
+  <p class="qcard col" id="s-msg"></p>
+  <div class="col stack">
+    <p>¿A quién creer? Aquí, a la comparación por tipo de ruta: el tipo de ruta influye a la vez en qué depósito la hace y en si se llega a tiempo, así que mezclarlo todo compara cosas distintas. La regla general no es «separa siempre»: es <strong>pensar qué variable explica a las otras dos</strong> antes de decidir qué tabla mirar. Un modelo de ML entrenado con el total heredaría la misma conclusión equivocada.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta completa</h2>
+    <ol class="steps">
+      <li><div><strong>Una probabilidad es una parte de los casos</strong>, y una condicional, una parte de un grupo: quédate con los casos que encajan con lo que sabes y vuelve a contar.</div></li>
+      <li><div><strong>Distingue «y» de «si».</strong> P(A y B) divide entre todos; P(A | B), solo entre los casos con B.</div></li>
+      <li><div><strong>No le des la vuelta sin cuidado.</strong> P(alerta | avería) y P(avería | alerta) pueden ser 90 % y 27 %. Para pasar de una a otra hace falta saber lo frecuente que es cada cosa: eso es Bayes.</div></li>
+      <li><div><strong>Árbol</strong>: multiplica por las ramas (regla del producto) y suma los caminos que acaban igual (probabilidad total).</div></li>
+      <li><div><strong>Independientes</strong>: saber una no cambia la otra, y la tabla se multiplica. <strong>Excluyentes</strong> es otra cosa: no pueden pasar juntas.</div></li>
+      <li><div><strong>La independencia puede depender del grupo.</strong> Dos señales relacionadas en toda la flota pueden ser independientes dentro de cada tipo de conductor.</div></li>
+      <li><div><strong>Antes de comparar totales, mira los grupos</strong>: una mezcla distinta puede dar la vuelta a la conclusión (Simpson).</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>Dónde aparece en la telemetría de flota</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6L34 32H6Z"/><path d="M20 16v8M20 28v1"/></svg><h3>Alertas de mantenimiento</h3><p>Lo que importa al taller no es cuántas averías detecta el sistema, sino cuántas alertas acaban en avería: P(avería | alerta). Con averías raras, aunque el sensor sea bueno, la mayoría de alertas son falsas, y cada revisión cuesta dinero (unos 150 €).</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M10 22a8 8 0 0 1 4-14 9 9 0 0 1 16 3 6 6 0 0 1 0 11Z"/><path d="M14 28l-2 5M21 28l-2 5M28 28l-2 5"/></svg><h3>Riesgo según las condiciones</h3><p>P(incidente | lluvia), P(incidente | noche), P(retraso | obra en la ruta): comparar cada condicional con la probabilidad general dice qué condiciones merecen un aviso al conductor o un precio distinto en el seguro.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 32V14M18 32V8M28 32V20"/><path d="M5 32h30"/><path d="M6 18l10-8 10 8 8-4" stroke-dasharray="3 3"/></svg><h3>Comparar depósitos, rutas o conductores</h3><p>Antes de premiar o señalar a alguien por su porcentaje de entregas a tiempo o de alertas, hay que comparar dentro de grupos parecidos (mismo tipo de ruta, mismo turno). Si no, aparece Simpson.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="12" cy="14" r="5"/><circle cx="28" cy="14" r="5"/><circle cx="20" cy="29" r="5"/><path d="M16 18l3 7M24 18l-3 7"/></svg><h3>Combinar señales</h3><p>Vibración, temperatura y códigos de fallo: un clasificador tipo Naive Bayes las combina suponiendo que son independientes dado el estado del camión. Saber cuándo esa suposición falla (dos sensores que miden lo mismo) evita contar dos veces la misma pista.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Conexiones</p>
+    <h2>Con los modelos de la serie ML y los otros temas</h2>
+    <p>El paso siguiente natural es el <a href="bayes-es.html" target="_self">teorema de Bayes</a> de la serie ML: la idea 3 desarrollada, con priors, actualizaciones y la alerta de avería contada con calma. La <a href="regresion-logistica-es.html" target="_self">regresión logística</a> estima directamente una probabilidad condicional, P(avería | datos del camión). Un <a href="arboles-de-decision-es.html" target="_self">árbol de decisión</a> hace lo mismo que el juguete: parte los casos en grupos y en cada hoja cuenta qué parte es de cada clase. Y una <a href="cadenas-de-markov-es.html" target="_self">cadena de Markov</a> es una tabla de probabilidades condicionales: P(estado de mañana | estado de hoy).</p>
+    <p>En esta colección, las proporciones que aquí se cuentan son medias de ceros y unos (<a href="media-varianza-y-desviacion-tipica-es.html" target="_self">tema 7</a>), y la binomial y la Poisson del <a href="distribuciones-es.html" target="_self">tema 8</a> suponían que cada suceso es independiente de los demás. El <a href="covarianza-y-correlacion-es.html" target="_self">tema 10</a>, covarianza y correlación, mide <em>cuánto</em> se apartan dos variables numéricas de ser independientes. En «Preparar los datos», las <a href="clases-desbalanceadas-es.html" target="_self">clases desbalanceadas</a> son la idea 3 con averías raras, y el <a href="analisis-exploratorio-es.html" target="_self">análisis exploratorio</a> empieza muchas veces con tablas cruzadas como la de la idea 1.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo que ayuda y dónde engaña</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Lo que ayuda</h3><ul class="pc">
+      <li>Contar en una tabla convierte casi cualquier pregunta de probabilidad en una división sencilla.</li>
+      <li>El árbol permite rehacer la tabla con datos sueltos y responder a «¿y si cambia la mezcla?» (más lluvia, más novatos).</li>
+      <li>La independencia, cuando se cumple, simplifica muchísimo: basta multiplicar.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Dónde engaña</h3><ul class="pc">
+      <li>Con pocos casos en el grupo, la condicional da saltos: 3 de 10 no es un 30 % fiable.</li>
+      <li>Dar la vuelta a una condicional sin tener en cuenta lo frecuente que es cada cosa lleva a conclusiones muy equivocadas.</li>
+      <li>Que dos cosas vayan juntas no dice que una cause la otra, y una tercera variable escondida puede invertir la conclusión (Simpson).</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Probabilidad condicional</dt><dd>La probabilidad de algo sabiendo que pasó otra cosa: P(A | B), «A si B».</dd>
+      <dt>Probabilidad conjunta</dt><dd>La de que pasen las dos cosas a la vez: P(A y B).</dd>
+      <dt>Tabla de contingencia</dt><dd>Tabla que cuenta los casos para cada combinación de dos variables (lluvia sí/no × alerta sí/no).</dd>
+      <dt>Regla del producto</dt><dd>P(A y B) = P(B) × P(A | B): multiplicar por las ramas del árbol.</dd>
+      <dt>Probabilidad total</dt><dd>Sumar los caminos que acaban en lo mismo para tener su probabilidad general.</dd>
+      <dt>Independientes</dt><dd>Saber una no cambia la otra: P(A | B) = P(A). La tabla se multiplica.</dd>
+      <dt>Excluyentes</dt><dd>No pueden pasar a la vez: P(A y B) = 0.</dd>
+      <dt>Independencia condicional</dt><dd>Independientes dentro de cada grupo (dado el tipo de conductor), aunque no lo sean mezclando grupos.</dd>
+      <dt>Paradoja de Simpson</dt><dd>Una comparación que sale al revés en el total que en cada grupo, por una mezcla distinta de grupos.</dd>
+      <dt>Teorema de Bayes</dt><dd>La regla para darle la vuelta a una condicional: de P(alerta | avería) a P(avería | alerta).</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: las cuentas detrás de todo</summary>
+    <p style="padding-top:10px">No hacen falta para entender la idea:</p>
+    <div class="formula">condicional        P(A | B) = P(A y B) / P(B)
+   P(alerta | lluvia) = 50 / 200 = 25 %      P(lluvia | alerta) = 50 / 130 = 38,5 %
+
+regla del producto P(A y B) = P(B) · P(A | B) = P(A) · P(B | A)
+   0,20 · 0,25 = 0,13 · 0,385 = 0,05
+
+probabilidad total P(A) = P(B) · P(A | B) + P(no B) · P(A | no B)
+   0,20 · 0,25 + 0,80 · 0,10 = 0,13
+
+Bayes              P(B | A) = P(B) · P(A | B) / P(A)
+   P(avería | alerta) = 0,02 · 0,90 / (0,02 · 0,90 + 0,98 · 0,05)
+                      = 0,018 / 0,067 = 26,9 %
+
+independencia      P(A | B) = P(A)   ⇔   P(A y B) = P(A) · P(B)
+excluyentes        P(A y B) = 0      (si P(A) y P(B) &gt; 0, no son independientes)
+
+Simpson            total = parte en ciudad · % ciudad + parte en autopista · % autopista
+   Norte: 0,8 · 75 % + 0,2 · 95 % = 79 %     Sur: 0,2 · 70 % + 0,8 · 90 % = 86 %</div>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2>Todo en un minuto</h2>
+    <p>Un repaso animado: los mil viajes, quedarse con los de lluvia y volver a contar, por qué darle la vuelta a una condicional no da lo mismo, cómo se ve la independencia y la paradoja de los dos depósitos. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xACfAAEAAwEAAwEAAAAAAAAAAAAABgcIBQQDAQIBAQEBAQAAAAAAAAAAAAAAAAABAgMQAQACAQMCAwMFCgoIAwYFBQABAgMFBBESBiEHMVFBEzJhIjYUdLRSQoFzcnVxsyOysRUXkTOUNaGikoJVNNNDYhYIw8HiUySDk6NUY4Ql4Tfj0fERAQEBAAMBAQEAAAAAAAAAAAABESFBMQJCEv/AABEIBDgHgAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AKSAdWAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEg7W7N1XvDJucemxgm22pS+T42X4fhebRHT9G3PyZBHxYv9Cfd/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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB/9k=" aria-label="Animación: probabilidad condicional e independencia">
+      <source src="probabilidad-condicional-e-independencia-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g,"\u00a0");s=fr?i+","+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+/* porcentaje: sin decimales si es entero, con uno si no */
+const pc=v=>{if(!isFinite(v))return "—";const x=100*v;return f1(x,Math.abs(x-Math.round(x))<0.05?0:1)+" %";};
+const eur=v=>f1(Math.round(v),0)+" €";
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+const big=(id,items)=>{$(id).innerHTML=items.map(([v,s,on])=>`<div${on?' class="on"':""}><b>${v}</b><span>${s}</span></div>`).join("");};
+
+/* mosaico: columnas "pasa A" (ancho a) y "no pasa A"; dentro, la parte con B (naranja) */
+function mosaic(svg,o){const nw=narrowOf(svg),W=nw?600:900,H=nw?530:380,FS=nw?25:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+  const L=nw?78:66,R=W-(nw?20:16),T=nw?30:22,B=H-(nw?124:80),gap=nw?10:8;
+  const sy=v=>B-v*(B-T),wA=Math.max(0,(R-L-gap)*o.a),xA=L,xN=L+wA+gap,wN=R-xN;
+  for(const v of [0,0.25,0.5,0.75,1]){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},svg);txt(svg,L-8,sy(v)+FS*0.35,Math.round(v*100)+" %",{"text-anchor":"end","font-size":FS*0.85});}
+  const col=(x,w,p,lab,n)=>{if(w<0.5)return;
+    el("rect",{x,y:sy(1),width:w,height:sy(0)-sy(1),fill:"var(--mean)","fill-opacity":.16,stroke:"var(--mean)","stroke-opacity":.5},svg);
+    if(p>0)el("rect",{x,y:sy(p),width:w,height:sy(0)-sy(p),fill:"var(--point)","fill-opacity":.85},svg);
+    const cx=Math.max(L+4,Math.min(R-4,x+w/2)),l2=o.labB+" "+pc(p);let an="middle";const tw=Math.max(lab.length,l2.length)*FS*0.6;let tx=cx;
+    if(cx-tw/2<4){tx=4;an="start";}else if(cx+tw/2>W-4){tx=W-4;an="end";}
+    txt(svg,tx,B+FS*1.3,lab,{"text-anchor":an,"font-size":FS,"font-weight":700,class:"t-ink"});
+    txt(svg,tx,B+FS*2.5,l2,{"text-anchor":an,"font-size":FS,"font-weight":700,style:"fill:var(--point)"});
+    if(n)txt(svg,tx,B+FS*3.6,n,{"text-anchor":an,"font-size":FS*0.85});};
+  col(xA,wA,o.pA,o.labA,o.nA);col(xN,wN,o.pN,o.labN,o.nN);
+  const pB=o.a*o.pA+(1-o.a)*o.pN;
+  el("line",{x1:L,x2:R,y1:sy(pB),y2:sy(pB),stroke:"var(--ink)","stroke-width":2,"stroke-dasharray":"7 5"},svg);
+  txt(svg,R-6,sy(pB)-8,o.labAll+" "+pc(pB),Object.assign({"text-anchor":"end","font-size":FS*0.85,class:"t-ink"},halo(5)));
+  return pB;}
+
+/* ---------- juguete: 1 000 viajes ---------- */
+(function(){const svg=$("toy");let K=0;
+  const KN=[{n:"Nada",f:()=>true},{n:"Llovió",f:r=>r},{n:"No llovió",f:r=>!r},{n:"Hubo alerta",f:(r,a)=>a},{n:"No hubo alerta",f:(r,a)=>!a}];
+  chips($("t-k"),KN.map(k=>k.n),i=>{K=i;draw();});
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,cs=nw?10:14,gap=nw?34:44,FS=nw?23:14;
+    const gw=50*cs+gap,ox=(W-gw)/2,oy=nw?62:52,H=oy+20*cs+(nw?50:40);
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const BL=[{r:true,cols:10,x:ox,na:50,n:200,name:"llovió"},{r:false,cols:40,x:ox+10*cs+gap,na:80,n:800,name:"no llovió"}];
+    let N=0,NA=0,NR=0;
+    for(const b of BL){txt(svg,b.x,oy-FS*1.55,b.name,{"font-size":FS,"font-weight":700,class:"t-ink"});txt(svg,b.x,oy-FS*0.45,b.n+" viajes",{"font-size":FS*0.85});
+      for(let k=0;k<b.n;k++){const c=k%b.cols,rw=Math.floor(k/b.cols),a=k<b.na,on=KN[K].f(b.r,a);if(on){N++;if(a)NA++;if(b.r)NR++;}
+        el("rect",{x:b.x+c*cs+1,y:oy+rw*cs+1,width:cs-2,height:cs-2,rx:2,fill:a?"var(--point)":(b.r?"var(--mean)":"var(--muted)"),"fill-opacity":on?(a?1:.42):.08},svg);}
+      /* recuadro de lo que se cuenta */
+      const rowsA=b.na/b.cols,box=(r0,r1)=>el("rect",{x:b.x-3,y:oy+r0*cs-3,width:b.cols*cs+6,height:(r1-r0)*cs+6,rx:4,fill:"none",stroke:"var(--ink)","stroke-width":2,"stroke-dasharray":"6 4"},svg);
+      if(K===1&&b.r||K===2&&!b.r)box(0,20);if(K===3)box(0,rowsA);if(K===4)box(rowsA,20);}
+    txt(svg,W/2,H-12,nw?"cada cuadro es un viaje · naranja: alerta":"cada cuadro es un viaje · naranja: hubo alerta de frenada brusca",{"text-anchor":"middle","font-size":FS*0.85});
+    big("t-big",[[f1(N,0),"viajes que cuentas"],[pc(NA/N),`con alerta: ${NA} de ${f1(N,0)}`,K<3],[pc(NR/N),`con lluvia: ${NR} de ${f1(N,0)}`,K>=3]]);
+    $("t-msg").innerHTML=[
+      `Sin saber nada del viaje, cuentas los 1 000: 130 tienen alerta. La probabilidad de alerta es 130 de 1 000, un <b>13 %</b>, y la de lluvia, 200 de 1 000, un 20 %. Ahora pulsa «Llovió».`,
+      `Sabes que llovió: te quedas solo con los 200 viajes de la izquierda y vuelves a contar. 50 tienen alerta: un <b>25 %</b>, casi el doble que el 13 % general. Es la probabilidad de alerta <em>si</em> llueve, y se escribe P(alerta | lluvia).`,
+      `Sabes que no llovió: quedan los 800 de la derecha, 80 con alerta, un <b>10 %</b>. Saber algo también puede bajar una probabilidad: P(alerta | sin lluvia) = 10 % es menos que el 13 % general.`,
+      `Ahora sabes que hubo alerta y preguntas por la lluvia: te quedas con los 130 cuadros naranjas. 50 son de viajes con lluvia: un <b>38,5 %</b>, frente al 20 % de todos los viajes. Fíjate: P(lluvia | alerta) = 38,5 % no es P(alerta | lluvia) = 25 %. Se cuentan los mismos 50 viajes, pero se dividen entre grupos distintos (130 y 200).`,
+      `Sin alerta quedan 870 viajes, y 150 son de lluvia: un <b>17,2 %</b>, algo menos que el 20 % general. Que no haya alerta hace un poco menos probable que lloviera.`][K];}
+  window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 1: tabla, tres divisiones ---------- */
+(function(){const svg=$("tb");let cell=0,dv=0;
+  const T=[[50,80],[150,720]],RN=["alerta","sin alerta"],CN=["llovió","no llovió"],rt=[130,870],ct=[200,800];
+  chips($("b-cell"),["alerta y llovió","alerta y no llovió","sin alerta y llovió","sin alerta y no llovió"],i=>{cell=i;draw();});
+  chips($("b-div"),["Todos los viajes","Su columna (el tiempo)","Su fila (la alerta)"],i=>{dv=i;draw();});
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:15,c0=nw?160:220,cw=nw?138:170,hh=nw?52:44,rh=nw?64:54;
+    const x0=(W-(c0+3*cw))/2,y0=8,H=y0+hh+3*rh+10;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const r=cell>>1,c=cell&1,X=j=>x0+c0+j*cw,Y=i=>y0+hh+i*rh;
+    /* denominador */
+    let dx,dy,dw,dh,dtc;if(dv===0){dx=X(0);dy=Y(0);dw=2*cw;dh=2*rh;dtc=[2,2];}else if(dv===1){dx=X(c);dy=Y(0);dw=cw;dh=2*rh;dtc=[2,c];}else{dx=X(0);dy=Y(r);dw=2*cw;dh=rh;dtc=[r,2];}
+    el("rect",{x:dx+2,y:dy+2,width:dw-4,height:dh-4,rx:8,fill:"var(--mean)","fill-opacity":.12,stroke:"var(--mean)","stroke-width":3},svg);
+    el("rect",{x:X(dtc[1])+6,y:Y(dtc[0])+6,width:cw-12,height:rh-12,rx:8,fill:"var(--mean)","fill-opacity":.28},svg);
+    el("rect",{x:X(c)+6,y:Y(r)+6,width:cw-12,height:rh-12,rx:8,fill:"var(--point)","fill-opacity":.75},svg);
+    ["llovió","no llovió","total"].forEach((s,j)=>txt(svg,X(j)+cw/2,y0+hh*0.62,s,{"text-anchor":"middle","font-size":FS,"font-weight":700,class:"t-ink"}));
+    ["alerta","sin alerta","total"].forEach((s,i)=>txt(svg,x0+8,Y(i)+rh*0.6,s,{"font-size":FS,"font-weight":700,class:"t-ink"}));
+    const V=[[50,80,130],[150,720,870],[200,800,1000]];
+    for(let i=0;i<3;i++)for(let j=0;j<3;j++)txt(svg,X(j)+cw/2,Y(i)+rh*0.6,f1(V[i][j],0),{"text-anchor":"middle","font-size":FS*1.1,class:i<2&&j<2?"t-ink":null,"font-weight":i<2&&j<2?700:400});
+    el("line",{x1:x0,x2:X(3),y1:Y(2),y2:Y(2),stroke:"var(--muted)","stroke-width":1.5},svg);el("line",{x1:X(2),x2:X(2),y1:y0,y2:Y(3),stroke:"var(--muted)","stroke-width":1.5},svg);
+    const n=T[r][c],a=`${RN[r]} y ${CN[c]}`;
+    big("b-big",[[pc(n/1000),`entre todos: ${n} de 1 000. P(${a})`,dv===0],[pc(n/ct[c]),`entre su columna: ${n} de ${ct[c]}. P(${RN[r]} | ${CN[c]})`,dv===1],[pc(n/rt[r]),`entre su fila: ${n} de ${rt[r]}. P(${CN[c]} | ${RN[r]})`,dv===2]]);
+    $("b-msg").innerHTML=[`<b>P(${a}) = ${n} / 1 000 = ${pc(n/1000)}</b>. De todos los viajes, qué parte tiene las dos cosas a la vez. No sabes nada de antemano: divides entre todos.`,
+      `<b>P(${RN[r]} | ${CN[c]}) = ${n} / ${ct[c]} = ${pc(n/ct[c])}</b>. «Si sé que ${CN[c]}, ¿qué parte tuvo ${RN[r]}?». Te quedas con la columna de «${CN[c]}» (${ct[c]} viajes) y cuentas dentro. Cada columna, repartida así, suma 100 %.`,
+      `<b>P(${CN[c]} | ${RN[r]}) = ${n} / ${rt[r]} = ${pc(n/rt[r])}</b>. Ahora lo que sabes es la alerta: «si sé que hubo ${RN[r]==="alerta"?"alerta":"no hubo alerta"}, ¿qué parte de esos viajes ${CN[c]}?». Te quedas con la fila (${rt[r]} viajes). El numerador es el mismo ${n}; el resultado, no.`][dv];}
+  window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 2: árbol ---------- */
+(function(){const svg=$("tr"),ip=$("r-p"),ia=$("r-a"),ib=$("r-b");
+  function draw(){const p=+ip.value/100,a=+ia.value/100,b=+ib.value/100,nw=narrowOf(svg),W=nw?600:900,H=nw?500:340,FS=nw?21:14;
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const R0=[nw?80:90,H/2],M=[[nw?172:300,H*0.27],[nw?172:300,H*0.73]],xl=nw?300:560,LY=[H*0.11,H*0.39,H*0.61,H*0.89];
+    const leaves=[[0,"llueve y alerta",p,a,true],[0,"llueve, sin alerta",p,1-a,false],[1,"no llueve y alerta",1-p,b,true],[1,"no llueve, sin alerta",1-p,1-b,false]];
+    const sw=v=>1.5+v*(nw?20:22);
+    [[0,p,"llueve"],[1,1-p,"no llueve"]].forEach(([k,v,lab])=>{el("line",{x1:R0[0],y1:R0[1],x2:M[k][0],y2:M[k][1],stroke:"var(--mean)","stroke-width":sw(v),"stroke-opacity":.55,"stroke-linecap":"round"},svg);
+      txt(svg,(R0[0]+M[k][0])/2+(nw?10:4),(R0[1]+M[k][1])/2+(k?FS*1.3:-FS*0.6),pc(v),Object.assign({"text-anchor":"middle","font-size":FS,"font-weight":700,class:"t-ink"},halo(5)));});
+    leaves.forEach(([k,lab,pp,q,al],i)=>{const y=LY[i];el("line",{x1:M[k][0],y1:M[k][1],x2:xl,y2:y,stroke:al?"var(--point)":"var(--muted)","stroke-width":sw(pp*q),"stroke-opacity":al?.85:.45,"stroke-linecap":"round"},svg);
+      txt(svg,M[k][0]+(xl-M[k][0])*0.55,M[k][1]+(y-M[k][1])*0.55+(i%2?FS*1.2:-FS*0.5),pc(q),Object.assign({"text-anchor":"middle","font-size":FS*0.9},halo(5)));
+      el("circle",{cx:xl,cy:y,r:nw?7:6,fill:al?"var(--point)":"var(--muted)"},svg);
+      txt(svg,xl+14,y-3,lab,{"font-size":FS*0.9,class:"t-ink","font-weight":al?700:400});
+      txt(svg,xl+14,y+FS*0.95,`${f1(pp,2)} × ${f1(q,2)} = ${pc(pp*q)}`,{"font-size":FS*0.85,style:al?"fill:var(--point)":null});});
+    [[0,"llueve"],[1,"no llueve"]].forEach(([k,lab])=>{el("circle",{cx:M[k][0],cy:M[k][1],r:nw?8:7,fill:"var(--mean)"},svg);txt(svg,M[k][0],M[k][1]+(k?FS*1.6:-FS*0.9),lab,Object.assign({"text-anchor":"middle","font-size":FS*0.9,class:"t-ink"},halo(5)));});
+    el("circle",{cx:R0[0],cy:R0[1],r:nw?9:8,fill:"var(--ink)"},svg);txt(svg,R0[0]-14,R0[1]+FS*0.3,"viaje",{"text-anchor":"end","font-size":FS*0.85});
+    const tot=p*a+(1-p)*b,back=tot>0?p*a/tot:NaN;
+    $("r-p-o").textContent=pc(p);$("r-a-o").textContent=pc(a);$("r-b-o").textContent=pc(b);
+    big("r-big",[[pc(tot),`alerta en total: ${pc(p*a)} + ${pc((1-p)*b)}`],[f1(Math.round(1000*tot),0),"viajes con alerta de cada 1 000"],[pc(back),"de los viajes con alerta, con lluvia"]]);
+    let m=`Probabilidad total: P(alerta) = ${f1(p,2)} × ${f1(a,2)} + ${f1(1-p,2)} × ${f1(b,2)} = <b>${pc(tot)}</b>. Es una media de las dos ramas (${pc(a)} y ${pc(b)}), en la que pesa más la rama más gruesa.`;
+    if(Math.abs(a-b)<0.005)m+=` Como las alertas salen igual llueva o no, la lluvia del mes no cambia nada: la alerta es independiente de la lluvia (idea 4).`;
+    else if(p>=0.35)m+=` Con un mes tan lluvioso, las alertas suben aunque ningún conductor conduzca peor: solo ha cambiado la mezcla de viajes. Si cada alerta se revisa en un vídeo que cuesta 6 € de tiempo del supervisor, en 1 000 viajes son ${eur(6*Math.round(1000*tot))} en lugar de 780 €.`;
+    else m+=` Prueba a subir la lluvia del mes al 40 %: con las mismas ramas, la alerta pasa del 13 % al 16 %.`;
+    $("r-msg").innerHTML=m;}
+  [ip,ia,ib].forEach(i=>i.addEventListener("input",draw));window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 3: darle la vuelta ---------- */
+(function(){const svg=$("rv"),ip=$("v-p"),is=$("v-s"),iF=$("v-f");let mode=0;
+  const rnd=mulberry32(11),perm=[...Array(1000).keys()];for(let i=999;i>0;i--){const j=Math.floor(rnd()*(i+1));[perm[i],perm[j]]=[perm[j],perm[i]];}
+  seg(["v-0","v-1","v-2"],i=>{mode=i;draw();});
+  function draw(){const nw=narrowOf(svg),cols=nw?40:50,rows=1000/cols,cs=nw?14:16,W=nw?600:900,FS=nw?23:14,ox=(W-cols*cs)/2,oy=8,H=oy+rows*cs+(nw?44:36);
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const p=+ip.value/100,s=+is.value/100,fa=+iF.value/100,av=Math.round(1000*p),va=Math.round(av*s),fp=Math.round((1000-av)*fa);
+    for(let i=0;i<1000;i++){const k=perm[i],x=ox+(k%cols)*cs,y=oy+Math.floor(k/cols)*cs,isA=i<av,al=isA?i<va:i<av+fp;
+      const on=mode===0||(mode===1&&isA)||(mode===2&&al);let fill,st="none",w=0;
+      if(isA&&al)fill="var(--point)";else if(isA){fill="transparent";st="var(--point)";w=2.2;}else if(al)fill="var(--sample)";else fill="var(--line)";
+      el("rect",{x:x+1.5,y:y+1.5,width:cs-3,height:cs-3,rx:2.5,fill,stroke:st,"stroke-width":w,opacity:on?1:.12},svg);}
+    txt(svg,W/2,H-10,nw?"cada cuadro: un camión en una semana":"cada cuadro es un camión en una semana · 1 000 camiones",{"text-anchor":"middle","font-size":FS*0.85});
+    $("v-p-o").textContent=f1(100*p,1)+" %";$("v-s-o").textContent=pc(s);$("v-f-o").textContent=f1(100*fa,1)+" %";
+    const pa=av?va/av:NaN,pb=va+fp?va/(va+fp):NaN,cost=va?(va+fp)*150/va:NaN;
+    big("v-big",[[pc(pa),`P(alerta | avería): de ${av} averías, ${va} dan alerta`,mode===1],[pc(pb),`P(avería | alerta): de ${va+fp} alertas, ${va} son averías`,mode===2],[isFinite(cost)?eur(cost):"—",`en revisiones de 150 € por cada avería encontrada`]]);
+    let m;
+    if(mode===1)m=`Te quedas con los ${av} camiones con avería: a ${va} les salta la alerta. Eso es lo que mide el fabricante, P(alerta | avería) = <b>${pc(pa)}</b>. Ahora pulsa «Solo las alertas».`;
+    else if(mode===2)m=`Te quedas con los ${va+fp} camiones con alerta: solo ${va} tienen avería (naranja) y ${fp} están sanos (violeta). P(avería | alerta) = <b>${pc(pb)}</b>, frente al ${pc(pa)} del fabricante. ${fp>va?`Hay más falsas alarmas que averías porque los camiones sanos son muchísimos: el ${f1(100*fa,1)} % de ${1000-av} sanos (${fp}) es más que el ${pc(s)} de ${av} averías (${va}).`:"Con estos números, la mayoría de alertas sí son averías."}`;
+    else m=`Hay ${av} averías y ${va+fp} alertas. La misma casilla, «avería y alerta» (${va} camiones), da ${pc(pa)} si se divide entre las averías y ${pc(pb)} si se divide entre las alertas. Prueba a subir las averías al 10 % o a bajar las falsas alarmas al 1 %: P(avería | alerta) se dispara.`;
+    $("v-msg").innerHTML=m;}
+  [ip,is,iF].forEach(i=>i.addEventListener("input",draw));window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 4: independencia ---------- */
+(function(){const svg=$("mi"),ia=$("i-a"),ib=$("i-b");
+  function draw(){const a=+ia.value/100,b=+ib.value/100;
+    const pB=mosaic(svg,{a:0.2,pA:a,pN:b,labA:"llueve",labN:"no llueve",nA:"200 viajes",nN:"800 viajes",labB:"alerta",labAll:"alerta en todos:"});
+    $("i-a-o").textContent=pc(a);$("i-b-o").textContent=pc(b);
+    const j=0.2*a,pr=0.2*pB;
+    big("i-big",[[pc(pB),"alerta en todos los viajes"],[pc(j),"lluvia y alerta a la vez"],[pc(pr),`20 % × ${pc(pB)}: lo que saldría si fueran independientes`]]);
+    let m;if(Math.abs(a-b)<0.005)m=`<b>Independientes.</b> Hay alerta en el ${pc(a)} de los viajes con lluvia y en el ${pc(b)} de los demás: saber si llovió no cambia nada. Por eso la casilla «lluvia y alerta» es justo 20 % × ${pc(pB)} = ${pc(j)}: la tabla se multiplica.`;
+    else m=`<b>No son independientes.</b> Con lluvia, alerta en el ${pc(a)}; sin lluvia, en el ${pc(b)}. Saber que llovió ${a>b?"sube":"baja"} la probabilidad de alerta, y la casilla «lluvia y alerta» (${pc(j)}) ${j>pr?"es mayor":"es menor"} que 20 % × ${pc(pB)} = ${pc(pr)}. Pon los dos deslizadores en el mismo valor (por ejemplo, 10 %).`;
+    $("i-msg").innerHTML=m;}
+  [ia,ib].forEach(i=>i.addEventListener("input",draw));window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 5: independiente frente a excluyente ---------- */
+(function(){const svg=$("em"),box=$("e-cases"),OPT=["Independientes","Excluyentes","Ni una cosa ni otra"];
+  /* [título, A, B, respuesta, P(A), P(B), P(A y B), explicación] */
+  const CASES=[
+    ["Dos conductores","A: el viaje lo conduce Ana.","B: ese mismo viaje lo conduce Luis.",1,0.30,0.25,0,"Cada viaje lo hace un solo conductor: no pueden pasar a la vez. Si sabes que lo conduce Ana, la probabilidad de que sea Luis cae del 25 % a 0. Excluyentes, y por eso muy dependientes."],
+    ["Pinchazos lejanos","A: el camión 3 pincha este mes (ruta de Galicia).","B: el camión 18 pincha este mes (ruta de Murcia).",0,0.15,0.20,0.03,"Rutas, carreteras y neumáticos distintos: que pinche uno no dice nada del otro. Pueden pasar los dos (un 15 % × 20 % = 3 % de los meses)."],
+    ["Lluvia y frenadas","A: llueve durante el viaje.","B: hay alerta de frenada brusca.",2,0.20,0.13,0.05,"Pueden pasar juntas (50 de 1 000 viajes), así que no son excluyentes. Pero con lluvia hay más alertas (25 % frente a 10 %), así que tampoco son independientes."],
+    ["La hora de llegada","A: la entrega llega antes de las 10:00.","B: esa misma entrega llega después de las 18:00.",1,0.35,0.15,0,"Una entrega llega una sola vez: o antes de las 10:00, o después de las 18:00, o en medio. Nunca las dos cosas. Excluyentes."],
+    ["Matrícula y kilómetros","A: la matrícula acaba en número par.","B: el camión tiene más de 300 000 km.",0,0.50,0.30,0.15,"El número de la matrícula no tiene nada que ver con el desgaste: entre los pares hay la misma parte de camiones con muchos kilómetros que entre los impares. Independientes, y pueden pasar juntas."],
+    ["Revisión y avería","A: el camión pasó la revisión este mes.","B: el camión tiene una avería de motor este mes.",2,0.25,0.12,0.01,"Pueden pasar las dos (una avería poco después de la revisión), así que no son excluyentes. Pero tras una revisión las averías son menos frecuentes (4 % frente a 14,7 %): tampoco son independientes."]];
+  let last=2;const ans=new Array(CASES.length).fill(-1);
+  CASES.forEach((c,i)=>{const d=document.createElement("div");d.className="case";d.innerHTML=`<h3>${c[0]}</h3><p class="d">${c[1]}<br>${c[2]}</p><div class="btns"></div><p class="ans"></p>`;box.appendChild(d);
+    const bs=OPT.map((o,j)=>{const b=document.createElement("button");b.type="button";b.textContent=o;b.onclick=()=>{ans[i]=j;last=i;bs.forEach((y,k)=>{y.className=k===c[3]?"ok":(k===j?"no":"");});
+      d.querySelector(".ans").innerHTML=(j===c[3]?`<b class="ok">¡Bien!</b> `:`<b class="no">Son ${OPT[c[3]].toLowerCase()}.</b> `)+c[7];draw();};d.querySelector(".btns").appendChild(b);return b;});});
+  function draw(){const c=CASES[last],[a,b,x]=[c[4],c[5],c[6]];
+    mosaic(svg,{a,pA:x/a,pN:(b-x)/(1-a),labA:"pasa A",labN:"no pasa A",nA:pc(a),nN:pc(1-a),labB:"B",labAll:"B en total:"});
+    $("e-ab").innerHTML=`<b>Dibujo de «${c[0]}».</b> ${c[1]} ${c[2]}`;
+    const done=ans.filter(v=>v>=0).length,ok=ans.filter((v,i)=>v===CASES[i][3]).length;
+    $("e-msg").innerHTML=done===0?`El dibujo muestra de momento «Lluvia y frenadas». Si sabes que pasó A, la probabilidad de B es la altura del naranja en la columna de A (${pc(x/a)}); sin saber nada, la línea discontinua (${pc(b)}). Contesta una tarjeta para ver su dibujo.`:
+      `Llevas ${ok} de ${done} bien. En «${c[0]}», B pasa en el ${pc(b)} de los casos y, sabiendo que pasó A, en el ${pc(x/a)}. ${x===0?"Cero: excluyentes.":Math.abs(x/a-b)<1e-9?"Lo mismo: independientes.":"Distinto, pero no cero: ni una cosa ni otra."}${done===CASES.length?" ¡Has hecho todas! La pregunta clave es siempre la misma: si sé que pasó A, ¿cambia la probabilidad de B?":""}`;}
+  window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 6: independencia condicional ---------- */
+(function(){const svg=$("ci");let g=0;
+  /* [días, días con frenada, con frenada y exceso, sin frenada y exceso] */
+  const G=[[1000,190,43,117],[300,120,36,54],[700,70,7,63]],NM=["todos los conductores","los novatos","los veteranos"];
+  seg(["c-0","c-1","c-2"],i=>{g=i;draw();});
+  function draw(){const [n,f,fv,nv]=G[g],a=f/n,pA=fv/f,pN=nv/(n-f),pv=(fv+nv)/n;
+    mosaic(svg,{a,pA,pN,labA:"frenada",labN:"sin frenada",nA:`${f} días`,nN:`${n-f} días`,labB:"exceso",labAll:"exceso en todos:"});
+    big("c-big",[[pc(pv),`días con exceso de velocidad (${fv+nv} de ${f1(n,0)})`],[pc(pA),`si hubo frenada brusca (${fv} de ${f})`],[pc(pN),`si no la hubo (${nv} de ${n-f})`]]);
+    $("c-msg").innerHTML=g===0?`Con ${NM[0]}, saber que hubo frenada brusca sube la probabilidad de exceso de velocidad del ${pc(pv)} al <b>${pc(pA)}</b>. Parece que una alerta «arrastra» a la otra. Pero los días con frenada son sobre todo de novatos, que también corren más. Pulsa «Solo novatos».`:
+      `Con ${NM[g]}, el exceso sale en el ${pc(pA)} de los días con frenada y en el ${pc(pN)} de los días sin ella: <b>lo mismo</b>. Dentro de cada tipo de conductor, las dos alertas son independientes. Lo que las relacionaba en el total era el tipo de conductor: ${g===1?"los novatos dan muchas de las dos":"los veteranos dan pocas de las dos"}.`;}
+  window.addEventListener("resize",draw);draw();})();
+
+/* ---------- idea 7: Simpson ---------- */
+(function(){const svg=$("sp"),iN=$("s-n"),iS=$("s-s");
+  const RATE={Norte:[0.75,0.95],Sur:[0.70,0.90]};
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,H=nw?500:380,FS=nw?23:14,wn=+iN.value/100,ws=+iS.value/100;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const T=nw?56:46,B=H-(nw?62:34),y0=0.5,sy=v=>B-(v-y0)/(1-y0)*(B-T),L=nw?76:58,gap=nw?26:44,pw=(W-L-12-gap)/2;
+    for(const v of [0.5,0.6,0.7,0.8,0.9,1]){el("line",{x1:L,x2:W-12,y1:sy(v),y2:sy(v),class:"g-line"},svg);txt(svg,L-8,sy(v)+FS*0.35,Math.round(v*100)+" %",{"text-anchor":"end","font-size":FS*0.85});}
+    const res={};
+    [["Norte",wn,0],["Sur",ws,1]].forEach(([dep,w,k])=>{const x0=L+k*(pw+gap),r=RATE[dep],tot=w*r[0]+(1-w)*r[1];res[dep]=tot;
+      txt(svg,x0+pw/2,T-(nw?24:18),"Depósito "+dep,{"text-anchor":"middle","font-size":FS,"font-weight":700,class:"t-ink"});
+      const bars=[[0,w,r[0],"ciudad","var(--mean)"],[w,1-w,r[1],"autopista","var(--sample)"]];
+      bars.forEach(([s,ww,h,lab,col])=>{if(ww<=0)return;const x=x0+s*pw+1,bw=ww*pw-2;if(bw<=0)return;
+        el("rect",{x,y:sy(h),width:bw,height:B-sy(h),fill:col,"fill-opacity":.55,stroke:col,"stroke-width":1.5},svg);
+        const t1=lab,t2=pc(h);
+        if(bw>=t1.length*FS*0.85*0.6+6){txt(svg,x+bw/2,B-FS*1.5,t2,{"text-anchor":"middle","font-size":FS,"font-weight":700,class:"t-ink"});txt(svg,x+bw/2,B-FS*0.45,t1,{"text-anchor":"middle","font-size":FS*0.85,class:"t-ink"});}
+        else if(bw>=t2.length*FS*0.8*0.6)txt(svg,x+bw/2,B-FS*0.5,t2,{"text-anchor":"middle","font-size":FS*0.8,"font-weight":700,class:"t-ink"});});
+      el("line",{x1:x0,x2:x0+pw,y1:sy(tot),y2:sy(tot),stroke:"var(--ink)","stroke-width":2.5,"stroke-dasharray":"8 5"},svg);
+      txt(svg,x0+pw/2,sy(tot)-8,"total "+pc(tot),Object.assign({"text-anchor":"middle","font-size":FS,"font-weight":700,class:"t-ink"},halo(6)));
+      if(nw){txt(svg,x0+pw/2,B+FS*1.2,`${Math.round(w*1000)} ciudad`,{"text-anchor":"middle","font-size":FS*0.8});txt(svg,x0+pw/2,B+FS*2.2,`${Math.round((1-w)*1000)} autopista`,{"text-anchor":"middle","font-size":FS*0.8});}else txt(svg,x0+pw/2,B+FS*1.3,`${Math.round(w*1000)} ciudad · ${Math.round((1-w)*1000)} autopista`,{"text-anchor":"middle","font-size":FS*0.8});});
+    $("s-n-o").textContent=pc(wn);$("s-s-o").textContent=pc(ws);
+    const lN=Math.round(1000*(1-res.Norte)),lS=Math.round(1000*(1-res.Sur));
+    big("s-big",[[pc(res.Norte),"Norte a tiempo, en total"],[pc(res.Sur),"Sur a tiempo, en total"],[eur(30*lN),`penalización del Norte por entregas tarde, a 30 € cada una (Sur: ${eur(30*lS)})`]]);
+    let m;const nb=res.Norte>res.Sur+1e-9,sb=res.Sur>res.Norte+1e-9;
+    if(sb)m=`<b>Paradoja.</b> El Norte gana en ciudad (75 % frente a 70 %) y en autopista (95 % frente a 90 %), pero en total pierde: ${pc(res.Norte)} frente a ${pc(res.Sur)}. La razón es la mezcla: el Norte hace ${pc(wn)} de sus entregas en ciudad, la parte difícil, y el Sur solo ${pc(ws)}. Pon las dos mezclas iguales y mira qué pasa.`;
+    else if(nb&&Math.abs(wn-ws)<0.001)m=`Con la misma mezcla (${pc(wn)} en ciudad los dos), el total del Norte (${pc(res.Norte)}) supera al del Sur (${pc(res.Sur)}) por los mismos 5 puntos que en cada tipo de ruta. Comparar con la misma mezcla es la forma justa.`;
+    else if(nb)m=`Ahora el Norte gana también en total (${pc(res.Norte)} frente a ${pc(res.Sur)}): su mezcla ya no le perjudica tanto. Fíjate en que los porcentajes por tipo de ruta no han cambiado; solo la anchura de las barras.`;
+    else m=`Empate en total (${pc(res.Norte)}): la ventaja del Norte en cada ruta la compensa justo su mezcla más difícil.`;
+    $("s-msg").innerHTML=m;}
+  [iN,iS].forEach(i=>i.addEventListener("input",draw));window.addEventListener("resize",draw);draw();})();
+})();
+</script>
+</body>
+</html>
