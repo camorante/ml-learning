@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pruebas de hipótesis y p-valor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content;max-width:100%}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec p b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.rowb{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.yesno{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.yesno .card h3{font-size:1.05rem}
+.verdict{display:inline-block;border-radius:999px;padding:2px 10px;font-size:.85rem;font-weight:700}
+.verdict.ok{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.verdict.no{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.verdict.mid{background:color-mix(in srgb,var(--sample) 18%,transparent);color:var(--sample)}
+@media (max-width:620px){.yesno{grid-template-columns:1fr}.seg{border-radius:14px}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#es" target="_self">← Menú principal</a> · Las matemáticas debajo del ML · tema 13 · explicado con dibujos · <a href="pruebas-de-hipotesis-y-p-valor-tecnico-es.html" target="_self">ver la versión técnica</a> · <a href="matematicas-del-ml-es.html" target="_self">todos los temas</a> · <a href="hypothesis-tests-and-p-values-en.html" target="_self">in English</a></p>
+  <h1>Pruebas de hipótesis y p-valor</h1>
+  <p class="lede">Diez camiones hacen un curso de conducción eficiente y gastan 1,6 L/100 km menos que otros diez. ¿El curso funciona o ha sido suerte? Una prueba de hipótesis responde a una pregunta muy concreta: si el curso no sirviera para nada, ¿cuántas veces saldría por azar una diferencia así?</p>
+</header>
+
+<section class="first" aria-label="Juguete interactivo">
+  <div class="situ col">
+    <p class="eyebrow">La situación del juguete</p>
+    <p>Una empresa de transporte quiere saber si un <strong>curso de conducción eficiente</strong> ahorra gasóleo. Hace una <strong>prueba A/B</strong>: de 20 camiones parecidos, sortea 10 cuyos conductores hacen el curso; los otros 10 siguen igual. Un mes después mira el consumo medio de cada camión en la telemetría.</p>
+    <p>Los del curso gastan de media <strong>30,4 L/100 km</strong> y los otros <strong>32,0</strong>: un ahorro de <strong>1,6</strong>. Pero los camiones varían mucho entre sí (rutas, cargas, el propio camión), y con solo 10 por grupo, el reparto del sorteo podría haber dejado por casualidad los camiones más ahorradores en el grupo del curso. ¿Cómo saberlo?</p>
+    <p>La idea: suponer que el curso <strong>no hace nada</strong>. Entonces las etiquetas «con curso» y «sin curso» no importan, y cualquier otro reparto de los 20 camiones habría sido igual de probable. Así que se <strong>barajan las etiquetas</strong> y se mira qué diferencia sale.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="Consumo de los 20 camiones según su etiqueta e histograma de las diferencias al barajar las etiquetas"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Arriba, cada punto es un camión, colocado según su consumo (en litros cada 100 km). El color es su grupo de verdad: <b style="color:var(--sample)">violeta</b> sin curso y <b style="color:var(--point)">naranja</b> con curso. La fila en la que está es la etiqueta que tiene ahora: al barajar, los camiones cambian de fila, pero no de color. La raya vertical de cada fila es su media. Abajo, el histograma de las diferencias de media («sin curso» menos «con curso») de todas las barajadas; las rayas discontinuas marcan la diferencia real, 1,6, hacia los dos lados, y en <b style="color:var(--warn)">rojo</b> las barajadas que llegan hasta ahí o más allá.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>Barajar las etiquetas</h3>
+      <p>Cada barajada reparte al azar las 20 etiquetas (10 «con curso» y 10 «sin curso») entre los 20 camiones, como si se volviera a hacer el sorteo, y calcula la diferencia de medias. Es lo que saldría si el curso no hiciera nada.</p>
+      <div class="rowb"><button type="button" id="t-1" class="primary">Barajar 1 vez</button><button type="button" id="t-100">+100</button><button type="button" id="t-1k">+1 000</button><button type="button" id="t-10k">+10 000</button></div>
+    </div>
+    <div class="dec">
+      <h3>Volver a los datos reales</h3>
+      <p>Deja cada camión con su etiqueta de verdad y borra las barajadas.</p>
+      <div class="rowb"><button type="button" id="t-re">↺ Empezar de nuevo</button></div>
+    </div>
+  </div>
+  <div class="big3" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Prueba en este orden:</strong></p>
+    <ol class="try">
+      <li>Mira los datos reales: los naranjas están algo más a la izquierda (gastan menos), pero se mezclan bastante con los violetas.</li>
+      <li>Pulsa «Barajar 1 vez» cuatro o cinco veces: la diferencia sale a veces positiva y a veces negativa, casi siempre más pequeña que 1,6.</li>
+      <li>Pulsa «+1 000»: el histograma toma forma de campana alrededor de 0. Cuenta cuántas barajadas llegan a 1,6 o más.</li>
+      <li>Pulsa «+10 000»: el porcentaje se estabiliza cerca del 3,1&nbsp;%. Ese número es el <b>p-valor</b>.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Lo que acabas de ver</p>
+    <h2>El p-valor: cuánto sorprende el resultado si no pasara nada</h2>
+    <p>Una prueba de hipótesis hace siempre los mismos tres pasos:</p>
+    <ul>
+      <li><strong>Suponer que no pasa nada.</strong> «El curso no cambia el consumo.» Esa suposición se llama <strong>hipótesis nula</strong>. Lo contrario («sí lo cambia») es la <strong>hipótesis alternativa</strong>.</li>
+      <li><strong>Ver qué resultados daría el azar</strong> si la nula fuera cierta. Aquí, barajando las etiquetas: salen diferencias alrededor de 0, casi todas entre −1,5 y +1,5.</li>
+      <li><strong>Mirar dónde cae el resultado real.</strong> La fracción de resultados del azar tan extremos como el real o más es el <strong>p-valor</strong>. Aquí, un 3,1&nbsp;%: si el curso no sirviera para nada, una diferencia de 1,6 o más (en cualquier sentido) saldría unas 3 veces de cada 100 sorteos.</li>
+    </ul>
+    <p>Un p-valor pequeño quiere decir que el resultado sería raro si no pasara nada, así que la explicación «no pasa nada» pierde fuerza. Lo habitual es llamar <strong>«estadísticamente significativo»</strong> a un resultado con p-valor por debajo del 5&nbsp;%. Pero el p-valor tiene trampas: no es la probabilidad de que el curso no funcione (idea 2), con pocos camiones se escapan efectos reales (ideas 3 y 4), «significativo» no quiere decir «importante» (idea 5), y se puede fabricar un resultado significativo sin querer probando muchas cosas (idea 6) o mirando cada día (idea 7).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 7</p>
+    <h2>La campana de la suerte, y si cuentan uno o dos lados</h2>
+    <p>Barajar miles de veces da una forma de campana. No hace falta barajar para conocerla: en el <a href="muestreo-y-teorema-central-del-limite-es.html" target="_self">tema 11</a> se vio que una diferencia de medias baila con forma de campana y una anchura llamada <strong>error estándar</strong>, que se calcula con la dispersión de los datos y el número de camiones. Aquí es 0,69 L/100 km. Con pocos datos se usa la campana de colas algo más gordas de la <a href="intervalos-de-confianza-y-bootstrap-es.html" target="_self">t de Student</a>. Esa fórmula es el famoso <strong>test t</strong>.</p>
+    <p>Queda una decisión: ¿qué cuenta como «tan extremo»? Si antes de empezar solo interesaba saber si el curso <em>ahorra</em>, se cuentan solo las diferencias de 1,6 o más hacia el lado del ahorro: prueba <strong>unilateral</strong>. Si también importaría que el curso <em>empeorara</em> el consumo (por ejemplo, conductores más lentos que fuerzan el motor), se cuentan los dos lados: prueba <strong>bilateral</strong>, la habitual.</p>
+  </div>
+  <figure class="fig"><svg id="pv" role="img" aria-label="Distribución de las diferencias si el curso no hiciera nada, con las colas tan extremas como el ahorro observado"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Las barras grises son todas las formas posibles de repartir los 20 camiones en dos grupos de 10 (son 184 756) y la diferencia que daría cada una. La curva <b style="color:var(--mean)">azul</b> es la campana del test t, que se le parece mucho sin tener que barajar. La raya negra es el ahorro observado y las zonas <b style="color:var(--warn)">rojas</b>, los resultados tan extremos o más: su tamaño es el p-valor.</p>
+  <div class="decs">
+    <div class="dec"><h3>Ahorro observado</h3><p>Imagina que la prueba hubiera dado otro ahorro, con los mismos camiones igual de variados.</p><div class="slider"><label for="pv-d">Ahorro <output id="pv-d-o"></output></label><input type="range" id="pv-d" min="0" max="3" step="0.1" value="1.6"><div class="ends"><span>0</span><span>3 L/100 km</span></div></div></div>
+    <div class="dec"><h3>¿Qué cuenta como «tan extremo»?</h3><p>Decídelo <b>antes</b> de ver los datos: elegirlo después para que salga un p-valor menor es hacer trampa.</p><div class="seg" role="group" aria-label="Lados"><button type="button" id="pv-2" aria-pressed="true">Los dos lados (bilateral)</button><button type="button" id="pv-1" aria-pressed="false">Solo ahorros (unilateral)</button></div></div>
+  </div>
+  <div class="big3 col" id="pv-big"></div>
+  <p class="qcard col" id="pv-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 7</p>
+    <h2>Lo que el p-valor no dice: la probabilidad de que el curso no sirva</h2>
+    <p>Es el error más extendido: leer «p = 3&nbsp;%» como «hay un 3&nbsp;% de probabilidad de que el curso no funcione». No es eso. El p-valor se calcula <em>suponiendo</em> que el curso no funciona: es la probabilidad del resultado si la nula es cierta, no la probabilidad de que la nula sea cierta. Son dos preguntas distintas, como «¿qué probabilidad hay de que llueva si está nublado?» y «¿qué probabilidad hay de que esté nublado si llueve?» (el <a href="probabilidad-condicional-e-independencia-es.html" target="_self">tema 9</a> y el <a href="bayes-es.html" target="_self">teorema de Bayes</a>).</p>
+    <p>Para ver la diferencia, imagina una empresa que prueba <strong>1 000 ideas</strong> (cursos, avisos, neumáticos, rutas) con pruebas A/B, y llama «funciona» a todo lo que sale con p &lt; 5&nbsp;%. ¿Cuántos de esos «funciona» son falsos? Depende de dos cosas que el p-valor no ve: cuántas ideas funcionan de verdad y cómo de grandes son las pruebas.</p>
+  </div>
+  <figure class="fig"><svg id="nn" role="img" aria-label="Mil ideas probadas: cuántas funcionan, cuántas se detectan y cuántas falsas alarmas hay"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada cuadro es una idea probada. <b style="color:var(--good)">Verde relleno</b>: funciona y la prueba lo detecta. <b style="color:var(--good)">Verde hueco</b>: funciona, pero la prueba no lo ve. <b style="color:var(--warn)">Rojo</b>: no funciona, pero sale p &lt; 5&nbsp;% por suerte (una falsa alarma). <b>Gris</b>: no funciona y la prueba no dice nada.</p>
+  <div class="decs">
+    <div class="dec"><h3>¿Cuántas ideas funcionan de verdad?</h3><p>En la práctica, la mayoría de las ideas no cambian casi nada.</p><div class="slider"><label for="nn-r">Ideas que funcionan <output id="nn-r-o"></output></label><input type="range" id="nn-r" min="5" max="50" step="5" value="10"><div class="ends"><span>5&nbsp;%</span><span>50&nbsp;%</span></div></div></div>
+    <div class="dec"><h3>¿Cómo son las pruebas?</h3><p>Con un ahorro real de 1 L/100 km, una prueba con 10 camiones por grupo lo detecta solo 29 veces de cada 100 (idea 3); con 41 por grupo, 81 de cada 100.</p><div class="seg" role="group" aria-label="Tamaño de las pruebas"><button type="button" id="nn-s" aria-pressed="true">10 camiones por grupo</button><button type="button" id="nn-l" aria-pressed="false">41 por grupo</button></div></div>
+  </div>
+  <div class="big3 col" id="nn-big"></div>
+  <p class="qcard col" id="nn-msg"></p>
+  <div class="yesno">
+    <div class="card pc-good"><h3>Lo que sí dice el p-valor</h3><ul class="pc">
+      <li>Cuánto choca el resultado con la idea de que no pasa nada: cuanto más pequeño, más raro sería por azar.</li>
+      <li>Si se usa la regla «actuar cuando p &lt; 5&nbsp;%», las ideas que no funcionan pasarán el filtro el 5&nbsp;% de las veces, no más.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Lo que no dice</h3><ul class="pc">
+      <li>La probabilidad de que la nula sea cierta (o de que el curso funcione). Para eso hace falta saber cuántas ideas suelen funcionar: es una pregunta <a href="bayes-es.html" target="_self">bayesiana</a>.</li>
+      <li>Cuánto ahorra el curso: un p-valor diminuto puede venir de un ahorro diminuto medido con muchísimos datos (idea 5).</li>
+      <li>Que un p-valor grande demuestre que no hay efecto: puede que la prueba fuera demasiado pequeña para verlo (idea 4).</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 7</p>
+    <h2>Dos maneras de equivocarse: falsas alarmas y efectos que se escapan</h2>
+    <p>Usar la regla «si p &lt; 5&nbsp;%, el curso funciona» es fijar un listón. Con cualquier listón hay dos errores posibles:</p>
+    <ul>
+      <li><strong>Error de tipo I (falsa alarma):</strong> el curso no hace nada, pero la prueba sale significativa por suerte. Pasa justo el 5&nbsp;% de las veces: ese 5&nbsp;% es el <strong>nivel de significación</strong>, que se llama α (alfa).</li>
+      <li><strong>Error de tipo II (efecto que se escapa):</strong> el curso sí ahorra, pero la prueba no llega al listón. Su probabilidad se llama β (beta), y lo contrario, la probabilidad de detectar el efecto, es la <strong>potencia</strong>.</li>
+    </ul>
+    <p>Supongamos que el curso ahorra de verdad 1,0 L/100 km y que los camiones varían 1,6 entre sí. El dibujo muestra qué ahorro mediría la prueba en los dos mundos.</p>
+  </div>
+  <figure class="fig"><svg id="ab" role="img" aria-label="Campanas del ahorro medido si el curso no hace nada y si ahorra 1 L/100 km, con el listón de significación"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> La campana gris es el ahorro que mediría la prueba si el curso no hiciera nada; la <b style="color:var(--mean)">azul</b>, si ahorra de verdad 1,0. Las rayas verticales son el listón: un ahorro medido más allá (hacia cualquier lado) da p &lt; α. En <b style="color:var(--warn)">rojo</b>, las falsas alarmas (α); en <b style="color:var(--sample)">violeta</b>, el efecto real que se escapa (β); en <b style="color:var(--good)">verde</b>, el que se detecta (la potencia).</p>
+  <div class="decs">
+    <div class="dec"><h3>El listón (α)</h3><p>Un listón más exigente da menos falsas alarmas, pero deja escapar más efectos reales.</p><div class="seg" role="group" aria-label="Nivel de significación"><button type="button" id="ab-a0" aria-pressed="false">1&nbsp;%</button><button type="button" id="ab-a1" aria-pressed="true">5&nbsp;%</button><button type="button" id="ab-a2" aria-pressed="false">10&nbsp;%</button></div></div>
+    <div class="dec"><h3>Camiones por grupo</h3><p>Más camiones estrechan las dos campanas y las separan.</p><div class="chips" id="ab-n" role="group" aria-label="Camiones por grupo"></div></div>
+  </div>
+  <div class="big3 col" id="ab-big"></div>
+  <p class="qcard col" id="ab-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 de 7</p>
+    <h2>Con pocos camiones no se ve nada (y lo que se ve, exagera)</h2>
+    <p>La potencia depende de tres cosas: el tamaño del efecto real (un ahorro grande se ve antes), lo que varían los camiones y cuántos hay. Como el error estándar baja con la raíz del número de camiones (<a href="muestreo-y-teorema-central-del-limite-es.html" target="_self">tema 11</a>), para detectar un efecto la mitad de grande hacen falta <strong>cuatro veces</strong> más camiones.</p>
+    <p>Por eso el número de camiones se decide <strong>antes</strong> de la prueba: se elige el ahorro más pequeño que valdría la pena detectar y se calcula cuántos camiones dan una potencia del 80&nbsp;%. Una prueba sin potencia no solo pierde efectos reales: cuando por suerte sale significativa, el ahorro medido suele estar muy <strong>exagerado</strong>, porque solo pasan el listón las mediciones que salieron altas.</p>
+  </div>
+  <figure class="fig"><svg id="pw" role="img" aria-label="Potencia de la prueba según el número de camiones por grupo"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> La curva <b style="color:var(--mean)">azul</b> es la potencia (de cada 100 pruebas, cuántas detectan el ahorro real) según los camiones por grupo, en escala logarítmica. La raya discontinua es el 80&nbsp;% habitual y la raya <b style="color:var(--good)">verde</b> marca cuántos camiones hacen falta para llegar. El punto <b style="color:var(--point)">naranja</b> es tu elección.</p>
+  <div class="controls col">
+    <div class="slider"><label for="pw-d">Ahorro real <output id="pw-d-o"></output></label><input type="range" id="pw-d" min="0.25" max="2" step="0.05" value="1"><div class="ends"><span>0,25</span><span>2 L/100 km</span></div></div>
+    <div class="slider"><label for="pw-n">Camiones por grupo <output id="pw-n-o"></output></label><input type="range" id="pw-n" min="0" max="11" step="1" value="2"><div class="ends"><span>5</span><span>300</span></div></div>
+  </div>
+  <div class="big3 col" id="pw-big"></div>
+  <p class="qcard col" id="pw-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 de 7</p>
+    <h2>Significativo no es importante: mira el intervalo, en euros</h2>
+    <p>«Estadísticamente significativo» solo quiere decir «difícil de explicar por azar». Con datos de miles de camiones, hasta un ahorro de 0,1 L/100 km sale significativo. ¿Merece la pena? El curso cuesta <strong>300&nbsp;€</strong> por conductor; con 100 000 km al año y el gasóleo a 1,65&nbsp;€/L, cada 0,1 L/100 km son 165&nbsp;€ al año por camión. Para pagar el curso hace falta ahorrar al menos <strong>0,18 L/100 km</strong>.</p>
+    <p>Lo que responde a eso es el <strong>intervalo de confianza</strong> de la diferencia (<a href="intervalos-de-confianza-y-bootstrap-es.html" target="_self">tema 12</a>): dice cuánto puede ahorrar el curso. Y lleva el p-valor dentro: el intervalo del 95&nbsp;% no incluye el 0 <strong>exactamente</strong> cuando p &lt; 5&nbsp;%.</p>
+  </div>
+  <figure class="fig"><svg id="ci" role="img" aria-label="Intervalo de confianza del ahorro con el cero y el ahorro que paga el curso"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> La raya gruesa es el intervalo del 95&nbsp;% del ahorro, con el ahorro medido en el círculo; debajo del eje, lo mismo en euros por camión y año. La línea del 0 es «el curso no hace nada» y la zona <b style="color:var(--good)">verde</b>, los ahorros que pagan el curso.</p>
+  <div class="controls col">
+    <div class="slider"><label for="ci-n">Camiones por grupo <output id="ci-n-o"></output></label><input type="range" id="ci-n" min="0" max="10" step="1" value="8"><div class="ends"><span>10</span><span>20 000</span></div></div>
+    <div class="slider"><label for="ci-d">Ahorro medido <output id="ci-d-o"></output></label><input type="range" id="ci-d" min="0" max="2.5" step="0.05" value="0.1"><div class="ends"><span>0</span><span>2,5 L/100 km</span></div></div>
+  </div>
+  <div class="big3 col" id="ci-big"></div>
+  <p class="qcard col" id="ci-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 6 de 7</p>
+    <h2>Prueba 20 cosas y alguna saldrá «significativa»</h2>
+    <p>El informe del curso no mira solo el consumo: también ralentí, frenazos, acelerones, velocidad, averías… hasta 20 indicadores. Si el curso no sirve para nada, cada uno tiene un 5&nbsp;% de salir significativo por suerte. Con 20, lo raro es que <em>no</em> salga ninguno: pasa en el 64&nbsp;% de los cursos inútiles. Si luego el informe solo cuenta el que salió («¡el curso reduce los frenazos!»), es una falsa alarma vestida de descubrimiento. Buscar entre muchas pruebas hasta que una salga se llama <strong>p-hacking</strong>.</p>
+    <p>Las correcciones suben el listón cuando se hacen muchas pruebas. <strong>Bonferroni</strong> divide el 5&nbsp;% entre el número de pruebas (0,25&nbsp;% cada una). <strong>Holm</strong> hace lo mismo, pero va relajando el listón una vez que la prueba más clara lo pasa. <strong>Benjamini-Hochberg</strong> es menos estricta: no evita toda falsa alarma, sino que limita qué fracción de los «descubrimientos» son falsos.</p>
+  </div>
+  <figure class="fig"><svg id="mc" role="img" aria-label="P-valores de 20 indicadores de un curso que no sirve para nada, con el listón de cada corrección"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada fila es un indicador del curso, ordenados del p-valor más pequeño al más grande (escala logarítmica: a la izquierda, más «sorprendente»). La línea <b style="color:var(--mean)">azul</b> es el listón de la corrección elegida; los puntos <b style="color:var(--warn)">rojos</b> lo pasan. Aquí el curso no hace nada, así que <b>todos los rojos son falsas alarmas</b>.</p>
+  <div class="decs">
+    <div class="dec"><h3>Corrección</h3><div class="seg" role="group" aria-label="Corrección"><button type="button" id="mc-0" aria-pressed="true">Sin corregir</button><button type="button" id="mc-1" aria-pressed="false">Bonferroni</button><button type="button" id="mc-2" aria-pressed="false">Holm</button><button type="button" id="mc-3" aria-pressed="false">Benjamini-Hochberg</button></div></div>
+    <div class="dec"><h3>Más cursos inútiles</h3><div class="rowb"><button type="button" id="mc-1x" class="primary">Probar otro curso</button><button type="button" id="mc-1k">+1 000 cursos</button><button type="button" id="mc-re">↺ Empezar de nuevo</button></div></div>
+  </div>
+  <div class="big3 col" id="mc-big"></div>
+  <p class="qcard col" id="mc-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 7 de 7</p>
+    <h2>Mirar cada día y parar cuando sale: otra forma de hacer trampa sin querer</h2>
+    <p>La prueba del curso está planeada para 30 días. Pero es tentador mirar el p-valor cada mañana y, el día que baje del 5&nbsp;%, parar y anunciar que funciona. Parece inocente: el resultado era significativo. El problema es que el p-valor sube y baja de un día a otro por azar, y con 30 oportunidades de cruzar el listón, lo cruza mucho más que el 5&nbsp;% de las veces. Se llama <strong>peeking</strong> (mirar a hurtadillas).</p>
+  </div>
+  <figure class="fig"><svg id="pk" role="img" aria-label="P-valor de una prueba A/A día a día durante 30 días con el listón del 5&nbsp;%"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Una prueba en la que el curso <b>no hace nada</b>: cada día se suman los datos de 20 camiones por grupo y se recalcula el p-valor con todo lo acumulado (eje vertical, escala logarítmica). La raya discontinua es el 5&nbsp;%. El punto <b style="color:var(--warn)">rojo</b> marca el primer día que lo cruza: ahí se habría parado y anunciado un ahorro falso. En gris, las pruebas anteriores.</p>
+  <div class="rowb col"><button type="button" id="pk-1" class="primary">Otra prueba</button><button type="button" id="pk-1k">+1 000 pruebas</button><button type="button" id="pk-re">↺ Empezar de nuevo</button></div>
+  <div class="big3 col" id="pk-big"></div>
+  <p class="qcard col" id="pk-msg"></p>
+  <div class="col stack">
+    <p>La solución es fijar antes cuántos días dura la prueba y mirar el resultado solo al final. Si hace falta poder parar antes (por ejemplo, si el curso empeorara mucho el consumo), hay métodos <strong>secuenciales</strong> que reparten el 5&nbsp;% entre las miradas con un listón más exigente al principio.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta completa</h2>
+    <ol class="steps">
+      <li><div><strong>Antes de empezar, por escrito</strong>: qué se mide (una métrica principal), la hipótesis nula, si la prueba es unilateral o bilateral, el listón (5&nbsp;%) y cuántos días dura.</div></li>
+      <li><div><strong>Calcula cuántos camiones</strong> hacen falta para detectar el ahorro más pequeño que valga la pena, con una potencia del 80&nbsp;%.</div></li>
+      <li><div><strong>Sortea</strong> quién recibe el cambio: así lo único que distingue a los grupos, aparte del azar, es el cambio.</div></li>
+      <li><div><strong>Calcula el p-valor</strong> al final: test t, barajando etiquetas o la prueba que toque (porcentajes, rangos).</div></li>
+      <li><div><strong>Acompáñalo del intervalo</strong> y tradúcelo a euros: significativo no es lo mismo que rentable.</div></li>
+      <li><div><strong>Si miras muchas métricas</strong>, corrige (Holm o Benjamini-Hochberg) o di claramente cuál era la principal.</div></li>
+      <li><div><strong>No leas el p-valor</strong> como la probabilidad de que el efecto sea real, ni un p-valor grande como prueba de que no hay efecto.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>Dónde aparece en la telemetría de flota</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="12" y="5" width="16" height="30" rx="3"/><path d="M17 30h6"/><path d="M16 12h8M16 17h8M16 22h5"/></svg><h3>Un aviso de ralentí en la app</h3><p>Con el aviso, el 15,1&nbsp;% de 2 000 trayectos tiene más de 10 minutos de ralentí; sin él, el 18,0&nbsp;%. Un test de porcentajes da p = 1,5&nbsp;%. Ojo: los trayectos de un mismo camión se parecen, y si se sortean camiones (no trayectos) hay que analizar por camión.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13"/><circle cx="20" cy="20" r="5"/><path d="M20 7v8M20 25v8"/></svg><h3>Neumáticos de bajo consumo</h3><p>Antes de la prueba se calcula: para ver un ahorro de 0,5 L/100 km con camiones que varían 1,6, hacen falta unos 161 por grupo. Con 20, una prueba «sin efecto» no demuestra nada.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 32h28M8 32V8"/><path d="M12 26h4v6h-4zM19 18h4v14h-4zM26 22h4v10h-4z"/></svg><h3>¿El modelo nuevo es mejor?</h3><p>Un modelo de averías nuevo acierta el 76,1&nbsp;% frente al 74,4&nbsp;% del actual en los mismos 2 000 camiones. Como son los mismos camiones, se comparan los casos en que discrepan (prueba de McNemar): p = 2&nbsp;%, cuando un test que los tratara como independientes daría 21&nbsp;%.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="8" width="28" height="24" rx="3"/><path d="M11 15h6M11 20h6M11 25h6M23 15h6M23 20h6M23 25h6"/></svg><h3>El panel con 50 indicadores</h3><p>Un panel que compara cada semana 50 indicadores por depósito y marca en rojo los «significativos» enciende unas 2 o 3 alarmas falsas por semana aunque no cambie nada. Benjamini-Hochberg las mantiene a raya.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Conexiones</p>
+    <h2>Con los modelos de la serie ML y los otros temas</h2>
+    <p>Este tema junta casi toda la colección: la desviación típica del <a href="media-varianza-y-desviacion-tipica-es.html" target="_self">tema 7</a> y la campana normal del <a href="distribuciones-es.html" target="_self">tema 8</a> dan forma al azar; la prueba de porcentajes es el χ² de independencia del <a href="probabilidad-condicional-e-independencia-es.html" target="_self">tema 9</a>; la <a href="covarianza-y-correlacion-es.html" target="_self">correlación</a> también tiene su p-valor; el error estándar y el teorema central del límite del <a href="muestreo-y-teorema-central-del-limite-es.html" target="_self">tema 11</a> dan la anchura de la campana, y los intervalos del <a href="intervalos-de-confianza-y-bootstrap-es.html" target="_self">tema 12</a> son la otra cara del p-valor. El <a href="maxima-verosimilitud-es.html" target="_self">tema 14, máxima verosimilitud</a>, da una receta general para construir pruebas (la razón de verosimilitudes).</p>
+    <p>En la serie ML, la <a href="regresion-lineal-polinomial-es.html" target="_self">regresión lineal</a> y la <a href="regresion-logistica-es.html" target="_self">regresión logística</a> dan un p-valor para cada coeficiente («¿esta variable aporta algo?»), con las mismas trampas: con muchas variables, alguna sale significativa por suerte. El <a href="bayes-es.html" target="_self">teorema de Bayes</a> responde a la pregunta que el p-valor no responde: la probabilidad de que el efecto sea real. En «Preparar los datos», <a href="separar-antes-de-mirar-es.html" target="_self">separar antes de mirar</a> es la misma disciplina que fijar la prueba antes de ver los datos; las <a href="clases-desbalanceadas-es.html" target="_self">clases desbalanceadas</a> traen las mismas falsas alarmas y efectos que se escapan, con otros nombres (falsos positivos y negativos), y el <a href="proyecto-completo-es.html" target="_self">proyecto completo</a> decide si un modelo nuevo es mejor que el anterior, que es una prueba de hipótesis.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo que ayuda y dónde engaña</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Lo que ayuda</h3><ul class="pc">
+      <li>Protege de celebrar casualidades: con 10 camiones por grupo, diferencias de 1 L/100 km salen solas a menudo.</li>
+      <li>Obliga a planear: qué medir, cuántos camiones y cuántos días, antes de empezar.</li>
+      <li>Barajar etiquetas funciona para casi cualquier cifra, sin fórmulas.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Dónde engaña</h3><ul class="pc">
+      <li>Se lee mal casi siempre: no es la probabilidad de que la nula sea cierta ni mide el tamaño del efecto.</li>
+      <li>El 5&nbsp;% es una costumbre, no una ley: un 4,9&nbsp;% y un 5,1&nbsp;% dicen prácticamente lo mismo.</li>
+      <li>Probar muchas cosas, mirar cada día o elegir el análisis después de ver los datos lo vuelven papel mojado.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Prueba A/B</dt><dd>Repartir al azar los camiones en dos grupos, aplicar un cambio solo a uno y comparar.</dd>
+      <dt>Hipótesis nula</dt><dd>La suposición aburrida: «el cambio no hace nada». La prueba intenta descartarla.</dd>
+      <dt>Hipótesis alternativa</dt><dd>Lo contrario: «el cambio sí hace algo» (en un sentido o en cualquiera).</dd>
+      <dt>p-valor</dt><dd>Si la nula fuera cierta, la probabilidad de un resultado tan extremo como el observado o más.</dd>
+      <dt>Significativo</dt><dd>Con un p-valor por debajo del listón elegido (normalmente 5&nbsp;%). No quiere decir importante.</dd>
+      <dt>Nivel de significación (α)</dt><dd>El listón: la fracción de falsas alarmas que se acepta cuando no pasa nada.</dd>
+      <dt>Error de tipo I y de tipo II</dt><dd>Falsa alarma (ver un efecto que no existe) y efecto que se escapa (no ver uno que sí existe).</dd>
+      <dt>Potencia</dt><dd>La probabilidad de detectar un efecto real de un tamaño dado. Se busca un 80&nbsp;% o más.</dd>
+      <dt>Unilateral y bilateral</dt><dd>Contar como «extremos» solo los resultados en un sentido, o en los dos.</dd>
+      <dt>Test de permutación</dt><dd>Barajar las etiquetas de los grupos miles de veces para ver qué diferencias da el azar.</dd>
+      <dt>Test t</dt><dd>La fórmula que da el p-valor de una diferencia de medias con la campana t de Student.</dd>
+      <dt>p-hacking</dt><dd>Probar muchas métricas, análisis o momentos de parada hasta que algo salga significativo.</dd>
+      <dt>Bonferroni, Holm y Benjamini-Hochberg</dt><dd>Correcciones que suben el listón cuando se hacen muchas pruebas a la vez.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: las cuentas detrás de todo</summary>
+    <p style="padding-top:10px">No hacen falta para entender la idea:</p>
+    <div class="formula">medias:          sin curso 320,0 / 10 = 32,0   con curso 304,0 / 10 = 30,4
+ahorro:          32,0 − 30,4 = 1,6 L/100 km
+barajar:         C(20, 10) = 184 756 repartos; 5 722 dan |dif| ≥ 1,6
+                 p = 5 722 / 184 756 = 3,1&nbsp;%
+error estándar:  √(s²₁/10 + s²₂/10) = √(1,49²/10 + 1,59²/10) = 0,689
+test t:          t = 1,6 / 0,689 = 2,32  →  p = 3,2&nbsp;% (t de Student, 17,9 g.l.)
+intervalo 95&nbsp;%:  1,6 ± 2,10 · 0,689 = [0,15, 3,05]   (no incluye 0 ↔ p &lt; 5&nbsp;%)
+potencia:        ahorro real 1,0, σ = 1,6, 10 por grupo:
+                 ee = 1,6 · √(2/10) = 0,716;  Φ(1,0 / 0,716 − 1,96) = Φ(−0,56) ≈ 29&nbsp;%
+camiones:        n = 2 · (1,96 + 0,84)² · 1,6² / 1,0² = 40,2 → 41 por grupo
+20 pruebas:      P(alguna falsa alarma) = 1 − 0,95²⁰ = 64&nbsp;%
+Bonferroni:      listón 5&nbsp;% / 20 = 0,25&nbsp;% cada una</div>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2>Todo en minuto y medio</h2>
+    <p>Un repaso animado: los 20 camiones del curso, las etiquetas barajadas que dibujan la campana de la suerte, el p-valor como la parte de la campana que llega al resultado, los dos errores, la potencia con pocos camiones y las 20 métricas de un curso inútil. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xACTAAEAAwEBAQEBAAAAAAAAAAAAAQYHBQQDAggBAQEBAQAAAAAAAAAAAAAAAAABAwIQAAEDAwIEBAMDBwoDBgcBAQADAgERBQQGEjETByFRIkEUYTJxUoEVNkJ0M7QjkYJ1saGzsjU3cmKSFiRzCFN2FzTDJmXTQ0TRlIMRAQEBAQEBAAAAAAAAAAAAAAARARICUf/AABEIAhwDwAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AMRABozAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASCqgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAP/9k=" aria-label="Animación: pruebas de hipótesis y p-valor">
+      <source src="pruebas-de-hipotesis-y-p-valor-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g," ");s=fr?i+","+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const fs=(v,d)=>(v>0&&+v.toFixed(d??1)!==0?"+":"")+f1(v,d);
+const pc=(v,d)=>f1(100*v,d??1)+"\u00a0%";
+const pp=v=>v<0.0001?"menos de 0,01 %":v<0.001?pc(v,2):v<0.1?pc(v,1):pc(v,0);
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+const redraws=[];window.addEventListener("resize",()=>redraws.forEach(g=>g()));
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+/* ---- estadística ---- */
+function lgam(x){const c=[0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+  if(x<0.5)return Math.log(Math.PI/Math.sin(Math.PI*x))-lgam(1-x);x-=1;let a=c[0];const t=x+7.5;for(let i=1;i<9;i++)a+=c[i]/(x+i);return 0.5*Math.log(2*Math.PI)+(x+0.5)*Math.log(t)-t+Math.log(a);}
+function betacf(a,b,x){const qab=a+b,qap=a+1,qam=a-1;let c=1,d=1-qab*x/qap;d=1/(Math.abs(d)<1e-300?1e-300:d);let h=d;
+  for(let m=1;m<=300;m++){const m2=2*m;for(const aa of [m*(b-m)*x/((qam+m2)*(a+m2)),-(a+m)*(qab+m)*x/((a+m2)*(qap+m2))]){d=1+aa*d;d=1/(Math.abs(d)<1e-300?1e-300:d);c=1+aa/c;if(Math.abs(c)<1e-300)c=1e-300;h*=d*c;}if(Math.abs(d*c-1)<1e-14)break;}return h;}
+function ibeta(a,b,x){if(x<=0)return 0;if(x>=1)return 1;const lb=lgam(a+b)-lgam(a)-lgam(b)+a*Math.log(x)+b*Math.log(1-x);return x<(a+1)/(a+b+2)?Math.exp(lb)*betacf(a,b,x)/a:1-Math.exp(lb)*betacf(b,a,1-x)/b;}
+const tsf=(t,df)=>{const p=0.5*ibeta(df/2,0.5,df/(df+t*t));return t>0?p:1-p;};
+const bis=(f,lo,hi)=>{for(let i=0;i<70;i++){const m=(lo+hi)/2;if(f(m)<0)lo=m;else hi=m;}return (lo+hi)/2;};
+const tq=(q,df)=>bis(t=>1-tsf(t,df)-q,0,400);
+const erf=x=>{const s=Math.sign(x);x=Math.abs(x);const t=1/(1+0.3275911*x);return s*(1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x));};
+const ncdf=x=>0.5*(1+erf(x/Math.SQRT2));
+const zq=q=>bis(z=>ncdf(z)-q,-10,10);
+const npdf=x=>Math.exp(-x*x/2)/Math.sqrt(2*Math.PI);
+const tpdf=(t,df)=>Math.exp(lgam((df+1)/2)-lgam(df/2)-0.5*Math.log(df*Math.PI)-(df+1)/2*Math.log(1+t*t/df));
+const tk=(a,b,n)=>{const raw=(b-a)/n,p=10**Math.floor(Math.log10(raw)),m=raw/p,st=(m<1.5?1:m<3?2:m<7?5:10)*p,out=[];for(let v=Math.ceil(a/st-1e-9)*st;v<=b+1e-9;v+=st)out.push(+v.toFixed(10));return out;};
+/* panel con ejes, en coordenadas del viewBox */
+function axes(svg,o){const FS=o.FS,L=o.x+(o.padL??FS*3.4),R=o.x+o.w-(o.padR??FS*0.9),T=o.y+(o.padT??FS*2.2),B=o.y+o.h-(o.padB??FS*2.6);
+  const sx=v=>L+(v-o.x0)/(o.x1-o.x0)*(R-L),sy=v=>B-(v-o.y0)/(o.y1-o.y0)*(B-T),g=el("g",null,svg);
+  for(const v of (o.yt||[])){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},g);txt(g,L-7,sy(v)+FS*0.3,(o.fy||(v=>f1(v,0)))(v),{"text-anchor":"end","font-size":FS*0.8});}
+  for(const v of (o.xt||[])){if(o.grid!==false)el("line",{x1:sx(v),x2:sx(v),y1:T,y2:B,class:"g-line","stroke-opacity":.55},g);
+    const s=(o.fx||(v=>f1(v,0)))(v),w=s.length*FS*0.8*0.62,X=sx(v);let a="middle",xx=X;if(X+w/2>o.x+o.w-3){a="end";xx=o.x+o.w-3;}else if(X-w/2<o.x+3){a="start";xx=o.x+3;}
+    txt(g,xx,B+FS*1.05,s,{"text-anchor":a,"font-size":FS*0.8});}
+  el("line",{x1:L,x2:R,y1:B,y2:B,class:"g-axis"},g);
+  if(o.xl)txt(g,R,o.y+o.h-FS*0.25,o.xl,{"text-anchor":"end","font-size":FS*0.85,class:"t-ink"});
+  if(o.yl)txt(g,L,T-FS*0.75,o.yl,{"font-size":FS*0.8});
+  return {L,R,T,B,sx,sy,FS};}
+const dot=(g,x,y,r,fill,extra)=>el("circle",Object.assign({cx:x,cy:y,r,fill,stroke:"var(--point-ring)","stroke-width":r>6?2:1.2},extra||{}),g);
+function ibar(g,A,lo,hi,y,col,w,m){const a=A.sx(lo),b=A.sx(hi);el("line",{x1:a,x2:b,y1:y,y2:y,stroke:col,"stroke-width":w,"stroke-linecap":"round"},g);
+  [a,b].forEach(x=>el("line",{x1:x,x2:x,y1:y-w*1.4,y2:y+w*1.4,stroke:col,"stroke-width":Math.max(2,w*0.45),"stroke-linecap":"round"},g));
+  if(m!=null)el("circle",{cx:A.sx(m),cy:y,r:w*1.15,fill:"var(--surface)",stroke:col,"stroke-width":Math.max(2.5,w*0.5)},g);}
+
+/* ---- los datos del juguete (consumo del mes, L/100 km) ---- */
+const SIN=[31.5,30.7,32.2,30.9,32.3,35.3,32.7,33.2,30.7,30.5],CON=[32.3,29.5,29.5,31.7,30.3,32.0,29.6,32.1,27.4,29.6];
+const ALLV=SIN.concat(CON),DEC=ALLV.map(v=>Math.round(v*10)),SUM=DEC.reduce((s,v)=>s+v,0);   /* en décimas */
+const OBS=2*SIN.reduce((s,v)=>s+Math.round(v*10),0)-SUM;   /* = 160 → 1,6 L/100 km (dif = D/100) */
+/* todas las particiones posibles: 184 756 diferencias */
+const EXACT=(()=>{const out=new Int32Array(184756);let k=0;(function rec(i,left,s){if(left===0){out[k++]=2*s-SUM;return;}if(20-i<left)return;rec(i+1,left-1,s+DEC[i]);rec(i+1,left,s);})(0,10,0);return out;})();
+const EXP2=EXACT.reduce((c,d)=>c+(Math.abs(d)>=OBS?1:0),0)/EXACT.length;   /* 0,0310 */
+const SE=Math.sqrt((()=>{const v=a=>{const m=a.reduce((s,x)=>s+x,0)/a.length;return a.reduce((s,x)=>s+(x-m)**2,0)/(a.length-1);};return v(SIN)/10+v(CON)/10;})());
+const DF=(()=>{const v=a=>{const m=a.reduce((s,x)=>s+x,0)/a.length;return a.reduce((s,x)=>s+(x-m)**2,0)/(a.length-1)/10;};const a=v(SIN),b=v(CON);return (a+b)**2/(a*a/9+b*b/9);})();
+
+/* ---------- juguete: barajar etiquetas ---------- */
+(function(){const svg=$("toy");let rnd=mulberry32(2024),lab=ALLV.map((_,i)=>i<10?0:1),N=0,K=0,last=null;const H=new Map();
+  const bin=D=>Math.round(D/20);   /* casillas de 0,2 L/100 km */
+  function shuffle(k){for(let j=0;j<k;j++){const idx=[...Array(20).keys()];for(let i=0;i<10;i++){const r=i+Math.floor(rnd()*(20-i));[idx[i],idx[r]]=[idx[r],idx[i]];}
+      const L=new Array(20).fill(1);let s=0;for(let i=0;i<10;i++){L[idx[i]]=0;s+=DEC[idx[i]];}const D=2*s-SUM,ex=Math.abs(D)>=OBS;N++;if(ex)K++;
+      const b=bin(D),h=H.get(b)||[0,0];h[ex?1:0]++;H.set(b,h);if(j===k-1){lab=L;last=D;}}}
+  $("t-1").onclick=()=>{shuffle(1);draw();};$("t-100").onclick=()=>{shuffle(100);draw();};$("t-1k").onclick=()=>{shuffle(1000);draw();};$("t-10k").onclick=()=>{shuffle(10000);draw();};
+  $("t-re").onclick=()=>{rnd=mulberry32(2024);lab=ALLV.map((_,i)=>i<10?0:1);N=0;K=0;last=null;H.clear();draw();};
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,Ht=nw?900:560;svg.setAttribute("viewBox",`0 0 ${W} ${Ht}`);svg.textContent="";
+    const topH=nw?400:250;
+    const A=axes(svg,{x:0,y:0,w:W,h:topH,x0:26.8,x1:36,y0:0,y1:1,xt:[27,28,29,30,31,32,33,34,35,36],xl:"consumo del mes (L/100 km)",FS,padL:FS*0.9,padR:FS*0.9,padT:FS*0.4});
+    const r=nw?13:10,half=(A.B-A.T)/2,tops=[A.T,A.T+half],rows=tops.map(t=>t+half-r-6);
+    const means=[0,1].map(g=>{const ix=lab.map((l,i)=>l===g?i:-1).filter(i=>i>=0);return ix.reduce((s,i)=>s+ALLV[i],0)/ix.length;});
+    [0,1].forEach(g=>{txt(svg,A.L+2,tops[g]+FS*1.1,(N?"etiqueta ":"")+(g?"«con curso»":"«sin curso»")+" · media "+f1(means[g],1),Object.assign({"font-size":FS*0.8,"font-weight":700,class:"t-ink"},halo(5)));
+      el("line",{x1:A.sx(means[g]),x2:A.sx(means[g]),y1:tops[g]+FS*1.7,y2:rows[g]+r+4,stroke:"var(--ink)","stroke-width":3},svg);});
+    [0,1].forEach(g=>{const ix=ALLV.map((v,i)=>i).filter(i=>lab[i]===g).sort((a,b)=>ALLV[a]-ALLV[b]),lv=[];   /* apilar puntos que se tocarían */
+      ix.forEach(i=>{const x=A.sx(ALLV[i]);let k=0;while(lv.some(([xx,kk])=>kk===k&&Math.abs(xx-x)<2*r+1))k++;lv.push([x,k]);dot(svg,x,rows[g]-k*(2*r-3),r,i<10?"var(--sample)":"var(--point)");});});
+    /* histograma */
+    const y0=topH+(nw?30:22);
+    const B=axes(svg,{x:0,y:y0,w:W,h:Ht-y0,x0:-3.2,x1:3.2,y0:0,y1:1,xt:[-3,-2,-1,0,1,2,3],fx:v=>fs(v,0),xl:nw?"diferencia barajada (L/100 km)":"diferencia de medias con las etiquetas barajadas (L/100 km)",FS,padL:FS*0.9,padR:FS*0.9,padT:FS*2.2});
+    let mx=1;H.forEach(h=>{mx=Math.max(mx,h[0]+h[1]);});const bw=(B.sx(0.2)-B.sx(0))*0.86;
+    H.forEach((h,b)=>{const xc=B.sx(b*0.2),tot=h[0]+h[1],hp=(B.B-B.T-FS*0.6)/mx;
+      if(h[0])el("rect",{x:xc-bw/2,y:B.B-hp*tot,width:bw,height:hp*h[0],fill:"var(--muted)","fill-opacity":.55},svg);
+      if(h[1])el("rect",{x:xc-bw/2,y:B.B-hp*h[1],width:bw,height:hp*h[1],fill:"var(--warn)","fill-opacity":.85},svg);});
+    [-1.6,1.6].forEach(v=>{el("line",{x1:B.sx(v),x2:B.sx(v),y1:B.T-FS*0.6,y2:B.B,stroke:"var(--ink)","stroke-width":2,"stroke-dasharray":"6 5"},svg);});
+    txt(svg,B.sx(1.6)+FS*0.35,B.T-FS*0.2,"real: +1,6",Object.assign({"font-size":FS*0.8,"font-weight":700,class:"t-ink"},halo(5)));
+    txt(svg,B.sx(-1.6)-FS*0.35,B.T-FS*0.2,"−1,6",Object.assign({"text-anchor":"end","font-size":FS*0.8,class:"t-ink"},halo(5)));
+    if(last!=null){const x=B.sx(Math.max(-3.15,Math.min(3.15,last/100)));el("path",{d:`M${x} ${B.B-FS*0.9}l${-FS*0.45} ${FS*0.8}h${FS*0.9}z`,fill:"var(--mean)"},svg);}
+    if(!N)txt(svg,(B.L+B.R)/2,(B.T+B.B)/2,"aquí se irán apilando las barajadas",Object.assign({"text-anchor":"middle","font-size":FS*0.85},halo(6)));
+    const p=N?K/N:NaN;
+    $("t-big").innerHTML=`<div><b>${N&&last!=null?fs(last/100,2):"+1,60"}</b><span>${N?"diferencia de la última barajada":"ahorro real: sin curso − con curso (L/100 km)"}</span></div><div><b>${f1(K,0)} de ${f1(N,0)}</b><span>barajadas con una diferencia de 1,6 o más (hacia cualquier lado)</span></div><div><b style="color:var(--warn)">${N?pc(p,N>=1000?1:0):"—"}</b><span>p-valor aproximado${N>=1000?`; contando las 184 756 formas de repartir: ${pc(EXP2,1)}`:""}</span></div>`;
+    let m;
+    if(!N)m=`Los camiones con curso gastan 1,6 L/100 km menos de media. Pero fíjate en las filas: los puntos se mezclan mucho, y basta que dos o tres camiones ahorradores caigan en un grupo para mover la media. Si el curso no hiciera nada, ¿saldría a menudo una diferencia así? Pulsa «Barajar 1 vez».`;
+    else if(N<20)m=`Barajada ${N}: con las etiquetas repartidas al azar, la diferencia sale <b>${fs(last/100,2)}</b>. Así se ve el azar puro: lo que daría la prueba si el curso no hiciera nada. ${Math.abs(last)>=OBS?"¡Esta llega a 1,6! Pasa, pero pocas veces.":"No llega a 1,6."} Repite unas veces y luego pulsa «+1 000».`;
+    else if(N<1000)m=`De ${f1(N,0)} barajadas, <b>${K}</b> llegan a una diferencia de 1,6 o más: un ${pc(p,0)}. Con tan pocas barajadas la cuenta todavía baila; pulsa «+1 000» o «+10 000».`;
+    else m=`De ${f1(N,0)} barajadas, <b>${f1(K,0)}</b> dan una diferencia de 1,6 o más hacia cualquier lado: un <b>${pc(p,1)}</b>. Probando las 184 756 formas posibles de repartir los camiones sale exactamente un ${pc(EXP2,1)}. Ese es el <b>p-valor</b>: si el curso no sirviera para nada, una diferencia tan grande saldría por suerte unas 3 veces de cada 100. Es poco, así que la explicación «ha sido suerte» pierde fuerza. Lo que no dice es la probabilidad de que el curso funcione (idea 2).`;
+    $("t-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 1: la campana y los lados ---------- */
+(function(){const svg=$("pv"),inD=$("pv-d");let two=true;seg(["pv-2","pv-1"],i=>{two=i===0;draw();});
+  const HB=new Map();for(const D of EXACT){const b=Math.round(D/20);HB.set(b,(HB.get(b)||0)+1);}
+  function draw(){const d=+inD.value,Dd=Math.round(d*100),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?520:380;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:-3.4,x1:3.4,y0:0,y1:0.68,xt:[-3,-2,-1,0,1,2,3],fx:v=>fs(v,0),xl:nw?"diferencia si el curso no hace nada":"diferencia de medias si el curso no hiciera nada (L/100 km)",FS,padL:FS*0.9,padR:FS*0.9,padT:FS*2.4});
+    const bw=A.sx(0.2)-A.sx(0),tot=EXACT.length;
+    HB.forEach((c,b)=>{const x=b*0.2,h=c/tot/0.2,ex=two?Math.abs(b*20)>=Dd:b*20>=Dd;
+      el("rect",{x:A.sx(x)-bw*0.45,y:A.sy(h),width:bw*0.9,height:A.B-A.sy(h),fill:ex?"var(--warn)":"var(--muted)","fill-opacity":ex?.55:.28},svg);});
+    const tp=x=>tpdf(x/SE,DF)/SE;let dc="";for(let i=0;i<=300;i++){const x=-3.4+6.8*i/300;dc+=(i?"L":"M")+A.sx(x).toFixed(1)+" "+A.sy(tp(x)).toFixed(1);}
+    el("path",{d:dc,fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    const lines=two?[d,-d]:[d];lines.forEach(v=>el("line",{x1:A.sx(v),x2:A.sx(v),y1:A.T-FS*0.4,y2:A.B,stroke:"var(--ink)","stroke-width":2.5,"stroke-dasharray":v<0?"6 5":"none"},svg));
+    {const lb="observado "+fs(d,1),lw=lb.length*FS*0.8*0.62,rt=A.sx(d)+FS*0.35+lw>W-3;txt(svg,A.sx(d)+(rt?-1:1)*FS*0.35,A.T-FS*0.9,lb,Object.assign({"text-anchor":rt?"end":"start","font-size":FS*0.8,"font-weight":700,class:"t-ink"},halo(5)));}
+    let cnt=0;for(const D of EXACT)if(two?Math.abs(D)>=Dd:D>=Dd)cnt++;const pe=cnt/tot,t=d/SE,ptt=two?Math.min(1,2*tsf(t,DF)):tsf(t,DF);
+    $("pv-d-o").textContent=f1(d,1)+" L/100 km";
+    $("pv-big").innerHTML=`<div><b>${f1(t,2)}</b><span>el ahorro en errores estándar: ${f1(d,1)} / ${f1(SE,2)}</span></div><div><b style="color:var(--warn)">${pp(pe)}</b><span>p-valor barajando (contando las 184 756 formas de repartir)</span></div><div><b style="color:var(--mean)">${pp(ptt)}</b><span>p-valor con la fórmula (test t)</span></div>`;
+    let m;
+    if(d<0.05)m=`Con un ahorro de 0, cualquier reparto es al menos igual de extremo: p-valor del 100 %. Los datos no dicen nada contra «el curso no hace nada».`;
+    else if(ptt>=0.05)m=`Un ahorro de ${f1(d,1)} está a ${f1(t,1)} errores estándar de 0: el azar da algo así o más el ${pp(ptt)} de las veces. No llega al 5 %, así que no es «significativo»: los datos encajan con que el curso no haga nada… y también con que ahorre bastante. Sube el ahorro.`;
+    else m=`Un ahorro de ${f1(d,1)} está a ${f1(t,1)} errores estándar de 0, y el azar da algo así o más solo el ${pp(ptt)} de las veces (barajando: ${pp(pe)}). Por debajo del 5 %: significativo. Las dos cuentas casi coinciden: el test t es un atajo de barajar.`;
+    m+=two?" Ahora cuentan los dos lados: un empeoramiento de "+f1(d,1)+" también habría sido «tan extremo». Prueba con «solo ahorros».":` Con «solo ahorros» el p-valor es la mitad del bilateral. Parece un regalo, pero solo es legítimo si se decidió antes: elegir el lado después de ver hacia dónde ha salido el resultado duplica las falsas alarmas.`;
+    $("pv-msg").innerHTML=m;}
+  inD.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 2: mil ideas ---------- */
+(function(){const svg=$("nn"),inR=$("nn-r");let pw=0;const POW=[0.287,0.808];seg(["nn-s","nn-l"],i=>{pw=i;draw();});
+  const r=mulberry32(31),rk=[...Array(1000).keys()].map(i=>[r(),r(),i]);const ordA=rk.slice().sort((a,b)=>a[0]-b[0]).map(x=>x[2]),pos=new Int32Array(1000);ordA.forEach((id,k)=>pos[id]=k);
+  const ordB=rk.slice().sort((a,b)=>a[1]-b[1]).map(x=>x[2]);
+  function draw(){const nw=narrowOf(svg),cols=nw?25:50,rows=1000/cols,W=nw?600:900,FS=nw?22:14,cs=nw?(W-20)/cols:(W-40)/cols,H=rows*cs+(nw?50:36);svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const fr=+inR.value/100,R=Math.round(1000*fr),TP=Math.round(R*POW[pw]),FP=Math.round(0.05*(1000-R));
+    /* ideas reales: las R primeras según el orden A; entre ellas, detectadas las TP primeras según el orden B; entre las nulas, FP falsas alarmas según el orden B */
+    const st=new Int8Array(1000);let tp=0,fp=0;for(const id of ordB){if(pos[id]<R){st[id]=tp<TP?1:2;if(tp<TP)tp++;}else{st[id]=fp<FP?3:0;if(fp<FP)fp++;}}
+    const ox=(W-cols*cs)/2;for(let id=0;id<1000;id++){const x=ox+(id%cols)*cs,y=6+Math.floor(id/cols)*cs,s=st[id],pad=cs*0.12;
+      el("rect",{x:x+pad,y:y+pad,width:cs-2*pad,height:cs-2*pad,rx:cs*0.15,fill:s===1?"var(--good)":s===3?"var(--warn)":s===2?"transparent":"var(--line)",stroke:s===2?"var(--good)":"none","stroke-width":s===2?cs*0.12:0},svg);}
+    txt(svg,W/2,H-FS*0.5,"cada cuadro es una idea probada · 1 000 ideas",{"text-anchor":"middle","font-size":FS*0.8});
+    $("nn-r-o").textContent=f1(100*fr,0)+"\u00a0%";
+    const sig=TP+FP,fal=FP/sig;
+    $("nn-big").innerHTML=`<div><b>${sig}</b><span>pruebas con p &lt; 5 %: «¡funciona!»</span></div><div><b style="color:var(--good)">${TP}</b><span>de ellas, ideas que funcionan de verdad (de ${R} que funcionan)</span></div><div><b style="color:var(--warn)">${FP} (${pc(fal,0)})</b><span>falsas alarmas entre los «¡funciona!»</span></div>`;
+    let m=`De 1 000 ideas, ${R} funcionan. Las pruebas detectan ${TP} (el ${pc(POW[pw],0)} de ${R}) y, de las ${1000-R} que no funcionan, ${FP} salen significativas por suerte (el 5 %). De los ${sig} «¡funciona!», <b>${pc(fal,0)} son falsos</b>, aunque cada uno tenga p &lt; 5 %. `;
+    m+=fal>0.4?"Con pocas ideas buenas y pruebas pequeñas, un resultado significativo es casi una moneda al aire. Cambia a pruebas de 41 camiones o sube las ideas que funcionan.":fal<0.15?"Con muchas ideas buenas y pruebas grandes, los «¡funciona!» son casi todos ciertos. El p-valor era el mismo: lo que ha cambiado es el contexto.":"Ni el 5 % ni el p-valor de cada prueba dicen esta cifra: depende de cuántas ideas suelen funcionar y de la potencia de las pruebas.";
+    $("nn-msg").innerHTML=m;}
+  inR.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 3: errores tipo I y II ---------- */
+(function(){const svg=$("ab"),NS=[5,10,20,41,80],AL=[0.01,0.05,0.10];let ni=1,ai=1;
+  chips($("ab-n"),NS.map(n=>n+" camiones"),i=>{ni=i;draw();},1);seg(["ab-a0","ab-a1","ab-a2"],i=>{ai=i;draw();});
+  function draw(){const n=NS[ni],al=AL[ai],se=1.6*Math.sqrt(2/n),z=zq(1-al/2),c=z*se,dl=1.0;
+    const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?560:400;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const ymax=npdf(0)/se*1.12;
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:-2.6,x1:3.8,y0:0,y1:ymax,xt:[-2,-1,0,1,2,3],fx:v=>fs(v,0),xl:nw?"ahorro medido (L/100 km)":"ahorro que mediría la prueba (L/100 km)",FS,padL:FS*0.9,padR:FS*0.9,padT:FS*3.2});
+    const f0=x=>npdf(x/se)/se,f1_=x=>npdf((x-dl)/se)/se;
+    const area=(f,a,b,col,op)=>{a=Math.max(a,-2.6);b=Math.min(b,3.8);if(b<=a)return;let d=`M${A.sx(a).toFixed(1)} ${A.B}`;for(let i=0;i<=120;i++){const x=a+(b-a)*i/120;d+=`L${A.sx(x).toFixed(1)} ${A.sy(Math.min(f(x),ymax)).toFixed(1)}`;}d+=`L${A.sx(b).toFixed(1)} ${A.B}Z`;el("path",{d,fill:col,"fill-opacity":op},svg);};
+    area(f1_,-c,c,"var(--sample)",.35);area(f1_,c,9,"var(--good)",.35);area(f1_,-9,-c,"var(--good)",.35);
+    area(f0,-9,-c,"var(--warn)",.75);area(f0,c,9,"var(--warn)",.75);
+    const curve=(f,col,dash)=>{let d="";for(let i=0;i<=300;i++){const x=-2.6+6.4*i/300;d+=(i?"L":"M")+A.sx(x).toFixed(1)+" "+A.sy(Math.min(f(x),ymax)).toFixed(1);}el("path",{d,fill:"none",stroke:col,"stroke-width":3,"stroke-dasharray":dash||"none"},svg);};
+    curve(f0,"var(--muted)","7 5");curve(f1_,"var(--mean)");
+    [-c,c].forEach(v=>{if(v>-2.6&&v<3.8)el("line",{x1:A.sx(v),x2:A.sx(v),y1:A.T-FS*0.4,y2:A.B,stroke:"var(--ink)","stroke-width":2.5},svg);});
+    txt(svg,A.sx(0),A.sy(Math.min(f0(0),ymax))-FS*0.5,"no hace nada",Object.assign({"text-anchor":"end","font-size":FS*0.8,class:"t-ink"},halo(5)));
+    txt(svg,A.sx(dl),A.sy(Math.min(f1_(dl),ymax))-FS*0.5,"ahorra 1,0",Object.assign({"text-anchor":"start","font-size":FS*0.8,"font-weight":700,style:"fill:var(--mean)"},halo(5)));
+    txt(svg,Math.min(A.sx(c)+FS*0.3,A.R-FS*5.5),A.T-FS*1.2,"listón: ±"+f1(c,2),Object.assign({"font-size":FS*0.8,"font-weight":700,class:"t-ink"},halo(5)));
+    const pow=1-ncdf(z-dl/se)+ncdf(-z-dl/se),beta=1-pow;
+    $("ab-big").innerHTML=`<div><b style="color:var(--warn)">${pc(al,0)}</b><span>falsas alarmas (tipo I, α) si el curso no hace nada</span></div><div><b style="color:var(--sample)">${pc(beta,0)}</b><span>el ahorro real se escapa (tipo II, β)</span></div><div><b style="color:var(--good)">${pc(pow,0)}</b><span>potencia: se detecta el ahorro real</span></div>`;
+    let m=`Con ${n} camiones por grupo, el ahorro medido baila con un error estándar de ${f1(se,2)} y el listón queda en ±${f1(c,2)} L/100 km. `;
+    m+=pow<0.5?`Un ahorro real de 1,0 cae casi siempre por debajo del listón: la prueba lo detecta solo <b>${f1(100*pow,0)} veces de cada 100</b>. Una prueba así tiene más probabilidad de decir «no se ve nada» que de ver un efecto que existe.`:pow<0.78?`La potencia es del ${pc(pow,0)}: mejor, pero todavía se escapa el ahorro real ${f1(100*beta,0)} veces de cada 100.`:`La potencia llega al ${pc(pow,0)}: las campanas apenas se solapan y casi siempre se ve el ahorro real.`;
+    if(ai===0)m+=" Con un listón del 1 % hay menos falsas alarmas, pero se escapan más efectos reales: los dos errores se cambian uno por otro.";else if(ai===2)m+=" Con un 10 %, más potencia a cambio del doble de falsas alarmas.";else m+=" Prueba a cambiar el listón o el número de camiones.";
+    $("ab-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 4: potencia ---------- */
+(function(){const svg=$("pw"),inD=$("pw-d"),inN=$("pw-n"),NN=[5,7,10,15,20,30,41,60,80,120,200,300],Z=1.959964,Z8=0.841621;
+  const pow=(d,n)=>{const l=d/(1.6*Math.sqrt(2/n));return 1-ncdf(Z-l)+ncdf(-Z-l);};
+  function draw(){const d=+inD.value,n=NN[+inN.value],P=pow(d,n),n80=Math.ceil(2*((Z+Z8)*1.6/d)**2),se=1.6*Math.sqrt(2/n);
+    const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?520:360;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const lx=Math.log,A=axes(svg,{x:0,y:0,w:W,h:H,x0:lx(4),x1:lx(400),y0:0,y1:1,xt:[5,10,20,50,100,200,400].map(lx),fx:v=>f1(Math.exp(v),0),yt:[0,0.2,0.4,0.6,0.8,1],fy:v=>f1(100*v,0)+"\u00a0%",xl:"camiones por grupo (escala log.)",yl:"potencia",FS,padL:FS*3.2});
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(0.8),y2:A.sy(0.8),stroke:"var(--muted)","stroke-width":2,"stroke-dasharray":"7 5"},svg);
+    let dc="";for(let i=0;i<=240;i++){const v=lx(4)+(lx(400)-lx(4))*i/240;dc+=(i?"L":"M")+A.sx(v).toFixed(1)+" "+A.sy(pow(d,Math.exp(v))).toFixed(1);}
+    el("path",{d:dc,fill:"none",stroke:"var(--mean)","stroke-width":3.5},svg);
+    if(n80<=400){const x=A.sx(lx(Math.max(4,n80)));el("line",{x1:x,x2:x,y1:A.sy(0.8),y2:A.B,stroke:"var(--good)","stroke-width":2.5},svg);
+      const lab=f1(n80,0)+" para el 80 %",right=x>A.R-FS*8;txt(svg,x+(right?-1:1)*FS*0.4,A.sy(0.8)+FS*1.3,lab,Object.assign({"text-anchor":right?"end":"start","font-size":FS*0.8,"font-weight":700,style:"fill:var(--good)"},halo(5)));}
+    const px=A.sx(lx(n)),py=A.sy(P);dot(svg,px,py,nw?11:8,"var(--point)");
+    txt(svg,px+(n>=120?-1:1)*FS*0.8,py+(n>=120?-FS*0.7:FS*1.5),pc(P,0),Object.assign({"text-anchor":n>=120?"end":"start","font-size":FS*0.9,"font-weight":700,class:"t-ink"},halo(5)));
+    /* ahorro medio de las pruebas que salen significativas (normal truncada) */
+    const c=Z*se,a=(c-d)/se,b=(-c-d)/se,ex=(d*(1-ncdf(a))+se*npdf(a))+(d*ncdf(b)-se*npdf(b)),wc=ex/P;
+    $("pw-d-o").textContent=f1(d,2)+" L/100 km";$("pw-n-o").textContent=f1(n,0);
+    $("pw-big").innerHTML=`<div><b style="color:var(--point)">${pc(P,0)}</b><span>potencia con ${n} camiones por grupo</span></div><div><b style="color:var(--good)">${f1(n80,0)}</b><span>camiones por grupo para el 80 % (${f1(2*n80,0)} en total)</span></div><div><b>${f1(wc,2)}</b><span>ahorro medio que miden las pruebas que salen significativas (el real es ${f1(d,2)})</span></div>`;
+    let m=`Con un ahorro real de ${f1(d,2)} L/100 km y ${n} camiones por grupo, de cada 100 pruebas, unas <b>${f1(100*P,0)}</b> lo detectan. Para llegar al 80 % hacen falta ${f1(n80,0)} por grupo. `;
+    if(P<0.5)m+=`Y ojo con la exageración: cuando una de estas pruebas sale significativa, el ahorro medido es de media ${f1(wc,2)}, ${f1(wc/d,1)} veces el real. Solo «ganan» las que exageraron por suerte. El juguete midió 1,6 con 10 camiones: puede que el curso ahorre bastante menos.`;
+    else if(P<0.8)m+="Cerca, pero todavía se escapan bastantes efectos reales. Sube un poco los camiones.";
+    else m+=`Con esta potencia, el ahorro medido de las pruebas significativas (${f1(wc,2)}) ya se parece al real.`;
+    if(d<=0.5)m+=` Para un efecto tan pequeño la curva se va a la derecha: la mitad de ahorro pide cuatro veces más camiones.`;
+    $("pw-msg").innerHTML=m;}
+  [inD,inN].forEach(i=>i.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 5: significativo frente a importante ---------- */
+(function(){const svg=$("ci"),inN=$("ci-n"),inD=$("ci-d"),NN=[10,20,50,100,200,500,1000,2000,5000,10000,20000],EUR=1650,PAY=300/1650;
+  function draw(){const n=NN[+inN.value],d=+inD.value,se=1.6*Math.sqrt(2/n),df=2*n-2,tc=tq(0.975,df),lo=d-tc*se,hi=d+tc*se,p=d>0?Math.min(1,2*tsf(d/se,df)):1;
+    const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?380:260;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const x0=nw?-1.5:-1.2,x1=4;const A=axes(svg,{x:0,y:0,w:W,h:H-FS*1.6,x0,x1,y0:0,y1:1,xt:[-1,0,1,2,3,4],fx:v=>fs(v,0),xl:"",FS,padL:FS*0.9,padR:FS*0.9,padT:FS*3});
+    for(const v of [-1,0,1,2,3,4]){const s=v?(v>0?"+":"−")+f1(Math.abs(v)*EUR/1000,2).replace(/,?0+$/,"")+" k€":"0 €";const X=A.sx(v);let an="middle",xx=X;const w=s.length*FS*0.72*0.62;if(X+w/2>W-3){an="end";xx=W-3;}else if(X-w/2<3){an="start";xx=3;}txt(svg,xx,A.B+FS*2.1,s,{"text-anchor":an,"font-size":FS*0.72,style:"fill:var(--good)"});}
+    txt(svg,W-3,H-FS*0.25,nw?"ahorro (L/100 km y € por camión y año)":"ahorro: arriba en L/100 km, en verde en € por camión y año",{"text-anchor":"end","font-size":FS*0.8,class:"t-ink"});
+    el("rect",{x:A.sx(PAY),y:A.T-FS*0.4,width:A.R-A.sx(PAY),height:A.B-A.T+FS*0.4,fill:"var(--good)","fill-opacity":.1},svg);
+    el("line",{x1:A.sx(PAY),x2:A.sx(PAY),y1:A.T-FS*0.4,y2:A.B,stroke:"var(--good)","stroke-width":2,"stroke-dasharray":"6 4"},svg);
+    txt(svg,A.sx(PAY)+FS*0.4,A.T+FS*0.4,"paga el curso (≥ 0,18)",Object.assign({"font-size":FS*0.78,style:"fill:var(--good)"},halo(5)));
+    el("line",{x1:A.sx(0),x2:A.sx(0),y1:A.T-FS*0.4,y2:A.B,stroke:"var(--ink)","stroke-width":2.5},svg);
+    txt(svg,A.sx(0)-FS*0.4,A.T+FS*0.4,nw?"0: nada":"0: no hace nada",Object.assign({"text-anchor":"end","font-size":FS*0.78,class:"t-ink"},halo(5)));
+    const sig=lo>0,col=sig?"var(--mean)":"var(--muted)",yI=A.T+(A.B-A.T)*0.62;
+    ibar(svg,A,Math.max(lo,x0),Math.min(hi,x1),yI,col,nw?10:8,d);
+    txt(svg,A.sx(Math.max(x0+0.05,lo)),yI-FS*1.3,"de "+fs(lo,2)+" a "+fs(hi,2),Object.assign({"text-anchor":lo<-0.2?"start":"middle","font-size":FS*0.8,"font-weight":700,style:`fill:${col}`},halo(5)));
+    $("ci-n-o").textContent=f1(n,0);$("ci-d-o").textContent=f1(d,2)+" L/100 km";
+    const pays=lo>=PAY?2:hi<PAY?0:1;
+    $("ci-big").innerHTML=`<div><b>${pp(p)}</b><span>p-valor · <span class="verdict ${sig?"ok":"no"}">${sig?"significativo":"no significativo"}</span></span></div><div><b>${f1(Math.round(lo*EUR/10)*10,0)} a ${f1(Math.round(hi*EUR/10)*10,0)} €</b><span>ahorro por camión y año (intervalo del 95 %)</span></div><div><b>${["no","quizá","sí"][pays]}</b><span>¿paga los 300 € del curso? <span class="verdict ${["no","mid","ok"][pays]}">${["ni en el mejor caso","depende de dónde caiga","incluso en el peor caso"][pays]}</span></span></div>`;
+    let m;
+    if(sig&&pays===0)m=`Con ${f1(n,0)} camiones por grupo, un ahorro de ${f1(d,2)} es <b>muy significativo</b> (p = ${pp(p)}): el intervalo, de ${f1(lo,2)} a ${f1(hi,2)}, está lejos del 0. Y aun así el curso <b>no compensa</b>: como mucho ahorra ${f1(hi*EUR,0)} € al año por camión y cuesta 300 €. Con muchísimos datos, todo es significativo; la pregunta útil es cuánto. Prueba ahora con 10 camiones y un ahorro de 1,6.`;
+    else if(sig&&pays===2)m=`Significativo (p = ${pp(p)}) <b>e importante</b>: incluso el extremo bajo del intervalo (${f1(lo,2)} L/100 km, ${f1(lo*EUR,0)} €) paga el curso.`;
+    else if(sig)m=`Significativo (p = ${pp(p)}): el intervalo no toca el 0. Pero va de ${f1(lo*EUR,0)} € a ${f1(hi*EUR,0)} € al año: el curso podría pagarse con creces o no pagarse. «Significativo» no responde a eso; hacen falta más camiones para estrechar el intervalo.`;
+    else m=`No significativo (p = ${pp(p)}): el intervalo, de ${fs(lo,2)} a ${fs(hi,2)}, incluye el 0. Pero fíjate: también incluye ahorros de hasta ${f1(hi*EUR,0)} € al año. «No significativo» no quiere decir «no funciona»: quiere decir que con ${f1(n,0)} camiones no se puede saber.`;
+    m+=" Fíjate en que el intervalo deja fuera el 0 justo cuando p &lt; 5 %: son la misma cuenta mirada de dos formas.";
+    $("ci-msg").innerHTML=m;}
+  [inN,inD].forEach(i=>i.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 6: comparaciones múltiples ---------- */
+(function(){const svg=$("mc"),NAMES=["consumo","ralentí","frenazos","acelerones","velocidad media","exceso de velocidad","km en vacío","paradas","tiempo en ruta","retrasos","averías","neumáticos","AdBlue","temperatura motor","revoluciones","giros bruscos","uso del crucero","horas de motor","repostajes","quejas de clientes"];
+  let meth=0,rnd,cur,N=0,K=[0,0,0,0];const MN=["sin corregir","Bonferroni","Holm","Benjamini-Hochberg"];
+  const thr=(m,i)=>m===0?0.05:m===1?0.05/20:m===2?0.05/(20-i):0.05*(i+1)/20;   /* i = posición (0 = el más pequeño) */
+  function found(ps,m){const s=ps.slice().sort((a,b)=>a-b);if(m<=1)return s.filter(p=>p<=thr(m,0)).length;
+    if(m===2){let k=0;while(k<20&&s[k]<=thr(2,k))k++;return k;}let k=0;for(let i=0;i<20;i++)if(s[i]<=thr(3,i))k=i+1;return k;}
+  const one=()=>{const ps=[];for(let i=0;i<20;i++)ps.push(Math.max(1e-4,rnd()));return ps;};
+  const add=ps=>{N++;for(let m=0;m<4;m++)if(found(ps,m)>0)K[m]++;};
+  function reset(){/* empieza por un curso con exactamente un «hallazgo» sin corregir, el más habitual */let s=1;for(;;s++){rnd=mulberry32(500+s);const ps=one(),f=ps.filter(p=>p<0.05);if(f.length===1&&f[0]>0.01)break;}
+    rnd=mulberry32(500+s);cur=one();N=0;K=[0,0,0,0];add(cur);}
+  seg(["mc-0","mc-1","mc-2","mc-3"],i=>{meth=i;draw();});
+  $("mc-1x").onclick=()=>{cur=one();add(cur);draw();};$("mc-1k").onclick=()=>{for(let j=0;j<999;j++)add(one());cur=one();add(cur);draw();};$("mc-re").onclick=()=>{reset();draw();};
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?20:13,rh=nw?31:21,H=20*rh+FS*5.6;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const o=cur.map((p,i)=>[p,i]).sort((a,b)=>a[0]-b[0]),lg=Math.log10,lab=nw?FS*10.4:FS*12;
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:lg(1e-4),x1:0,y0:0,y1:1,xt:nw?[-4,-3,-2,lg(0.05),0]:[-4,-3,-2,lg(0.05),-1,0],fx:v=>{const p=10**v;return p>=0.1?f1(100*p,0)+"\u00a0%":p>=0.01?f1(100*p,0)+"\u00a0%":f1(100*p,p>=0.001?1:2)+"\u00a0%";},xl:"p-valor (escala logarítmica)",FS,padL:lab,padR:FS*1.2,padT:FS*1.2});
+    const k=found(cur,meth),y=i=>A.T+(i+0.5)*(A.B-A.T)/20;
+    o.forEach(([p,id],i)=>{txt(svg,lab-8,y(i)+FS*0.32,NAMES[id],{"text-anchor":"end","font-size":FS*0.85,class:i<k?"t-ink":""});
+      el("line",{x1:A.L,x2:A.R,y1:y(i),y2:y(i),stroke:"var(--line)","stroke-width":1},svg);
+      dot(svg,A.sx(lg(p)),y(i),nw?8:6,i<k?"var(--warn)":"var(--muted)");});
+    let d="";for(let i=0;i<20;i++){const x=A.sx(lg(thr(meth,i)));d+=(i?"L":"M")+x.toFixed(1)+" "+(A.T+i*(A.B-A.T)/20).toFixed(1)+"L"+x.toFixed(1)+" "+(A.T+(i+1)*(A.B-A.T)/20).toFixed(1);}
+    el("path",{d,fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    const lowest=o[0];
+    $("mc-big").innerHTML=`<div><b style="color:var(--warn)">${k}</b><span>«hallazgos» en este curso (${MN[meth]}), todos falsos</span></div><div><b>${pc(K[meth]/N,N>=1000?1:0)}</b><span>de ${f1(N,0)} ${N===1?"curso inútil":"cursos inútiles"}, con al menos un «hallazgo»</span></div><div><b>${meth===0?"64 %":"5 %"}</b><span>lo que dice la teoría a la larga</span></div>`;
+    let m;
+    if(N===1&&meth===0)m=`Este curso no hace nada, y aun así «${NAMES[lowest[1]]}» sale con p = ${pp(lowest[0])}. Un informe que solo contara este indicador diría «¡el curso mejora ${NAMES[lowest[1]]}!». Cambia a Bonferroni, y luego pulsa «+1 000 cursos».`;
+    else if(meth===0)m=`De ${f1(N,0)} cursos que no sirven para nada, <b>${pc(K[0]/N,0)}</b> tienen al menos un indicador «significativo». La teoría dice 1 − 0,95²⁰ = 64 %. Sin corregir, probar 20 cosas casi garantiza un titular falso.`;
+    else m=`Con ${MN[meth]}, de ${f1(N,0)} cursos inútiles, solo <b>${pc(K[meth]/N,N>=1000?1:0)}</b> dan algún «hallazgo»${N<300?" (con pocos cursos la cuenta baila; pulsa «+1 000 cursos»)":""}: vuelve a estar cerca del 5 % prometido. `+(meth===1?"Bonferroni exige p &lt; 0,25 % a cada indicador: seguro, pero con efectos reales pequeños se le escapan muchos.":meth===2?"Holm compara el más pequeño con 0,25 %, el segundo con 0,26 %… y para en el primero que no pasa: nunca encuentra menos que Bonferroni.":"Benjamini-Hochberg sube el listón en escalera hasta el 5 %. Cuando no hay nada real se porta como Bonferroni; cuando hay varios efectos reales, encuentra muchos más, a cambio de admitir alguna falsa alarma entre ellos.");
+    $("mc-msg").innerHTML=m;}
+  reset();redraws.push(draw);draw();})();
+
+/* ---------- idea 7: mirar cada día ---------- */
+(function(){const svg=$("pk"),D=30;let rnd,cur,hist=[],N=0,KA=0,KE=0;
+  const path=()=>{let s=0;const p=[];for(let k=1;k<=D;k++){s+=gauss(rnd);const z=s/Math.sqrt(k);p.push(Math.max(1e-4,2*(1-ncdf(Math.abs(z)))));}return p;};
+  const add=p=>{N++;if(p.some(v=>v<0.05))KA++;if(p[D-1]<0.05)KE++;};
+  function reset(){let s=1;for(;;s++){rnd=mulberry32(900+s);const p=path(),k=p.findIndex(v=>v<0.05);if(k>=3&&k<=12&&p[D-1]>0.3)break;}rnd=mulberry32(900+s);cur=path();hist=[];N=0;KA=0;KE=0;add(cur);}
+  $("pk-1").onclick=()=>{hist.unshift(cur);if(hist.length>5)hist.length=5;cur=path();add(cur);draw();};
+  $("pk-1k").onclick=()=>{for(let j=0;j<999;j++)add(path());hist.unshift(cur);if(hist.length>5)hist.length=5;cur=path();add(cur);draw();};
+  $("pk-re").onclick=()=>{reset();draw();};
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?520:360;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";const lg=Math.log10;
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0.5,x1:30.5,y0:lg(1e-3),y1:0,xt:[1,5,10,15,20,25,30],yt:[0,-1,lg(0.05),-2,-3],fy:v=>{const p=10**v;return f1(100*p,p<0.01?1:0)+"\u00a0%";},xl:"día de la prueba",yl:"p-valor con lo acumulado",FS,padL:FS*3.6});
+    const cp=el("clipPath",{id:"pk-cl"},el("defs",null,svg));el("rect",{x:A.L,y:A.T-4,width:A.R-A.L,height:A.B-A.T+8},cp);const g=el("g",{"clip-path":"url(#pk-cl)"},svg);
+    el("rect",{x:A.L,y:A.sy(lg(0.05)),width:A.R-A.L,height:A.B-A.sy(lg(0.05)),fill:"var(--warn)","fill-opacity":.08},g);
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(lg(0.05)),y2:A.sy(lg(0.05)),stroke:"var(--warn)","stroke-width":2,"stroke-dasharray":"7 5"},g);
+    const pl=p=>p.map((v,k)=>(k?"L":"M")+A.sx(k+1).toFixed(1)+" "+A.sy(Math.max(lg(v),-3.05)).toFixed(1)).join("");
+    hist.forEach(p=>el("path",{d:pl(p),fill:"none",stroke:"var(--muted)","stroke-width":1.6,"stroke-opacity":.45},g));
+    el("path",{d:pl(cur),fill:"none",stroke:"var(--mean)","stroke-width":3.2},g);
+    const k=cur.findIndex(v=>v<0.05);
+    if(k>=0){const x=A.sx(k+1),y=A.sy(Math.max(lg(cur[k]),-3));dot(svg,x,y,nw?11:8,"var(--warn)");
+      const right=k>18;txt(svg,x+(right?-1:1)*FS*0.8,y+FS*2.4,`día ${k+1}: «¡funciona!»`,Object.assign({"text-anchor":right?"end":"start","font-size":FS*0.85,"font-weight":700,style:"fill:var(--warn)"},halo(5)));}
+    txt(svg,A.R-4,A.sy(lg(0.05))-FS*0.45,"listón 5 %",Object.assign({"text-anchor":"end","font-size":FS*0.78,style:"fill:var(--warn)"},halo(5)));
+    $("pk-big").innerHTML=`<div><b>${f1(N,0)}</b><span>${N===1?"prueba":"pruebas"} en las que el curso no hace nada</span></div><div><b style="color:var(--warn)">${pc(KA/N,N>=1000?1:0)}</b><span>mirando cada día, alguna vez bajan del 5 % (y se pararían)</span></div><div><b style="color:var(--good)">${pc(KE/N,N>=1000?1:0)}</b><span>mirando solo el día 30, salen significativas</span></div>`;
+    let m;
+    if(N===1)m=`En esta prueba el curso no hace nada. El p-valor baja del 5 % el día ${k+1}: quien mirara cada mañana habría parado ahí y anunciado un ahorro. Si hubiera esperado al día 30, el p-valor sería del ${pp(cur[D-1])}: nada. Pulsa «Otra prueba» unas veces y luego «+1 000 pruebas».`;
+    else if(N<300)m=`De ${N} pruebas sin efecto, ${KA} cruzan el listón algún día (${pc(KA/N,0)}) y ${KE} lo hacen el día 30 (${pc(KE/N,0)}). Con pocas pruebas las cifras bailan; pulsa «+1 000 pruebas».`;
+    else m=`De ${f1(N,0)} pruebas en las que el curso no hace nada, mirando cada día y parando en cuanto p &lt; 5 %, <b>${pc(KA/N,0)}</b> anunciarían un ahorro falso. Mirando solo al final, el ${pc(KE/N,1)}, lo prometido. Con 30 miradas, las falsas alarmas se multiplican por más de cinco.`;
+    $("pk-msg").innerHTML=m;}
+  reset();redraws.push(draw);draw();})();
+})();
+</script>
+</body>
+</html>

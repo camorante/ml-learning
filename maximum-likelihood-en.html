@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Maximum likelihood</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content;max-width:100%}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec p b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.rowb{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.ltab{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.ltab .card h3{font-size:1.02rem}
+.ltab .card p{font-size:.93rem}
+.ltab .card .to{font-family:var(--f-mono);font-size:.85rem;color:var(--mean)}
+@media (max-width:620px){.seg{border-radius:14px}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#en" target="_self">← Main menu</a> · The math under ML · topic 14 · explained with drawings · <a href="maximum-likelihood-technical-en.html" target="_self">see the technical version</a> · <a href="math-under-ml-en.html" target="_self">all topics</a> · <a href="maxima-verosimilitud-es.html" target="_self">en español</a></p>
+  <h1>Maximum likelihood</h1>
+  <p class="lede">The data has already happened and can't be changed. What moves is the guess: which value of the parameter made exactly what happened most probable? That question, asked again for different kinds of data, explains where almost every loss function in machine learning comes from.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="situ col">
+    <p class="eyebrow">The setup</p>
+    <p>A truck's telemetry system sends a <strong>harsh braking alert</strong> every time the deceleration goes past a limit. For 14 days, the alerts of each day were counted: 3, 1, 4, 0, 4, 2, 3, 1, 3, 2, 1, 6, 3, 2.</p>
+    <p>A day's alerts are counted well by the <strong>Poisson</strong> distribution (<a href="distributions-en.html" target="_self">topic 8</a>), which has a single number, <strong>λ</strong> (lambda): how many alerts the truck gives on a normal day, on average. That number isn't written anywhere: it has to be worked out from the counts. The idea of <strong>maximum likelihood</strong> is to try values of λ and ask each one: <em>what probability did you give to what actually happened?</em> The one that gave it the most wins.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="Probability that each value of lambda gives to the fourteen observed days, and the log-likelihood curve"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, each box is a day: the <b style="color:var(--point)">orange</b> number is how many alerts there were and the <b style="color:var(--mean)">blue</b> bar is the probability the chosen λ gave to that day (with its percentage). Bottom left (or in the middle on a phone), the <b style="color:var(--point)">orange dots</b> stack the days by their alerts and the <b style="color:var(--mean)">blue</b> bars are how many days of each kind that λ would expect in 14 days. Bottom right (or at the end), the <b>likelihood curve</b>: for each possible λ, how well it explains all 14 days at once (higher is better). The orange dot is your λ.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>How many alerts a day do you guess?</h3>
+      <p>Move λ and watch the bars of each day change. The data doesn't move: only the guess changes.</p>
+      <div class="slider"><label for="t-l">λ (alerts per day, on average) <output id="t-l-o"></output></label><input type="range" id="t-l" min="0.2" max="6" step="0.1" value="1"><div class="ends"><span>0.2</span><span>6</span></div></div>
+    </div>
+    <div class="dec">
+      <h3>Which truck?</h3>
+      <p>Truck B drives on the highway and brakes hard less often. Its 14 days: 3, 1, 1, 0, 2, 1, 1, 0, 0, 1, 0, 2, 2, 0.</p>
+      <div class="chips" id="t-c" role="group" aria-label="Truck"></div>
+    </div>
+    <div class="dec">
+      <h3>Shortcut</h3>
+      <p>Take λ straight to the highest point of the curve: the <b>most likely</b> value.</p>
+      <div class="rowb"><button type="button" id="t-best" class="primary">Go to the peak</button></div>
+    </div>
+  </div>
+  <div class="big3" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Try this, in order:</strong></p>
+    <ol class="try">
+      <li>With λ = 1, the 6-alert day gets 0.05% and the 4-alert days get 1.5%: this λ says those days can hardly happen, and they did.</li>
+      <li>Go up to λ = 5: now the ones that don't fit are the quiet days, with 0 or 1 alerts.</li>
+      <li>Find the highest point of the curve by hand. It's at <b>λ = 2.5</b>: 35 alerts over 14 days, the plain old average.</li>
+      <li>Switch to truck B: the peak moves to 1.0, which is its average. Press “Go to the peak” to check.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">What you just saw</p>
+    <h2>Likelihood: the data stays still, the parameter moves</h2>
+    <p>Ordinary probability goes forward: “if the truck gives 2.5 alerts a day on average, what's the probability it gives 6 tomorrow?”. <strong>Likelihood</strong> turns it around: the 14 days are already counted, and for each possible λ you ask what probability it gave to those 14 specific days. It's the same calculation, read backwards.</p>
+    <ul>
+      <li><strong>One number for each guess.</strong> λ = 1 gives the 14 days together a probability of 1 in 5 · 10¹⁵. λ = 2.5 gives them 1 in 8 · 10¹⁰: about 64,000 times more.</li>
+      <li><strong>The one that gave the most probability wins.</strong> The value of λ at the peak of the curve is the <strong>maximum likelihood estimate</strong>. For the Poisson it always comes out as the average of the counts, which is what anyone would have done by eye; the nice part is that the same reasoning works when there's no answer that obvious.</li>
+      <li><strong>Likelihood is not “the probability that λ is 2.5”.</strong> It compares guesses with each other, but it doesn't share out 100% among them. That's what the <a href="bayes-en.html" target="_self">Bayesian</a> approach does (idea 7).</li>
+    </ul>
+    <p>The ideas that follow explain why probabilities are multiplied and logarithms are used (1), what happens with percentages (2), why more data gives more certainty (3) and, above all, where the <strong>loss functions</strong> used by the models of the series come from: least squares (4), absolute error (5) and log loss (6). At the end, the danger of taking the data too literally (7) and how the peak is found when there's no formula (8).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 8</p>
+    <h2>Multiply probabilities, add logarithms</h2>
+    <p>Why is the probability of the 14 days together the <strong>product</strong> of each day's probability? Because the days are assumed to be <strong>independent</strong>: what happened on Monday doesn't change Tuesday's probabilities (<a href="conditional-probability-and-independence-en.html" target="_self">topic 9</a>). With independent events, “this and this and this” is computed by multiplying.</p>
+    <p>The practical problem: multiplying many numbers smaller than 1 gives a tiny number. With a year of data you get something like 0.000…0003 with 282 zeros in front, and with a year and a half the computer can no longer store it and rounds it to 0. The fix is to work with <strong>logarithms</strong>: the logarithm of a product is the sum of the logarithms, and adding up hundreds of normal numbers is no problem at all. Since the logarithm always grows when what's inside grows, <strong>the peak is in the same place</strong>. That's why people almost always talk about the <strong>log-likelihood</strong>.</p>
+  </div>
+  <figure class="fig"><svg id="lg" role="img" aria-label="Size of the joint probability as a function of the number of days, and the computer's limit"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Horizontally, how many days of truck A's data are used (on a log scale: 1, 10, 100, 1,000). Vertically, how many zeros the probability of all those days together has (with the best λ): −100 means 10⁻¹⁰⁰, a 1 preceded by 99 zeros after the decimal point. The dashed <b style="color:var(--warn)">red</b> line is the smallest value an ordinary computer number can hold. The <b style="color:var(--point)">orange</b> dot is your choice.</p>
+  <div class="controls col">
+    <div class="slider"><label for="lg-n">Days of data <output id="lg-n-o"></output></label><input type="range" id="lg-n" min="0" max="10" step="1" value="3"><div class="ends"><span>1</span><span>1,000</span></div></div>
+  </div>
+  <div class="big3 col" id="lg-big"></div>
+  <p class="qcard col" id="lg-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 8</p>
+    <h2>Percentages: the most likely one is the one you saw</h2>
+    <p>Another kind of data: of a customer's 40 deliveries, 3 arrived late. Each delivery is a “yes or no” with the same probability p of being late, so the number of late ones follows a <strong>binomial</strong> (<a href="distributions-en.html" target="_self">topic 8</a>). For each possible p you compute the probability of “3 late out of 40”: if p is very small, 3 late deliveries are too many; if it's very large, they're too few.</p>
+    <p>The peak is always at <strong>late / deliveries</strong>: 3 / 40 = 7.5%. Again, what anyone would compute. But now you know <em>why</em> it's the best estimate and, above all, you can see the shape of the curve around it (idea 3).</p>
+  </div>
+  <figure class="fig"><svg id="bi" role="img" aria-label="Likelihood of the percentage of late deliveries"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Horizontally, the percentage of late deliveries you assume. The <b style="color:var(--mean)">blue</b> curve is the likelihood of each guess, divided by the one at the peak (so the peak is 1 and the rest reads as “how many times less”). The dashed line marks the peak and the <b style="color:var(--point)">orange</b> dot, the percentage you choose below.</p>
+  <div class="controls col">
+    <div class="slider"><label for="bi-n">Deliveries <output id="bi-n-o"></output></label><input type="range" id="bi-n" min="0" max="5" step="1" value="3"><div class="ends"><span>5</span><span>200</span></div></div>
+    <div class="slider"><label for="bi-k">Arrived late <output id="bi-k-o"></output></label><input type="range" id="bi-k" min="0" max="40" step="1" value="3"><div class="ends"><span>0</span><span>all</span></div></div>
+    <div class="slider"><label for="bi-p">Percentage you assume <output id="bi-p-o"></output></label><input type="range" id="bi-p" min="0" max="100" step="0.5" value="20"><div class="ends"><span>0%</span><span>100%</span></div></div>
+  </div>
+  <div class="big3 col" id="bi-big"></div>
+  <p class="qcard col" id="bi-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 8</p>
+    <h2>More data, narrower peak: more certainty</h2>
+    <p>A 10% late rate can come from 1 out of 10 deliveries or from 100 out of 1,000. The peak is in the same place, but the curve doesn't have the same shape. With 10 deliveries it's a broad hill: 3% or 25% explain the data almost equally well. With 1,000 it's a sharp spike: any value a little away from 10% makes the data much, much less probable.</p>
+    <p>The width of the peak measures <strong>how much you know</strong>. A common rule is to keep the values whose likelihood is at least 14.7% of the peak's: that gives 95% intervals, like those of <a href="confidence-intervals-and-the-bootstrap-en.html" target="_self">topic 12</a>, and almost the same as Wilson's. And as there, cutting the width in half takes four times as much data.</p>
+  </div>
+  <figure class="fig"><svg id="an" role="img" aria-label="Likelihood curves for ten percent with different numbers of deliveries"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Four likelihood curves, all with 10% late deliveries: with 10, 40, 200 and 1,000 deliveries. The chosen one is thick <b style="color:var(--mean)">blue</b>; the others, gray. The blue band is the interval: the percentages that stay above the dashed 14.7% line.</p>
+  <div class="controls col">
+    <div class="slider"><label for="an-n">Deliveries (always 10% late) <output id="an-n-o"></output></label><input type="range" id="an-n" min="0" max="3" step="1" value="0"><div class="ends"><span>10</span><span>1,000</span></div></div>
+  </div>
+  <div class="big3 col" id="an-big"></div>
+  <p class="qcard col" id="an-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 8</p>
+    <h2>If the noise is a bell, you get least squares</h2>
+    <p>This is where it gets interesting for machine learning. You want a straight line that gives a truck's fuel use from the load it carries. The points don't fall exactly on the line: there's <strong>noise</strong> (wind, driver, traffic). If you assume that noise has the shape of a <strong>bell</strong> (a normal) with a fixed width, the probability of each trip depends on how far it is from the line, and the log-likelihood calculation boils down to this:</p>
+    <p class="note"><strong>log-likelihood = a fixed number − (sum of squared errors) / (2 × width²)</strong></p>
+    <p>Making the likelihood as large as possible is the same as making <strong>the sum of squared errors as small as possible</strong>: the <strong>least squares</strong> of <a href="linear-and-polynomial-regression-en.html" target="_self">linear regression</a> and of <a href="least-squares-as-a-projection-en.html" target="_self">topic 4</a>. They aren't a whim: they're the right answer <em>if</em> the noise is a bell.</p>
+  </div>
+  <figure class="fig"><svg id="ls" role="img" aria-label="Fuel use versus load line, sum of squares and log-likelihood as a function of the slope"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> On the left (at the top on a phone), 12 trips: load in tonnes and fuel use in liters per 100 km. The <b style="color:var(--mean)">blue</b> line has the slope you choose (and always goes through the center of the data); the <b style="color:var(--sample)">purple</b> lines are the errors. On the right, for each slope, the sum of squared errors (a valley) and the log-likelihood with noise of width 2 (a hill). The <b style="color:var(--point)">orange</b> dot is your slope.</p>
+  <div class="controls col">
+    <div class="slider"><label for="ls-b">Slope: extra liters per tonne <output id="ls-b-o"></output></label><input type="range" id="ls-b" min="0" max="1" step="0.01" value="0.2"><div class="ends"><span>0</span><span>1</span></div></div>
+  </div>
+  <div class="big3 col" id="ls-big"></div>
+  <p class="qcard col" id="ls-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 8</p>
+    <h2>If the noise has fat tails, you get absolute error</h2>
+    <p>Changing the shape of the noise changes the loss. Nine unloadings at a customer's dock took 18, 22, 15, 25, 20, 17, 23, 19 and <strong>95</strong> minutes (that day a delivery note was missing). What's the typical duration?</p>
+    <p>With <strong>bell</strong>-shaped noise, a data point 70 minutes from the center is almost impossible, so maximum likelihood moves the center toward it so it isn't quite so impossible: you get the <strong>mean</strong>, 28.2 minutes. With <strong>fat-tailed</strong> noise (the <strong>Laplace</strong> distribution, which allows big surprises), the calculation turns into the <strong>sum of absolute errors</strong> (not squared), and its minimum is the <strong>median</strong>: 20 minutes, as in <a href="mean-variance-and-standard-deviation-en.html" target="_self">topic 7</a>. Choosing a loss is choosing what you believe about the noise.</p>
+  </div>
+  <div class="seg col" role="group" aria-label="Shape of the noise"><button type="button" id="la-0" aria-pressed="true">Bell-shaped noise (normal)</button><button type="button" id="la-1" aria-pressed="false">Fat tails (Laplace)</button></div>
+  <figure class="fig"><svg id="la" role="img" aria-label="Nine unloading times, the shape of the noise and the loss as a function of the central value"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, the 9 unloadings (<b style="color:var(--point)">orange</b> dots) and the shape of the noise centered on the value you choose (in <b style="color:var(--mean)">blue</b>): the height of the curve above each dot is how probable it finds it. At the bottom, the loss of each central value (minus the log-likelihood: lower is better); the dashed lines mark the mean and the median.</p>
+  <div class="controls col">
+    <div class="slider"><label for="la-m">Typical duration you assume (min) <output id="la-m-o"></output></label><input type="range" id="la-m" min="10" max="50" step="0.2" value="40"><div class="ends"><span>10</span><span>50</span></div></div>
+  </div>
+  <div class="big3 col" id="la-big"></div>
+  <p class="qcard col" id="la-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 6 of 8</p>
+    <h2>If the answer is yes or no, you get log loss</h2>
+    <p>A model gives each delivery a probability of being late based on the trip's kilometers, with an S-shaped curve: <a href="logistic-regression-en.html" target="_self">logistic regression</a>. The likelihood of one delivery is the probability the model gave <strong>to what happened</strong>: if it was late, its probability of being late; if it was on time, its probability of being on time. You multiply the 40 together and take the logarithm.</p>
+    <p>With the sign flipped and divided by the number of deliveries, that calculation is the <strong>log loss</strong>, also called <strong>cross-entropy</strong>, the one minimized by logistic regression and almost every network that classifies. (Entropy will get its own topic later in the collection.) It punishes being very sure and wrong extremely hard: giving 1% to something that happens costs 4.6; giving it 50% costs only 0.69.</p>
+  </div>
+  <figure class="fig"><svg id="lo" role="img" aria-label="Curve of the probability of being late by kilometers, and the penalty of each delivery"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, each delivery is a dot: at the very top the ones that were <b style="color:var(--point)">late</b> and at the very bottom the ones that were <b style="color:var(--sample)">on time</b>, by the trip's km. The <b style="color:var(--mean)">blue</b> curve is the probability of being late the model gives. At the bottom, each delivery's <b style="color:var(--warn)">red</b> bar is its penalty: minus the logarithm of the probability the model gave to what happened.</p>
+  <div class="controls col">
+    <div class="slider"><label for="lo-m">Midpoint: km with a 50% chance of being late <output id="lo-m-o"></output></label><input type="range" id="lo-m" min="0" max="320" step="1" value="100"><div class="ends"><span>0 km</span><span>320 km</span></div></div>
+    <div class="slider"><label for="lo-b">Steepness of the S <output id="lo-b-o"></output></label><input type="range" id="lo-b" min="0.2" max="10" step="0.1" value="6"><div class="ends"><span>gentle</span><span>abrupt</span></div></div>
+  </div>
+  <div class="rowb col"><button type="button" id="lo-fit" class="primary">Maximum likelihood fit</button></div>
+  <div class="big3 col" id="lo-big"></div>
+  <p class="qcard col" id="lo-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 7 of 8</p>
+    <h2>With little data, maximum likelihood believes everything</h2>
+    <p>A new customer: 5 deliveries, none late. Maximum likelihood says <strong>0%</strong>: “this customer will never have a late delivery”. It's the answer that makes those 5 data points most probable, and it's absurd: across the fleet, 8% of deliveries are late. With little data, maximum likelihood <strong>overfits</strong>: it takes what it has seen literally.</p>
+    <p>The fix is to add what you already knew before seeing the data, a <strong>prior</strong> (the <a href="bayes-en.html" target="_self">Bayesian</a> approach). Here it amounts to adding a few <strong>imaginary deliveries</strong> with the fleet's average punctuality. The peak of “likelihood × prior” is called <strong>MAP</strong> (maximum a posteriori). In logarithms it's “log-likelihood + a penalty for straying from normal”: the same thing <strong>regularization</strong> does in machine learning models.</p>
+  </div>
+  <div class="chips col" id="mp-d" role="group" aria-label="Customer data"></div>
+  <figure class="fig"><svg id="mp" role="img" aria-label="Likelihood, prior and their combination for a customer's percentage of late deliveries"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The dashed <b style="color:var(--point)">orange</b> curve is the likelihood (only the customer's data); the <b style="color:var(--sample)">purple</b> one, the prior (what is known about the fleet, narrower the more imaginary deliveries there are); the <b style="color:var(--mean)">blue</b> one, both together. Each curve is scaled so its peak is 1. The diamonds mark the peaks.</p>
+  <div class="controls col">
+    <div class="slider"><label for="mp-m">Imaginary deliveries with 8% late <output id="mp-m-o"></output></label><input type="range" id="mp-m" min="0" max="50" step="1" value="0"><div class="ends"><span>0 (data only)</span><span>50</span></div></div>
+  </div>
+  <div class="big3 col" id="mp-big"></div>
+  <p class="qcard col" id="mp-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 8 of 8</p>
+    <h2>No formula: climbing the hill step by step</h2>
+    <p>For the Poisson or the binomial, the peak has a formula (the mean, k / n). For the logistic regression of idea 6, it doesn't: you have to <strong>search</strong> for it. The most used method is the hiker in the fog: look at which way the ground goes up right where you stand, take a step in that direction and repeat. It's the <a href="gradient-descent-en.html" target="_self">gradient descent</a> of the ML series (here “ascent”, because you climb the likelihood; going down the loss is the same thing). The slope of the ground is computed with derivatives, which will get their own topic later.</p>
+  </div>
+  <figure class="fig"><svg id="gd" role="img" aria-label="Map of the logistic regression log-likelihood and the path of the steps"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> It's a map of the terrain: each point is a model from idea 6 (midpoint horizontally, steepness vertically), and the darker the <b style="color:var(--mean)">blue</b>, the more likely, like the contour lines of a mountain map. The star is the peak. The <b style="color:var(--point)">orange</b> path is the steps taken from the bottom-left corner.</p>
+  <div class="decs">
+    <div class="dec"><h3>Step size</h3><p>How far you move each time in the direction that goes up.</p><div class="seg" role="group" aria-label="Step size"><button type="button" id="gd-s0" aria-pressed="false">Small</button><button type="button" id="gd-s1" aria-pressed="true">Good</button><button type="button" id="gd-s2" aria-pressed="false">Too big</button></div></div>
+    <div class="dec"><h3>Walk</h3><p>Take steps and watch the log-likelihood go up.</p><div class="rowb"><button type="button" id="gd-1" class="primary">1 step</button><button type="button" id="gd-10">+10 steps</button><button type="button" id="gd-re">↺ Start over</button></div></div>
+  </div>
+  <div class="big3 col" id="gd-big"></div>
+  <p class="qcard col" id="gd-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The full recipe</h2>
+    <ol class="steps">
+      <li><div><strong>Choose a model of how the data is generated</strong>: Poisson for counts, binomial for yes/no, normal for measurements with bell-shaped noise…</div></li>
+      <li><div><strong>Write the probability of each data point</strong> in terms of the parameters and multiply them (if the data points are independent).</div></li>
+      <li><div><strong>Take logarithms</strong>: the product becomes a sum and the peak doesn't move.</div></li>
+      <li><div><strong>Find the peak</strong>: with a formula if there is one (the mean, k / n) or by climbing step by step if not.</div></li>
+      <li><div><strong>Look at the width of the peak</strong>: it tells you how much you know and gives intervals.</div></li>
+      <li><div><strong>Be wary with little data</strong>: add a prior or regularization so you don't believe a 0% or a 100%.</div></li>
+      <li><div><strong>And the other way around</strong>: every loss function hides an assumption about the noise. Squares = bell; absolutes = fat tails; log loss = yes/no.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where it shows up in fleet telemetry</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6L34 32H6Z"/><path d="M20 16v8M20 28v1"/></svg><h3>Is this day unusual?</h3><p>With λ = 2.5 alerts a day fitted by maximum likelihood, a day with 9 alerts has a probability of 0.09% (9 or more, 0.11%). Going from “that looks like a lot” to “this is an anomalous day” first requires a model of what's normal.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13"/><path d="M20 12v8l6 4"/></svg><h3>Stop times and arrival times</h3><p>Stops at the dock are fitted with a lognormal (<a href="distributions-en.html" target="_self">topic 8</a>) by maximum likelihood. With it you compute the probability that a stop goes over 45 minutes, and whether or not to charge for waiting time.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="10" width="28" height="22" rx="2"/><path d="M6 16h28M13 6v8M27 6v8"/></svg><h3>Late risk per delivery</h3><p>The model that gives each delivery's risk is trained by minimizing log loss, that is, by maximum likelihood. That's why its percentages can be read as probabilities and used to make decisions in dollars.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 30h24M12 30V18M20 30V10M28 30V22"/></svg><h3>Driver rankings</h3><p>A new driver with 0 alerts in 3 days is not “the smoothest in the fleet”. With a prior (the fleet's average alerts), their estimate stays close to the average until they build up days, and the ranking stops rewarding luck.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Connections</p>
+    <h2>With the models of the ML series and the other topics</h2>
+    <p>Almost every model in the series is trained by maximizing a likelihood, even if it doesn't say so. <a href="linear-and-polynomial-regression-en.html" target="_self">Linear regression</a> with least squares is maximum likelihood with normal noise (and the projection of <a href="least-squares-as-a-projection-en.html" target="_self">topic 4</a> is its peak). <a href="logistic-regression-en.html" target="_self">Logistic regression</a> maximizes the likelihood of a Bernoulli, and <a href="gradient-descent-en.html" target="_self">gradient descent</a> is the way to find the peak. The <a href="bayes-en.html" target="_self">Bayesian</a> approach multiplies the likelihood by a prior: that's where regularization comes from. <a href="gaussian-processes-en.html" target="_self">Gaussian processes</a> choose their kernel's scale by maximizing the likelihood of the data, and the <a href="kalman-filter-en.html" target="_self">Kalman filter</a> tunes how much noise the GPS and the motion have in the same way.</p>
+    <p>In this collection it builds on the mean and median of <a href="mean-variance-and-standard-deviation-en.html" target="_self">topic 7</a>, the distributions of <a href="distributions-en.html" target="_self">topic 8</a>, the independence of <a href="conditional-probability-and-independence-en.html" target="_self">topic 9</a> and the sampling of <a href="sampling-and-the-central-limit-theorem-en.html" target="_self">topic 11</a>; the width of the peak connects with the intervals of <a href="confidence-intervals-and-the-bootstrap-en.html" target="_self">topic 12</a>, and comparing the peaks of two models is one of the <a href="hypothesis-tests-and-p-values-en.html" target="_self">hypothesis tests</a> of topic 13. The topics on entropy and derivatives, later on, complete idea 6 and idea 8.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>Where it helps and where it misleads</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Where it helps</h3><ul class="pc">
+      <li>A single recipe for any kind of data: counts, percentages, times, measurements, yes/no.</li>
+      <li>It explains where each loss function comes from and when another one is a better fit.</li>
+      <li>With lots of data it's the best possible estimate, and the width of the peak tells you how much to trust it.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Where it misleads</h3><ul class="pc">
+      <li>Everything depends on the chosen model: if the alerts aren't Poisson (very different drivers mixed together), the peak is the exact answer to the wrong question.</li>
+      <li>With little data it believes everything: 0 out of 5 gives 0%.</li>
+      <li>It assumes independent data; with days or trucks that resemble each other, the peak comes out too sharp.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Parameter</dt><dd>The number you can't see that decides the shape of the data: λ for the alerts, p for late deliveries.</dd>
+      <dt>Likelihood</dt><dd>With the data fixed, the probability each value of the parameter gave to that data. It's used to compare values with each other.</dd>
+      <dt>Log-likelihood</dt><dd>Its logarithm: the sum of the logarithms of each data point's probability. Same peak, no tiny numbers.</dd>
+      <dt>Maximum likelihood</dt><dd>Keeping the parameter value that makes the data most probable (the peak of the curve).</dd>
+      <dt>Independent</dt><dd>Data where what happens in one doesn't change the probabilities of another. It lets you multiply.</dd>
+      <dt>Loss function</dt><dd>What a model tries to make small while training. Many are minus the log-likelihood of some noise model.</dd>
+      <dt>Log loss (cross-entropy)</dt><dd>The average of minus the logarithm of the probability given to what happened. The one classifiers use.</dd>
+      <dt>Overfitting</dt><dd>Believing the data too much: with 0 late out of 5, saying there will never be a late delivery.</dd>
+      <dt>Prior and MAP</dt><dd>What was known before the data, and the peak of likelihood × prior. In logarithms, likelihood plus a penalty: regularization.</dd>
+      <dt>Gradient</dt><dd>The direction in which the hill rises fastest from where you stand. It's used to find the peak step by step.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the math behind it</summary>
+    <p style="padding-top:10px">You don't need it to understand the idea:</p>
+    <div class="formula">Poisson:   P(k alerts) = e^(−λ) · λ^k / k!
+log-likelihood of 14 days:  35 · log λ − 14 · λ − (sum of log k!)
+peak: derivative 35/λ − 14 = 0  →  λ = 35 / 14 = 2.5  (the mean)
+with λ = 2.5: log-likelihood = −25.11  →  probability 1.24 · 10⁻¹¹
+
+binomial (3 late out of 40):  3 · log p + 37 · log(1 − p) + constant
+peak: 3/p − 37/(1 − p) = 0  →  p = 3/40 = 7.5%
+
+normal (fixed σ):  log-likelihood = constant − Σ errors² / (2σ²)
+                   → maximum likelihood = least squares
+Laplace:           constant − Σ |errors| / b  → median
+yes/no:            Σ log(probability given to what happened)
+                   → minus this, divided by n = log loss
+
+with a prior (m imaginary deliveries at 8%):
+                   p = (late + 0.08 · m) / (deliveries + m)
+                   0 out of 5 with m = 20  →  1.6 / 25 = 6.4%</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in a minute and a half</h2>
+    <p>An animated recap: λ moving over the 14 days of alerts up to the peak, the tiny product that turns into a sum of logarithms, the peak that sharpens with more data, the three losses that come from three shapes of noise, the customer with 0 late out of 5, and the step-by-step climb up the hill. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJFVAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkB//Z" aria-label="Animation: maximum likelihood">
+      <source src="maximum-likelihood-with-audio-en.mp4" type="video/mp4">
+      Your browser can't play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"A":[3,1,4,0,4,2,3,1,3,2,1,6,3,2],"B":[3,1,1,0,2,1,1,0,0,1,0,2,2,0],"largo":[3,1,4,0,4,2,3,1,3,2,1,6,3,2,4,1,4,2,5,2,0,4,2,2,1,2,5,4,0,2,5,2,2,3,2,4,3,4,1,3,1,1,2,3,3,4,3,1,4,1,1,3,6,5,3,5,1,0,3,4,4,0,4,5,0,0,1,2,2,0,5,2,3,2,5,3,2,5,3,2,3,1,1,3,2,2,3,2,1,2,3,3,5,2,4,3,6,4,1,4,4,3,3,2,3,3,1,2,1,4,1,0,1,2,2,2,5,1,4,3,2,3,6,2,4,1,5,4,3,2,1,4,1,3,3,2,2,5,4,3,4,4,4,3,2,3,4,3,3,5,2,3,3,3,2,2,3,0,3,1,6,2,1,2,1,2,1,1,1,2,4,3,3,3,0,8,2,5,0,1,3,4,2,3,3,2,0,2,3,3,5,1,4,3,1,1,1,2,3,0,2,1,3,3,3,2,1,0,4,5,2,2,3,3,2,1,3,1,2,2,2,3,3,2,2,1,0,1,3,0,2,5,2,3,2,3,1,2,2,4,3,5,4,3,1,0,4,1,3,2,4,2,3,1,2,2,3,3,1,0,1,1,0,0,3,0,4,1,1,1,1,3,4,4,1,1,2,2,0,4,2,2,4,2,0,2,5,1,4,1,2,2,2,1,3,4,4,4,3,0,2,5,5,2,1,3,1,2,2,2,3,5,2,2,1,1,2,3,4,1,3,5,5,3,3,2,1,2,4,1,2,4,1,2,1,4,4,5,2,4,1,5,1,2,3,3,6,2,3,1,3,2,2,3,3,3,3,1,5,0,3,7,2,4,4,2,4,1,0,4,2,1,2,5,2,2,5,2,2,1,3,4,4,5,2,0,5,4,4,4,3,3,4,3,2,0,3,1,2,1,2,3,2,3,7,3,1,3,3,2,1,5,4,4,1,2,5,1,1,5,2,3,4,2,1,5,2,2,1,1,3,5,2,1,5,2,1,3,1,1,4,4,3,1,2,1,3,3,3,1,1,1,2,1,2,2,3,0,6,3,3,1,6,1,2,2,0,4,3,1,2,2,2,2,6,2,2,1,0,3,2,1,1,3,4,0,3,2,2,1,2,3,0,3,1,4,3,2,1,2,2,3,4,1,4,3,1,2,2,2,5,2,2,3,1,1,5,1,1,1,0,1,5,6,1,3,2,0,2,2,2,3,3,1,3,3,4,2,6,1,3,2,5,5,4,1,2,2,5,6,2,1,2,2,4,4,4,2,5,6,3,2,3,2,4,5,2,3,2,1,5,2,1,0,7,4,4,1,2,4,2,0,3,4,1,3,6,2,1,1,2,0,3,2,0,4,1,1,2,0,4,1,1,2,3,1,2,1,3,3,6,2,1,2,2,3,3,2,5,3,0,1,4,4,2,2,2,5,5,3,3,2,5,1,5,4,4,4,1,2,1,1,2,4,2,4,4,3,1,2,4,7,4,2,1,1,1,1,5,4,1,2,1,3,1,4,4,1,3,0,1,2,1,5,0,1,0,3,2,6,2,0,5,4,2,2,2,4,3,3,1,5,7,3,1,3,3,5,4,1,5,2,1,1,2,2,4,3,4,7,2,3,1,3,3,5,0,7,2,1,2,4,3,0,6,2,4,3,1,3,5,3,0,2,0,2,5,3,2,3,1,5,3,7,2,2,2,1,4,3,4,0,4,3,3,0,2,3,2,3,1,3,0,2,4,3,0,2,3,2,2,4,5,1,1,1,2,0,1,6,2,2,3,8,2,2,6,3,2,2,0,0,1,2,2,3,3,5,4,5,1,3,0,0,3,0,6,0,3,3,1,1,4,4,2,1,4,1,4,7,3,0,1,0,3,3,2,2,3,2,0,1,2,4,1,5,4,2,4,1,0,1,4,5,2,3,1,5,0,2,1,2,5,3,3,3,2,1,1,3,1,1,2,1,4,0,4,6,4,2,4,2,3,3,1,1,3,4,0,5,3,4,3,1,3,4,1,2,5,4,2,2,2,0,2,4,2,2,2,2,2,4,3,3,0,1,1,1,5,2,2,3,1,2,5,3,1,1,2,1,1,2,5,5,2,6,3,5,5,2,1,1,6,0,2,3,4,0,3,2,4,5,1,0,2,4,2,2,3,3,3,3,4,1,3,1,3,1,1,4,5,3,2,6,3,6,2,6,5,7,0,0,4,1,0,3,4,3,3,2,0,1,3,5,5,4,4,4,3,3,1,3,0,5,3,1,2,2,1,1],"carga":[4.0,6.0,7.0,9.0,10.0,12.0,13.0,15.0,17.0,19.0,21.0,24.0],"cons":[24.5,26.4,30.5,29.4,25.2,29.4,28.6,31.0,28.4,33.0,33.9,38.0],"desc":[18.0,22.0,15.0,25.0,20.0,17.0,23.0,19.0,95.0],"km":[25.0,26.0,35.0,42.0,54.0,81.0,83.0,93.0,94.0,95.0,96.0,100.0,109.0,109.0,123.0,128.0,140.0,141.0,150.0,153.0,174.0,175.0,178.0,181.0,183.0,191.0,197.0,232.0,234.0,247.0,249.0,252.0,261.0,261.0,263.0,269.0,273.0,292.0,300.0,302.0],"tarde":[0,0,0,0,0,0,0,0,1,1,0,1,0,0,1,0,1,0,0,0,0,1,0,0,0,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1],"lg":[163.804,2.118]};
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g,",");s=fr?i+"."+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const pc=(v,d)=>f1(100*v,d??1)+"%";
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+const redraws=[];window.addEventListener("resize",()=>redraws.forEach(g=>g()));
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+const SUP={"0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹","-":"⁻"};
+const sup=n=>String(n).split("").map(c=>SUP[c]).join("");
+/* number from its log10: "1.2 · 10⁻¹¹" */
+const sciL=(l10,d)=>{let e=Math.floor(l10),m=10**(l10-e);if(+m.toFixed(d??1)>=10){m/=10;e++;}return f1(m,d??1)+" · 10"+sup(e);};
+const mean=a=>a.reduce((s,v)=>s+v,0)/a.length;
+const LF=[0];for(let k=1;k<=2000;k++)LF.push(LF[k-1]+Math.log(k));
+const lpois=(k,l)=>k*Math.log(l)-l-LF[k];
+const llpois=(x,l)=>x.reduce((s,k)=>s+lpois(k,l),0);
+const llbin=(k,n,p)=>(k?k*Math.log(p):0)+(n-k?(n-k)*Math.log(1-p):0);
+const bis=(f,lo,hi)=>{const flo=f(lo)>0;for(let i=0;i<80;i++){const m=(lo+hi)/2;if((f(m)>0)===flo)lo=m;else hi=m;}return (lo+hi)/2;};
+const tk=(a,b,n)=>{const raw=(b-a)/n,p=10**Math.floor(Math.log10(raw)),m=raw/p,st=(m<1.5?1:m<3?2:m<7?5:10)*p,out=[];for(let v=Math.ceil(a/st-1e-9)*st;v<=b+1e-9;v+=st)out.push(+v.toFixed(10));return out;};
+/* panel with axes, in viewBox coordinates */
+function axes(svg,o){const FS=o.FS,L=o.x+(o.padL??FS*3.4),R=o.x+o.w-(o.padR??FS*0.9),T=o.y+(o.padT??FS*2.2),B=o.y+o.h-(o.padB??FS*2.6);
+  const sx=v=>L+(v-o.x0)/(o.x1-o.x0)*(R-L),sy=v=>B-(v-o.y0)/(o.y1-o.y0)*(B-T),g=el("g",null,svg);
+  for(const v of (o.yt||[])){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},g);txt(g,L-7,sy(v)+FS*0.3,(o.fy||(v=>f1(v,0)))(v),{"text-anchor":"end","font-size":FS*0.8});}
+  for(const v of (o.xt||[])){if(o.grid!==false)el("line",{x1:sx(v),x2:sx(v),y1:T,y2:B,class:"g-line","stroke-opacity":.55},g);
+    const s=(o.fx||(v=>f1(v,0)))(v),w=s.length*FS*0.8*0.62,X=sx(v);let a="middle",xx=X;if(X+w/2>o.x+o.w-3){a="end";xx=o.x+o.w-3;}else if(X-w/2<o.x+3){a="start";xx=o.x+3;}else if((o.yt||[]).length&&X-w/2<L-4){a="start";xx=L-2;}
+    txt(g,xx,B+FS*1.05,s,{"text-anchor":a,"font-size":FS*0.8});}
+  el("line",{x1:L,x2:R,y1:B,y2:B,class:"g-axis"},g);
+  if(o.xl)txt(g,R,o.y+o.h-FS*0.25,o.xl,{"text-anchor":"end","font-size":FS*0.85,class:"t-ink"});
+  if(o.yl)txt(g,L,T-FS*0.75,o.yl,{"font-size":FS*0.8});
+  return {L,R,T,B,sx,sy,FS};}
+const dot=(g,x,y,r,fill,extra)=>el("circle",Object.assign({cx:x,cy:y,r,fill,stroke:"var(--point-ring)","stroke-width":r>6?2:1.2},extra||{}),g);
+const pathOf=(pts)=>pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join("");
+const diamond=(g,x,y,r,col)=>el("path",{d:`M${x} ${y-r}L${x+r} ${y}L${x} ${y+r}L${x-r} ${y}Z`,fill:col,stroke:"var(--point-ring)","stroke-width":1.5},g);
+/* label that stays inside the panel */
+const lab=(g,x,y,s,FS,A,extra)=>{extra=extra||{};const fz=extra["font-size"]||FS*0.8,w=s.length*fz*0.6,an=extra["text-anchor"]||"middle",left=an==="middle"?x-w/2:an==="end"?x-w:x;let dx=0;if(left<A.L+2)dx=A.L+2-left;else if(left+w>A.R-2)dx=A.R-2-(left+w);return txt(g,x+dx,y,s,Object.assign({"font-size":fz},halo(5),extra,{"text-anchor":an}));};
+
+/* ---------- toy: harsh braking alerts ---------- */
+(function(){const svg=$("toy"),inL=$("t-l"),DATA=[D.A,D.B];let tr=0;
+  chips($("t-c"),["Truck A · city route","Truck B · highway"],i=>{tr=i;draw();});
+  $("t-best").onclick=()=>{inL.value=mean(DATA[tr]).toFixed(1);draw();};
+  inL.addEventListener("input",draw);
+  function draw(){const x=DATA[tr],lam=+inL.value,n=x.length,lh=mean(x),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14;
+    const cols=nw?7:14,rows=nw?2:1,cw=(W-4)/cols,ch=nw?150:126,stripH=rows*ch+FS*0.8;
+    const pH=nw?400:330,H=stripH+(nw?2*pH+10:pH);svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const P=x.map(k=>Math.exp(lpois(k,lam)));
+    x.forEach((k,i)=>{const cx=2+(i%cols)*cw+cw/2,y0=Math.floor(i/cols)*ch,g=el("g",null,svg);
+      el("rect",{x:cx-cw/2+3,y:y0+3,width:cw-6,height:ch-8,rx:8,fill:"none",stroke:"var(--line)"},g);
+      txt(g,cx,y0+FS*1.0,"day "+(i+1),{"text-anchor":"middle","font-size":FS*0.66});
+      txt(g,cx,y0+FS*2.6,String(k),{"text-anchor":"middle","font-size":FS*1.7,"font-weight":800,style:"fill:var(--point)"});
+      const bb=y0+ch-FS*1.55,hb=ch-FS*4.6,h=Math.max(1.5,hb*Math.min(1,P[i]/0.45)),bw=Math.min(cw*0.42,26);
+      el("rect",{x:cx-bw/2,y:bb-h,width:bw,height:h,rx:3,fill:"var(--mean)","fill-opacity":P[i]<0.02?0.45:0.85},g);
+      el("line",{x1:cx-cw*0.36,x2:cx+cw*0.36,y1:bb,y2:bb,stroke:"var(--line)"},g);
+      txt(g,cx,bb+FS*1.0,P[i]>=0.095?pc(P[i],0):P[i]>=0.0095?pc(P[i],1):pc(P[i],2),{"text-anchor":"middle","font-size":FS*0.66,style:P[i]<0.02?"fill:var(--warn)":"fill:var(--mean)","font-weight":700});});
+    /* fit: expected days versus observed days */
+    const p1=nw?{x:0,y:stripH,w:W,h:pH}:{x:0,y:stripH,w:W*0.48,h:pH},p2=nw?{x:0,y:stripH+pH+10,w:W,h:pH}:{x:W*0.5,y:stripH,w:W*0.5,h:pH};
+    const cnt=Array(10).fill(0);x.forEach(k=>cnt[Math.min(9,k)]++);
+    const ymax=Math.max(6,Math.ceil(Math.max(...cnt)+0.5));
+    const A=axes(svg,Object.assign({},p1,{x0:-0.6,x1:8.6,y0:0,y1:ymax,xt:[0,1,2,3,4,5,6,7,8],yt:tk(0,ymax,4),xl:"alerts in a day",yl:"days (out of 14)",FS,grid:false,padL:FS*2.4,padT:FS*2.4}));
+    for(let k=0;k<=8;k++){const e=n*Math.exp(lpois(k,lam));el("rect",{x:A.sx(k)-(A.sx(0.36)-A.sx(0)),y:A.sy(Math.min(ymax,e)),width:2*(A.sx(0.36)-A.sx(0)),height:A.sy(0)-A.sy(Math.min(ymax,e)),fill:"var(--mean)","fill-opacity":.28,stroke:"var(--mean)","stroke-width":1.5},svg);}
+    const r=nw?12:9;for(let k=0;k<=8;k++)for(let j=0;j<cnt[k];j++)dot(svg,A.sx(k),A.sy(j+0.5),r,"var(--point)");
+    /* log-likelihood curve */
+    const lmax=llpois(x,lh),y0=lmax-36,y1=lmax+(nw?7:4);
+    const Bc=axes(svg,Object.assign({},p2,{x0:0,x1:6,y0,y1,xt:[0,1,2,3,4,5,6],yt:tk(y0,y1,4),fy:v=>f1(v,0),xl:"λ you assume",yl:"log-likelihood of the 14 days",FS,padL:FS*2.8,padT:FS*2.4}));
+    const pts=[];for(let i=1;i<=300;i++){const l=6*i/300,v=llpois(x,l);if(v>=y0)pts.push([Bc.sx(l),Bc.sy(v)]);}
+    el("path",{d:pathOf(pts),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    el("line",{x1:Bc.sx(lh),x2:Bc.sx(lh),y1:Bc.sy(lmax),y2:Bc.B,stroke:"var(--ink)","stroke-width":1.5,"stroke-dasharray":"5 4"},svg);
+    lab(svg,Bc.sx(lh),Bc.sy(lmax)-FS*1.15,"peak: λ = "+f1(lh,1)+" (the mean)",FS,Bc,{class:"t-ink","font-weight":700});
+    const lc=llpois(x,lam),yc=Bc.sy(Math.max(y0,lc));dot(svg,Bc.sx(lam),yc,nw?11:8,"var(--point)");
+    if(lc<y0)txt(svg,Bc.sx(lam),yc-FS*0.9,"further down",Object.assign({"text-anchor":"middle","font-size":FS*0.72,style:"fill:var(--warn)"},halo(4)));
+    else if(Math.abs(lam-lh)>0.35)lab(svg,Bc.sx(lam)+(lam<lh?-1:1)*FS*0.2,yc+FS*1.5,f1(lc,1),FS,Bc,{style:"fill:var(--point)","font-weight":700});
+    $("t-l-o").textContent=f1(lam,1);
+    const ratio=(lmax-lc)/Math.LN10;
+    $("t-big").innerHTML=`<div><b>1 in ${sciL(-lc/Math.LN10,1)}</b><span>probability λ = ${f1(lam,1)} gives to the 14 days together (multiplying each day's)</span></div><div><b>${f1(lc,1)}</b><span>log-likelihood: the sum of the logarithms of the 14 probabilities</span></div><div><b style="color:var(--mean)">${ratio<0.0005?"at the peak":"×"+(ratio<5?f1(10**ratio,ratio<1?2:0):sciL(ratio,1))}</b><span>${ratio<0.0005?"no λ gives these 14 days more probability":"times more probable the data would be with the best λ"}</span></div>`;
+    const iw=P.indexOf(Math.min(...P)),kw=x[iw];let m;
+    if(Math.abs(lam-lh)<0.05)m=`<b>At the peak.</b> λ = ${f1(lh,1)} is the value that gives the most probability to the 14 days together, and it's exactly the average: ${x.reduce((s,v)=>s+v,0)} alerts over 14 days. No day gets a ridiculous probability: the worst, the one with ${kw} alerts, gets ${pc(P[iw],1)}. This is the maximum likelihood estimate.`;
+    else if(lam<lh)m=`With λ = ${f1(lam,1)}, day ${iw+1} (${kw} alerts) gets only <b>${P[iw]<0.001?pc(P[iw],2):pc(P[iw],1)}</b>: this λ says a day like that can hardly happen, and it did. The blue bars below expect more quiet days than there were. Raise λ.`;
+    else m=`With λ = ${f1(lam,1)}, day ${iw+1} (${kw} ${kw===1?"alert":"alerts"}) gets only <b>${P[iw]<0.001?pc(P[iw],2):pc(P[iw],1)}</b>: with that many alerts on average, such a quiet day would be very rare. The blue bars expect more busy days than there were. Lower λ.`;
+    $("t-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 1: product and logarithms ---------- */
+(function(){const svg=$("lg"),inN=$("lg-n"),NN=[1,2,5,14,30,60,100,200,365,500,1000],L=D.largo;
+  const cum=[0];L.forEach(k=>cum.push(cum[cum.length-1]+k));
+  const best=n=>{const lh=cum[n]/n;let s=0;for(let i=0;i<n;i++)s+=lpois(L[i],lh);return {lh,ll:s};};
+  const curve=[];for(let n=1;n<=1000;n=Math.max(n+1,Math.round(n*1.04)))curve.push([n,best(n).ll/Math.LN10]);curve.push([1000,best(1000).ll/Math.LN10]);
+  function draw(){const n=NN[+inN.value],nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?520:360;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const lx=Math.log10,A=axes(svg,{x:0,y:0,w:W,h:H,x0:0,x1:3,y0:-850,y1:0,xt:[0,1,2,3],fx:v=>f1(10**v,0),yt:[0,-200,-400,-600,-800],fy:v=>v?"10"+sup(v):"1",xl:"days of data (log scale)",yl:"probability of all the days together",FS,padL:FS*3.6});
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(-308),y2:A.sy(-308),stroke:"var(--warn)","stroke-width":2,"stroke-dasharray":"7 5"},svg);
+    txt(svg,A.L+6,A.sy(-308)+FS*1.2,"below this, the computer stores a 0",Object.assign({"font-size":FS*0.75,style:"fill:var(--warn)"},halo(5)));
+    el("path",{d:pathOf(curve.map(([d,v])=>[A.sx(lx(d)),A.sy(v)])),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    const b=best(n),y=b.ll/Math.LN10;dot(svg,A.sx(lx(n)),A.sy(y),nw?11:8,"var(--point)");
+    lab(svg,A.sx(lx(n))+(n<=2?FS*0.6:-FS*0.6),A.sy(y)+FS*1.5,"10"+sup(Math.round(y)),FS,A,{"text-anchor":n<=2?"start":"end",class:"t-ink","font-weight":700,"font-size":FS*0.9});
+    let prod=1;for(let i=0;i<n;i++)prod*=Math.exp(lpois(L[i],b.lh));
+    $("lg-n-o").textContent=f1(n,0);
+    const ps=prod===0?"0":prod>1e-3?f1(prod,3):sciL(Math.log10(prod),1);
+    $("lg-big").innerHTML=`<div><b ${prod===0?'style="color:var(--warn)"':""}>${ps}</b><span>product of the ${f1(n,0)} probabilities, computed directly by the computer</span></div><div><b style="color:var(--mean)">${f1(b.ll,1)}</b><span>sum of their logarithms (log-likelihood): always a manageable number</span></div><div><b>${f1(b.lh,2)}</b><span>most likely λ with ${f1(n,0)} ${n===1?"day":"days"}: the average, the same with the product as with logarithms</span></div>`;
+    let m;if(prod===0)m=`With ${f1(n,0)} days, the product has about ${f1(-y,0)} zeros after the decimal point, more than fit in an ordinary computer number (about 308): the direct calculation gives <b>0</b>, and every λ would look equally bad. The sum of logarithms (${f1(b.ll,1)}) has no problem at all and its peak is still at the average, ${f1(b.lh,2)}.`;
+    else if(n<=5)m=`With ${n} ${n===1?"day":"days"} the product is still a normal number (${ps}). But each day multiplies by something smaller than 1, typically between 0.1 and 0.3. Add more days.`;
+    else m=`With ${f1(n,0)} days the product is already ${ps}: each day adds roughly one zero. It still fits in the computer, but it's getting close to the red line. The sum of logarithms, ${f1(b.ll,1)}, is much easier to handle and has its peak at the same λ (${f1(b.lh,2)}).`;
+    $("lg-msg").innerHTML=m;}
+  inN.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 2: binomial ---------- */
+(function(){const svg=$("bi"),inN=$("bi-n"),inK=$("bi-k"),inP=$("bi-p"),NN=[5,10,20,40,100,200];
+  function draw(){const n=NN[+inN.value];inK.max=n;const k=Math.min(+inK.value,n),p=+inP.value/100,ph=k/n,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?460:330;
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const lmax=llbin(k,n,Math.min(1-1e-12,Math.max(1e-12,ph))),rel=q=>Math.exp(llbin(k,n,q)-lmax);
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0,x1:1,y0:0,y1:1.12,xt:[0,0.2,0.4,0.6,0.8,1],fx:v=>f1(100*v,0)+"%",yt:[0,0.25,0.5,0.75,1],fy:v=>f1(v,2),xl:"assumed percentage of late deliveries",yl:"likelihood (peak = 1)",FS,padL:FS*3.2,padT:FS*2.4});
+    const pts=[];for(let i=0;i<=600;i++){const q=Math.min(1-1e-9,Math.max(1e-9,i/600));pts.push([A.sx(q),A.sy(rel(q))]);}
+    el("path",{d:pathOf(pts)+`L${A.sx(1)} ${A.sy(0)}L${A.sx(0)} ${A.sy(0)}Z`,fill:"var(--mean)","fill-opacity":.1},svg);
+    el("path",{d:pathOf(pts),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    el("line",{x1:A.sx(ph),x2:A.sx(ph),y1:A.sy(1),y2:A.B,stroke:"var(--ink)","stroke-width":1.5,"stroke-dasharray":"5 4"},svg);
+    lab(svg,A.sx(ph),A.sy(1)-FS*0.6,`peak: ${k}/${n} = ${pc(ph,1)}`,FS,A,{class:"t-ink","font-weight":700});
+    const rp=rel(Math.min(1-1e-12,Math.max(1e-12,p)));dot(svg,A.sx(p),A.sy(rp),nw?11:8,"var(--point)");
+    $("bi-n-o").textContent=f1(n,0);$("bi-k-o").textContent=k;$("bi-p-o").textContent=pc(p,1);
+    const times=rp>0?1/rp:Infinity,tt=times<10?f1(times,1):times<1e6?f1(times,0):times===Infinity?"infinitely many":sciL(Math.log10(times),1);
+    $("bi-big").innerHTML=`<div><b style="color:var(--mean)">${pc(ph,1)}</b><span>maximum likelihood: ${k} late / ${n} deliveries</span></div><div><b>${pc(p,1)}</b><span>the percentage you assume</span></div><div><b>${Math.abs(p-ph)<0.0026?"×1":"×"+tt}</b><span>${Math.abs(p-ph)<0.0026?"you're at the peak":"times more probable the data is with "+pc(ph,1)+" than with "+pc(p,1)}</span></div>`;
+    let m;if(k===0)m=`No late deliveries: the peak is at <b>0%</b>, stuck to the wall. Maximum likelihood says this customer will <em>never</em> have a late delivery. With ${n} deliveries that's believing the data too much: idea 7 fixes it.`;
+    else if(k===n)m=`All late: the peak is at 100%. Just like with 0, it's an extreme answer that only holds up with a lot of data (idea 7).`;
+    else if(Math.abs(p-ph)<0.0026)m=`At the peak: ${k} out of ${n} is ${pc(ph,1)}, and no other percentage makes “${k} late out of ${n}” more probable. Move the percentage and watch how much the curve drops.`;
+    else m=`With ${pc(p,1)}, “${k} late out of ${n}” is <b>${tt} times</b> less probable than with ${pc(ph,1)}. ${p<ph?"With so few late deliveries assumed, seeing "+k+" would be a lot of bad luck.":"With so many late deliveries assumed, seeing only "+k+" would be a lot of good luck."} ${n<=20?"Notice how wide the curve is with so few deliveries.":"Try changing the deliveries while keeping the percentage: the curve gets narrower (idea 3)."}`;
+    $("bi-msg").innerHTML=m;}
+  [inN,inK,inP].forEach(i=>i.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 3: width ---------- */
+(function(){const svg=$("an"),inN=$("an-n"),NN=[10,40,200,1000],C=Math.exp(-3.841459/2);
+  const ci=n=>{const k=n/10,ph=0.1,g=q=>llbin(k,n,q)-llbin(k,n,ph)+3.841459/2;return [bis(g,1e-9,ph),bis(g,ph,1-1e-9)];};
+  function draw(){const s=+inN.value,n=NN[s],nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?480:340;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0,x1:0.45,y0:0,y1:1.15,xt:[0,0.1,0.2,0.3,0.4],fx:v=>f1(100*v,0)+"%",yt:[0,0.5,1],fy:v=>f1(v,1),xl:"percentage of late deliveries",yl:"likelihood (peak = 1)",FS,padL:FS*2.6,padT:FS*2.4});
+    const [lo,hi]=ci(n);
+    el("rect",{x:A.sx(lo),y:A.T,width:A.sx(hi)-A.sx(lo),height:A.B-A.T,fill:"var(--mean)","fill-opacity":.12},svg);
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(C),y2:A.sy(C),stroke:"var(--muted)","stroke-width":1.5,"stroke-dasharray":"6 4"},svg);
+    txt(svg,A.R-4,A.sy(C)-FS*0.4,"14.7% of the peak",Object.assign({"text-anchor":"end","font-size":FS*0.72},halo(4)));
+    NN.forEach((m,j)=>{const k=m/10,lm=llbin(k,m,0.1),pts=[];for(let i=1;i<=500;i++){const q=0.45*i/500;pts.push([A.sx(q),A.sy(Math.exp(llbin(k,m,q)-lm))]);}
+      el("path",{d:pathOf(pts),fill:"none",stroke:j===s?"var(--mean)":"var(--muted)","stroke-width":j===s?3.5:1.5,"stroke-opacity":j===s?1:.55},svg);});
+    [lo,hi].forEach((v,j)=>lab(svg,A.sx(v)+(j?1:-1)*FS*0.3,A.B-FS*1.4,pc(v,1),FS,A,{"text-anchor":j?"start":"end",style:"fill:var(--mean)","font-weight":700}));
+    $("an-n-o").textContent=f1(n,0);
+    $("an-big").innerHTML=`<div><b>${f1(n/10,0)} of ${f1(n,0)}</b><span>deliveries late: always 10%</span></div><div><b style="color:var(--mean)">${pc(lo,1)} to ${pc(hi,1)}</b><span>95% likelihood interval</span></div><div><b>${f1(100*(hi-lo),1)} points</b><span>width of the interval</span></div>`;
+    const m=[`With 10 deliveries and 1 late, the peak is a gentle hill: any percentage between ${pc(lo,1)} and ${pc(hi,1)} explains the data reasonably well. Knowing “it's 10%” from 10 deliveries is knowing very little.`,
+      `With 40 deliveries, the curve narrows: from ${pc(lo,1)} to ${pc(hi,1)}. Four times as much data, roughly half the width.`,
+      `With 200 deliveries: from ${pc(lo,1)} to ${pc(hi,1)}. The Wilson interval from topic 12 would give almost the same: the two ways of reasoning agree when there's enough data.`,
+      `With 1,000 deliveries, a sharp spike: from ${pc(lo,1)} to ${pc(hi,1)}. Now you can say with fair confidence that the true late rate is somewhere between 8 and 12%. To narrow it further, you'd need 4,000.`][s];
+    $("an-msg").innerHTML=m;}
+  inN.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 4: least squares ---------- */
+(function(){const svg=$("ls"),inB=$("ls-b"),X=D.carga,Y=D.cons,n=X.length,xm=mean(X),ym=mean(Y),SG=2;
+  const ss=b=>{const a=ym-b*xm;return X.reduce((s,x,i)=>s+(Y[i]-a-b*x)**2,0);};
+  const ll=b=>-n*Math.log(SG*Math.sqrt(2*Math.PI))-ss(b)/(2*SG*SG);
+  let sxx=0,sxy=0;X.forEach((x,i)=>{sxx+=(x-xm)**2;sxy+=(x-xm)*(Y[i]-ym);});const bh=sxy/sxx;
+  function draw(){const b=+inB.value,a=ym-b*xm,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?1060:420;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const p1=nw?{x:0,y:0,w:W,h:480}:{x:0,y:0,w:W*0.56,h:H},p2=nw?{x:0,y:490,w:W,h:280}:{x:W*0.58,y:0,w:W*0.42,h:H/2},p3=nw?{x:0,y:780,w:W,h:280}:{x:W*0.58,y:H/2,w:W*0.42,h:H/2};
+    const A=axes(svg,Object.assign({},p1,{x0:0,x1:26,y0:20,y1:42,xt:[0,5,10,15,20,25],yt:[20,25,30,35,40],xl:"load (t)",yl:"fuel use (L/100 km)",FS,padL:FS*2.6,padT:FS*2.2}));
+    X.forEach((x,i)=>el("line",{x1:A.sx(x),x2:A.sx(x),y1:A.sy(Y[i]),y2:A.sy(a+b*x),stroke:"var(--sample)","stroke-width":2.5},svg));
+    el("line",{x1:A.sx(0),x2:A.sx(26),y1:A.sy(a),y2:A.sy(a+b*26),stroke:"var(--mean)","stroke-width":3.5},svg);
+    X.forEach((x,i)=>dot(svg,A.sx(x),A.sy(Y[i]),nw?9:7,"var(--point)"));
+    const B1=axes(svg,Object.assign({},p2,{x0:0,x1:1,y0:0,y1:200,xt:[0,0.25,0.5,0.75,1],fx:v=>f1(v,2),yt:[0,100,200],xl:"slope",yl:"sum of errors² (valley)",FS,padL:FS*2.6,padT:FS*2.2}));
+    const B2=axes(svg,Object.assign({},p3,{x0:0,x1:1,y0:-45,y1:-20,xt:[0,0.25,0.5,0.75,1],fx:v=>f1(v,2),yt:[-40,-30,-20],xl:"slope",yl:"log-likelihood (hill)",FS,padL:FS*2.6,padT:FS*2.2}));
+    const c1=[],c2=[];for(let i=0;i<=200;i++){const q=i/200;c1.push([B1.sx(q),B1.sy(Math.min(205,ss(q)))]);c2.push([B2.sx(q),B2.sy(Math.max(-46,ll(q)))]);}
+    el("path",{d:pathOf(c1),fill:"none",stroke:"var(--sample)","stroke-width":3},svg);el("path",{d:pathOf(c2),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    [[B1,ss(bh)],[B2,ll(bh)]].forEach(([P,v])=>el("line",{x1:P.sx(bh),x2:P.sx(bh),y1:P.T,y2:P.B,stroke:"var(--ink)","stroke-width":1.3,"stroke-dasharray":"5 4"},svg));
+    dot(svg,B1.sx(b),B1.sy(Math.min(200,ss(b))),nw?10:7,"var(--point)");dot(svg,B2.sx(b),B2.sy(Math.max(-45,ll(b))),nw?10:7,"var(--point)");
+    $("ls-b-o").textContent=f1(b,2)+" L/100 km per t";
+    $("ls-big").innerHTML=`<div><b>${f1(b,2)}</b><span>chosen slope (the maximum likelihood one is ${f1(bh,2)})</span></div><div><b style="color:var(--sample)">${f1(ss(b),1)}</b><span>sum of squared errors</span></div><div><b style="color:var(--mean)">${f1(ll(b),1)}</b><span>log-likelihood with normal noise of width 2</span></div>`;
+    const near=Math.abs(b-bh)<0.015;
+    $("ls-msg").innerHTML=near?`<b>At the bottom of the valley and the top of the hill at the same time</b>: slope ${f1(bh,2)}, about ${f1(bh,2)} more liters per 100 km for each tonne. The two curves are the same one, flipped and rescaled: log-likelihood = ${f1(-n*Math.log(SG*Math.sqrt(2*Math.PI)),1)} − sum of errors² / 8. That's why the least squares line is the maximum likelihood line.`:`With slope ${f1(b,2)}, the sum of squared errors is ${f1(ss(b),1)} and the log-likelihood ${f1(ll(b),1)}. ${b<bh?"The line is too flat: the trips with a heavy load end up above it.":"The line climbs too steeply: the trips with a heavy load end up below it."} Move the slope until the valley bottoms out: you'll see the hill reaches its peak at the same spot.`;}
+  inB.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 5: normal versus Laplace ---------- */
+(function(){const svg=$("la"),inM=$("la-m"),X=D.desc;let mode=0;
+  const mu=mean(X),med=X.slice().sort((a,b)=>a-b)[4],SG=6,BL=4;
+  const loss=(m,md)=>md?X.reduce((s,x)=>s+Math.abs(x-m)/BL,0):X.reduce((s,x)=>s+(x-m)**2/(2*SG*SG),0);
+  seg(["la-0","la-1"],i=>{mode=i;draw();});
+  function draw(){const m=+inM.value,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?720:470;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const p1={x:0,y:0,w:W,h:nw?330:220},p2={x:0,y:nw?340:230,w:W,h:nw?380:240};
+    const A=axes(svg,Object.assign({},p1,{x0:10,x1:100,y0:0,y1:1.1,xt:[10,20,30,40,50,60,70,80,90,100],xl:"unloading minutes",FS,padL:FS*1,padT:FS*1}));
+    const dens=x=>mode?Math.exp(-Math.abs(x-m)/BL):Math.exp(-((x-m)**2)/(2*SG*SG)),pts=[];for(let i=0;i<=600;i++){const x=10+90*i/600;pts.push([A.sx(x),A.sy(dens(x))]);}
+    el("path",{d:pathOf(pts)+`L${A.R} ${A.B}L${A.L} ${A.B}Z`,fill:"var(--mean)","fill-opacity":.15,stroke:"var(--mean)","stroke-width":2.5},svg);
+    el("line",{x1:A.sx(m),x2:A.sx(m),y1:A.sy(1.05),y2:A.B,stroke:"var(--mean)","stroke-width":2},svg);
+    X.forEach((x,i)=>dot(svg,A.sx(x),A.B-(nw?14:10)-(i%3)*(nw?6:4),nw?10:7,"var(--point)"));
+    const dO=dens(95);lab(svg,A.sx(95),A.B-(nw?52:38),"it sees it with "+(dO<1e-4?"≈ 0":f1(dO,3)),FS,A,{"text-anchor":"end",style:"fill:var(--point)","font-weight":700});
+    const lmax=Math.max(loss(10,mode),loss(50,mode))*1.04,Bp=axes(svg,Object.assign({},p2,{x0:10,x1:50,y0:0,y1:lmax,xt:[10,15,20,25,30,35,40,45,50],yt:tk(0,lmax,4),fy:v=>f1(v,0),xl:"assumed typical duration (min)",yl:mode?"loss: Σ |error| / 4":"loss: Σ error² / 72",FS,padL:FS*2.8,padT:FS*2.4}));
+    const c=[];for(let i=0;i<=400;i++){const q=10+40*i/400;c.push([Bp.sx(q),Bp.sy(loss(q,mode))]);}
+    el("path",{d:pathOf(c),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    [[mu,"mean "+f1(mu,1),0],[med,"median "+f1(med,0),1]].forEach(([v,s,j])=>{el("line",{x1:Bp.sx(v),x2:Bp.sx(v),y1:Bp.T,y2:Bp.B,stroke:j===mode?"var(--ink)":"var(--muted)","stroke-width":j===mode?2:1.3,"stroke-dasharray":"5 4"},svg);
+      lab(svg,Bp.sx(v)+(j?-1:1)*FS*0.35,Bp.T+FS*0.6,s,FS,Bp,{"text-anchor":j?"end":"start","font-size":FS*0.78,style:j===mode?"fill:var(--ink)":"fill:var(--muted)","font-weight":j===mode?700:400});});
+    const lv=loss(m,mode);dot(svg,Bp.sx(m),Bp.sy(lv),nw?11:8,"var(--point)");
+    $("la-m-o").textContent=f1(m,1);
+    const best=mode?med:mu;
+    $("la-big").innerHTML=`<div><b>${f1(mu,1)} min</b><span>mean of the 9 unloadings</span></div><div><b>${f1(med,0)} min</b><span>median: the middle one, once sorted</span></div><div><b style="color:var(--mean)">${f1(best,1)} min</b><span>maximum likelihood with ${mode?"fat tails (Laplace)":"bell-shaped noise (normal)"}</span></div>`;
+    const near=Math.abs(m-best)<0.5;
+    $("la-msg").innerHTML=mode?(near?`<b>At the peak with Laplace:</b> ${f1(med,0)} minutes, the median. The loss is the sum of distances without squaring, so the 95 “pulls” just as much as any other point, no matter how far away it is. That day's 75 extra minutes don't move the estimate.`:`With fat tails, the loss is a sum of distances: it's V-shaped with straight stretches and its lowest point is at the median (${f1(med,0)}). Here the value ${f1(m,1)} loses ${f1(lv,1)} versus ${f1(loss(med,1),1)} for the median. Move the slider to the bottom.`)
+      :(near?`<b>At the peak with bell-shaped noise:</b> ${f1(mu,1)} minutes, the mean. A bell hardly allows data 70 minutes from the center, so the peak shifts toward the 95 so it doesn't have to call it impossible. None of the other 8 unloadings took more than 25 minutes. Switch to fat tails.`:`With bell-shaped noise, the loss is the sum of squared errors (divided by 2 × 6², the assumed width): a round valley with its bottom at the mean, ${f1(mu,1)}. Notice how little the bell “sees” the 95-minute data point when the center is far away.`);}
+  inM.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 6: log loss ---------- */
+(function(){const svg=$("lo"),inM=$("lo-m"),inB=$("lo-b"),K=D.km,Yt=D.tarde,n=K.length;
+  const prob=(m,b,x)=>1/(1+Math.exp(-b*(x-m)/100));
+  const pen=(m,b)=>K.map((x,i)=>{const p=prob(m,b,x),q=Yt[i]?p:1-p;return -Math.log(Math.max(q,1e-300));});
+  $("lo-fit").onclick=()=>{inM.value=D.lg[0].toFixed(0);inB.value=D.lg[1].toFixed(1);draw();};
+  function draw(){const m=+inM.value,b=+inB.value,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?760:520;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const p1={x:0,y:0,w:W,h:nw?440:300},p2={x:0,y:nw?450:310,w:W,h:nw?310:210};
+    const A=axes(svg,Object.assign({},p1,{x0:0,x1:330,y0:-0.08,y1:1.08,xt:[0,50,100,150,200,250,300],yt:[0,0.5,1],fy:v=>pc(v,0),xl:"trip km",yl:"probability of being late",FS,padL:FS*3,padT:FS*2.2}));
+    const P=pen(m,b),cap=6;
+    K.forEach((x,i)=>{const p=prob(m,b,x),y=Yt[i]?1:0;el("line",{x1:A.sx(x),x2:A.sx(x),y1:A.sy(y),y2:A.sy(p),stroke:"var(--warn)","stroke-width":1.5,"stroke-opacity":.5},svg);});
+    const c=[];for(let i=0;i<=330;i+=2)c.push([A.sx(i),A.sy(prob(m,b,i))]);el("path",{d:pathOf(c),fill:"none",stroke:"var(--mean)","stroke-width":3.5},svg);
+    K.forEach((x,i)=>dot(svg,A.sx(x),A.sy(Yt[i]?1:0)+(i%2?3:-3),nw?8:6,Yt[i]?"var(--point)":"var(--sample)"));
+    txt(svg,A.L+4,A.sy(1)+FS*1.6,"late",{"font-size":FS*0.78,style:"fill:var(--point)","font-weight":700});txt(svg,A.L+4,A.sy(0)-FS*1.3,"on time",{"font-size":FS*0.78,style:"fill:var(--sample)","font-weight":700});
+    const Bp=axes(svg,Object.assign({},p2,{x0:0,x1:330,y0:0,y1:cap,xt:[0,50,100,150,200,250,300],yt:[0,2,4,6],fy:v=>f1(v,0),xl:"trip km",yl:nw?"penalty: −log(prob. of what happened)":"penalty of each delivery: −log(prob. of what happened)",FS,padL:FS*3,padT:FS*2.2}));
+    const bw=nw?6:5;K.forEach((x,i)=>{const h=Math.min(cap,P[i]);el("rect",{x:Bp.sx(x)-bw/2+(i%2?1:-1),y:Bp.sy(h),width:bw,height:Bp.B-Bp.sy(h),fill:"var(--warn)","fill-opacity":.8},svg);if(P[i]>cap)txt(svg,Bp.sx(x),Bp.sy(cap)-4,"▲",{"text-anchor":"middle","font-size":FS*0.7,style:"fill:var(--warn)"});});
+    const ll=-P.reduce((s,v)=>s+v,0),lossv=-ll/n,iw=P.indexOf(Math.max(...P));
+    $("lo-m-o").textContent=f1(m,0)+" km";$("lo-b-o").textContent=f1(b,1);
+    $("lo-big").innerHTML=`<div><b style="color:var(--warn)">${f1(lossv,3)}</b><span>log loss: average penalty per delivery (the maximum likelihood one is 0.467)</span></div><div><b>${f1(ll,1)}</b><span>log-likelihood of the 40 deliveries = −40 × the loss</span></div><div><b>${pc(Math.exp(-lossv),0)}</b><span>typical probability the model gives to what happened (geometric mean)</span></div>`;
+    const near=Math.abs(m-D.lg[0])<1.5&&Math.abs(b-D.lg[1])<0.06;let msg;
+    if(near)msg=`<b>Maximum likelihood:</b> midpoint ${f1(D.lg[0],0)} km, steepness ${f1(D.lg[1],2)}. Loss ${f1(lossv,3)}, the lowest possible with this S shape; a model that always said “50%” would get 0.693. Some deliveries are still poorly explained, like the ${f1(K[iw],0)} km one that was ${Yt[iw]?"late":"on time"} (penalty ${f1(P[iw],2)}): kilometers don't explain everything.`;
+    else if(b>=5)msg=`With such an abrupt S, the model is almost sure of everything: below ${f1(m,0)} km it says “on time” and above it, “late”. The deliveries that prove it wrong get huge penalties: the ${f1(K[iw],0)} km one gets ${f1(P[iw],1)}${P[iw]>cap?" (off the chart)":""}. A single very confident mistake weighs more than many hits. Soften the steepness and move the midpoint.`;
+    else msg=`Loss ${f1(lossv,3)}. The worst-explained delivery is the ${f1(K[iw],0)} km one, which was ${Yt[iw]?"late":"on time"} when the model gave that ${pc(Math.exp(-P[iw]),0)}: penalty ${f1(P[iw],2)}. ${m<130?"The midpoint is too far left: many short deliveries that were on time get penalized.":m>200?"The midpoint is too far right: many long deliveries that were late get penalized.":"Adjust the steepness and the midpoint, or press the button."}`;
+    $("lo-msg").innerHTML=msg;}
+  [inM,inB].forEach(i=>i.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 7: prior and MAP ---------- */
+(function(){const svg=$("mp"),inM=$("mp-m"),DS=[[0,5],[1,5],[0,40],[3,40],[16,200]],P0=0.08;let di=0;
+  chips($("mp-d"),DS.map(([k,n])=>`${k} late out of ${n}`),i=>{di=i;draw();});
+  function draw(){const [k,n]=DS[di],m=+inM.value,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?480:340;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0,x1:0.4,y0:0,y1:1.18,xt:[0,0.1,0.2,0.3,0.4],fx:v=>pc(v,0),yt:[0,0.5,1],fy:v=>f1(v,1),xl:"percentage of late deliveries",FS,padL:FS*2.6,padT:FS*1.2});
+    const a=m*P0,bq=m*(1-P0),phat=k/n,pmap=(k+a)/(n+m);
+    const lf=q=>llbin(k,n,q),pf=q=>(a?a*Math.log(q):0)+(bq?bq*Math.log(1-q):0),cf=q=>lf(q)+pf(q);
+    const curve=(f,mx,col,w,dash)=>{const pts=[];let top=f(Math.min(0.999999,Math.max(1e-9,mx)));for(let i=0;i<=400;i++){const q=Math.max(1e-9,0.4*i/400);pts.push([A.sx(q),A.sy(Math.exp(f(q)-top))]);}el("path",{d:pathOf(pts),fill:"none",stroke:col,"stroke-width":w,"stroke-dasharray":dash||"none"},svg);};
+    if(m>0)curve(pf,P0,"var(--sample)",2.5);
+    curve(lf,phat,"var(--point)",2.5,"7 5");
+    if(m>0)curve(cf,pmap,"var(--mean)",3.5);
+    diamond(svg,A.sx(phat),A.sy(1),nw?11:8,"var(--point)");
+    const yl=A.sy(1)-FS*0.9;
+    if(m>0){diamond(svg,A.sx(pmap),A.sy(1),nw?11:8,"var(--mean)");
+      const far=Math.abs(A.sx(pmap)-A.sx(phat))>FS*6;
+      lab(svg,A.sx(pmap)+(far?0:(pmap>=phat?FS*0.4:-FS*0.4)),far?yl:yl-FS*1.2,"MAP "+pc(pmap,1),FS,A,{style:"fill:var(--mean)","font-weight":700,"text-anchor":far?"middle":pmap>=phat?"start":"end"});}
+    lab(svg,A.sx(phat),yl,"data "+pc(phat,1),FS,A,{style:"fill:var(--point)","font-weight":700});
+    $("mp-m-o").textContent=m;
+    $("mp-big").innerHTML=`<div><b style="color:var(--point)">${pc(phat,1)}</b><span>maximum likelihood: ${k} / ${n}</span></div><div><b style="color:var(--mean)">${pc(pmap,1)}</b><span>with the prior: (${k} + 0.08 × ${m}) / (${n} + ${m})</span></div><div><b>${f1(m,0)}</b><span>imaginary deliveries from the fleet (8% late)</span></div>`;
+    let msg;if(m===0)msg=`With no prior, only the data counts: ${k} out of ${n} gives <b>${pc(phat,1)}</b>.${k===0?" A flat zero from only "+n+" deliveries: this is how maximum likelihood overfits.":k/n>0.15&&n<=5?" 20% because of a single late delivery: that's also believing 5 data points too much.":""} Add imaginary deliveries.`;
+    else if(n<=5)msg=`With ${m} imaginary deliveries at 8%, the customer goes from ${pc(phat,1)} to <b>${pc(pmap,1)}</b>: 5 real deliveries weigh little against what is known about the fleet. That's the sensible thing: there's no reason to think this customer is an extreme case.`;
+    else if(n>=200)msg=`With 200 real deliveries, the prior barely moves anything (${pc(phat,1)} → ${pc(pmap,1)}): when there's plenty of data, maximum likelihood and MAP agree. The prior only matters when data is scarce.`;
+    else msg=`With ${n} real deliveries and ${m} imaginary ones: ${pc(phat,1)} → <b>${pc(pmap,1)}</b>. The more real data, the less the prior weighs. In logarithms, the blue curve is the orange one plus the purple one: likelihood plus a penalty for straying from 8%, which is what regularization does.`;
+    $("mp-msg").innerHTML=msg;}
+  inM.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 8: climbing the hill ---------- */
+(function(){const svg=$("gd"),K=D.km,Yt=D.tarde,n=K.length,STEPS=[0.7,3,5.5],U0=0.6,B0=0.6;let si=1,path=[[U0,B0]];
+  const llm=(u,b)=>{let s=0;for(let i=0;i<n;i++){const z=b*(K[i]/100-u),lp=z>=0?-Math.log1p(Math.exp(-z)):z-Math.log1p(Math.exp(z));s+=Yt[i]?lp:lp-z;}return s/n;};
+  const grad=(u,b)=>{let gu=0,gb=0;for(let i=0;i<n;i++){const d=K[i]/100-u,p=1/(1+Math.exp(-b*d)),r=Yt[i]-p;gu+=-b*r;gb+=r*d;}return [gu/n,gb/n];};
+  const best=llm(D.lg[0]/100,D.lg[1]);
+  seg(["gd-s0","gd-s1","gd-s2"],i=>{si=i;path=[[U0,B0]];draw();});
+  const step=k=>{for(let j=0;j<k;j++){const [u,b]=path[path.length-1];if(!isFinite(u)||!isFinite(b)||Math.abs(u)>50||Math.abs(b)>50)break;const [gu,gb]=grad(u,b);path.push([u+STEPS[si]*gu,b+STEPS[si]*gb]);}draw();};
+  $("gd-1").onclick=()=>step(1);$("gd-10").onclick=()=>step(10);$("gd-re").onclick=()=>{path=[[U0,B0]];draw();};
+  let cacheKey="",cells=[];
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?560:420;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0,x1:320,y0:0,y1:4.5,xt:[0,50,100,150,200,250,300],yt:[0,1,2,3,4],fy:v=>f1(v,0),xl:"midpoint (km)",yl:"steepness of the S",FS,grid:false,padL:FS*2.4,padT:FS*2});
+    const NX=nw?48:72,NY=nw?36:40;
+    if(cacheKey!==NX+"x"+NY){cells=[];for(let i=0;i<NX;i++)for(let j=0;j<NY;j++){const u=(i+0.5)/NX*3.2,b=(j+0.5)/NY*4.5;cells.push([i,j,llm(u,b)]);}cacheKey=NX+"x"+NY;}
+    const lev=[-0.47,-0.48,-0.5,-0.53,-0.57,-0.62,-0.68,-0.75,-0.85,-1.0,-1.3];const g=el("g",null,svg);
+    cells.forEach(([i,j,v])=>{let q=lev.findIndex(t=>v>=t);if(q<0)q=lev.length;const op=0.06+0.8*Math.pow(1-q/lev.length,1.6);
+      el("rect",{x:A.sx(i/NX*320)-0.3,y:A.sy((j+1)/NY*4.5)-0.3,width:(A.R-A.L)/NX+0.6,height:(A.B-A.T)/NY+0.6,style:`fill:color-mix(in srgb,var(--mean) ${(op*100).toFixed(1)}%,var(--surface))`},g);});
+    const sx=u=>A.sx(Math.max(-0.2,Math.min(3.4,u))*100),sy=b=>A.sy(Math.max(-0.3,Math.min(4.8,b)));
+    const sxs=sx(D.lg[0]/100),sys=sy(D.lg[1]),R=nw?16:12;let st="";for(let k=0;k<10;k++){const r=k%2?R*0.45:R,a=-Math.PI/2+k*Math.PI/5;st+=(k?"L":"M")+(sxs+r*Math.cos(a)).toFixed(1)+" "+(sys+r*Math.sin(a)).toFixed(1);}
+    el("path",{d:st+"Z",fill:"var(--surface)",stroke:"var(--ink)","stroke-width":2},svg);
+    const ok=path.filter(([u,b])=>isFinite(u)&&isFinite(b));
+    el("path",{d:pathOf(ok.map(([u,b])=>[sx(u),sy(b)])),fill:"none",stroke:"var(--point)","stroke-width":2.5},svg);
+    ok.forEach(([u,b],k)=>dot(svg,sx(u),sy(b),k===ok.length-1?(nw?10:7):(nw?5:3.5),"var(--point)"));
+    const [u,b]=path[path.length-1],v=isFinite(u)&&isFinite(b)?llm(u,b):NaN,steps=path.length-1,out=!isFinite(v)||u<-0.2||u>3.4||b<-0.3||b>4.8;
+    $("gd-big").innerHTML=`<div><b>${steps}</b><span>steps taken</span></div><div><b style="color:var(--mean)">${isFinite(v)?f1(-v,3):"—"}</b><span>log loss where you are (the peak has ${f1(-best,3)})</span></div><div><b>${out?"off the map":f1(u*100,0)+" km · "+f1(b,2)}</b><span>midpoint and steepness of the current model</span></div>`;
+    let m;const gap=isFinite(v)?best-v:Infinity;
+    if(steps===0)m=`We start with a bad model: midpoint ${f1(U0*100,0)} km and steepness ${f1(B0,1)} (loss ${f1(-v,3)}). Press “1 step” a few times and then “+10 steps”.`;
+    else if(si===2)m=`With steps that are too big, each jump overshoots the peak and lands on the opposite slope, sometimes lower than where it was. ${out?"It has already left the map: the method has failed.":gap<0.01?"Right now it has landed near the peak by chance, but it won't stay: take more steps and you'll see it jump again.":"The loss doesn't go down in an orderly way: it goes up and down depending on where it lands."} Go back to “Good”.`;
+    else if(gap<0.0005)m=`<b>At the peak</b> after ${steps} steps: midpoint ${f1(u*100,0)} km and steepness ${f1(b,2)}, the same model the button in idea 6 gives. Nobody used a formula: just “look which way is up and take a step”. That's how logistic regression and neural networks are trained.`;
+    else m=`After ${steps} steps, the loss has gone down to ${f1(-v,3)} (the peak has ${f1(-best,3)}). ${si===0?"With small steps the path is safe but slow: it would take many more.":"Each step goes in the direction where the ground rises fastest, which is why the path crosses the color bands at right angles."}`;
+    $("gd-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+})();
+</script>
+</body>
+</html>

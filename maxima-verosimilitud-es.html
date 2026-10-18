@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Máxima verosimilitud</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content;max-width:100%}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec p b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.rowb{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.ltab{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.ltab .card h3{font-size:1.02rem}
+.ltab .card p{font-size:.93rem}
+.ltab .card .to{font-family:var(--f-mono);font-size:.85rem;color:var(--mean)}
+@media (max-width:620px){.seg{border-radius:14px}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#es" target="_self">← Menú principal</a> · Las matemáticas debajo del ML · tema 14 · explicado con dibujos · <a href="maxima-verosimilitud-tecnico-es.html" target="_self">ver la versión técnica</a> · <a href="matematicas-del-ml-es.html" target="_self">todos los temas</a> · <a href="maximum-likelihood-en.html" target="_self">in English</a></p>
+  <h1>Máxima verosimilitud</h1>
+  <p class="lede">Los datos ya han pasado y no se pueden cambiar. Lo que se mueve es la suposición: ¿qué valor del parámetro hacía más probable justo lo que ocurrió? Esa pregunta, repetida con distintos tipos de datos, explica de dónde salen casi todas las funciones de pérdida del aprendizaje automático.</p>
+</header>
+
+<section class="first" aria-label="Juguete interactivo">
+  <div class="situ col">
+    <p class="eyebrow">La situación del juguete</p>
+    <p>El sistema de telemetría de un camión manda una <strong>alerta de frenada brusca</strong> cada vez que la deceleración pasa de un límite. Durante 14 días se han contado las alertas de cada día: 3, 1, 4, 0, 4, 2, 3, 1, 3, 2, 1, 6, 3, 2.</p>
+    <p>Las alertas de un día se cuentan bien con la distribución de <strong>Poisson</strong> (<a href="distribuciones-es.html" target="_self">tema 8</a>), que tiene un solo número, <strong>λ</strong> (lambda): cuántas alertas da el camión en un día normal, de media. Ese número no se ve en ningún sitio: hay que deducirlo de los conteos. La idea de la <strong>máxima verosimilitud</strong> es probar valores de λ y preguntar a cada uno: <em>¿qué probabilidad le dabas a lo que de verdad pasó?</em> Gana el que le daba más.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="Probabilidad que da cada valor de lambda a los catorce días observados y curva de la log-verosimilitud"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Arriba, cada casilla es un día: el número <b style="color:var(--point)">naranja</b> son las alertas que hubo y la barra <b style="color:var(--mean)">azul</b>, la probabilidad que el λ elegido le daba a ese día (con su porcentaje). Abajo a la izquierda (o en medio en el móvil), los <b style="color:var(--point)">puntos naranjas</b> apilan los días según sus alertas y las barras <b style="color:var(--mean)">azules</b> son cuántos días de cada tipo esperaría ese λ en 14 días. Abajo a la derecha (o al final), la <b>curva de la verosimilitud</b>: para cada λ posible, lo bien que explica los 14 días a la vez (más arriba, mejor). El punto naranja es tu λ.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>¿Cuántas alertas al día supones?</h3>
+      <p>Mueve λ y mira cómo cambian las barras de cada día. Los datos no se mueven: solo cambia la suposición.</p>
+      <div class="slider"><label for="t-l">λ (alertas por día, de media) <output id="t-l-o"></output></label><input type="range" id="t-l" min="0.2" max="6" step="0.1" value="1"><div class="ends"><span>0,2</span><span>6</span></div></div>
+    </div>
+    <div class="dec">
+      <h3>¿Qué camión?</h3>
+      <p>El camión B hace autovía y frena bruscamente menos. Sus 14 días: 3, 1, 1, 0, 2, 1, 1, 0, 0, 1, 0, 2, 2, 0.</p>
+      <div class="chips" id="t-c" role="group" aria-label="Camión"></div>
+    </div>
+    <div class="dec">
+      <h3>Atajo</h3>
+      <p>Lleva λ directamente al punto más alto de la curva: el valor <b>más verosímil</b>.</p>
+      <div class="rowb"><button type="button" id="t-best" class="primary">Ir a la cima</button></div>
+    </div>
+  </div>
+  <div class="big3" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Prueba en este orden:</strong></p>
+    <ol class="try">
+      <li>Con λ = 1, el día de 6 alertas recibe un 0,05 % y los días de 4 alertas, un 1,5 %: este λ dice que esos días casi no pueden pasar, y pasaron.</li>
+      <li>Sube a λ = 5: ahora los que no encajan son los días tranquilos, con 0 o 1 alertas.</li>
+      <li>Busca a mano el punto más alto de la curva. Está en <b>λ = 2,5</b>: 35 alertas entre 14 días, la media de siempre.</li>
+      <li>Cambia al camión B: la cima se va a 1,0, que es su media. Pulsa «Ir a la cima» para comprobarlo.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Lo que acabas de ver</p>
+    <h2>La verosimilitud: los datos quietos, el parámetro en movimiento</h2>
+    <p>La probabilidad de siempre va hacia delante: «si el camión da 2,5 alertas al día de media, ¿qué probabilidad hay de que mañana dé 6?». La <strong>verosimilitud</strong> le da la vuelta: los 14 días ya están contados y se pregunta, para cada λ posible, qué probabilidad le daba a esos 14 días concretos. Es la misma cuenta, leída al revés.</p>
+    <ul>
+      <li><strong>Un número por cada suposición.</strong> λ = 1 le da a los 14 días juntos una probabilidad de 1 entre 5 · 10¹⁵. λ = 2,5 les da 1 entre 8 · 10¹⁰: unas 64 000 veces más.</li>
+      <li><strong>Gana el que más probabilidad daba.</strong> El valor de λ en la cima de la curva es la <strong>estimación de máxima verosimilitud</strong>. Para la Poisson sale siempre la media de los conteos, que es lo que cualquiera habría hecho a ojo; la gracia es que el mismo razonamiento funciona cuando no hay una respuesta tan evidente.</li>
+      <li><strong>La verosimilitud no es «la probabilidad de que λ valga 2,5».</strong> Compara suposiciones entre sí, pero no reparte un 100 % entre ellas. Eso lo hace el enfoque <a href="bayes-es.html" target="_self">bayesiano</a> (idea 7).</li>
+    </ul>
+    <p>Las ideas que siguen explican por qué se multiplican las probabilidades y se usan logaritmos (1), qué pasa con porcentajes (2), por qué más datos dan más certeza (3) y, sobre todo, de dónde salen las <strong>funciones de pérdida</strong> que usan los modelos de la serie: los mínimos cuadrados (4), el error absoluto (5) y la pérdida logarítmica (6). Al final, el peligro de creerse los datos al pie de la letra (7) y cómo se busca la cima cuando no hay fórmula (8).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 8</p>
+    <h2>Multiplicar probabilidades, sumar logaritmos</h2>
+    <p>¿Por qué la probabilidad de los 14 días juntos es la <strong>multiplicación</strong> de la de cada día? Porque se supone que los días son <strong>independientes</strong>: lo que pasó el lunes no cambia las probabilidades del martes (<a href="probabilidad-condicional-e-independencia-es.html" target="_self">tema 9</a>). Con sucesos independientes, «esto y esto y esto» se calcula multiplicando.</p>
+    <p>El problema práctico: multiplicar muchos números menores que 1 da un número diminuto. Con un año de datos sale algo como 0,000…0003 con 282 ceros delante, y con un año y medio el ordenador ya no puede guardarlo y lo redondea a 0. La solución es trabajar con <strong>logaritmos</strong>: el logaritmo de un producto es la suma de los logaritmos, y sumar cientos de números normales no da ningún problema. Como el logaritmo siempre crece cuando crece lo de dentro, <strong>la cima está en el mismo sitio</strong>. Por eso casi siempre se habla de la <strong>log-verosimilitud</strong>.</p>
+  </div>
+  <figure class="fig"><svg id="lg" role="img" aria-label="Tamaño de la probabilidad conjunta según el número de días y el límite del ordenador"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> En horizontal, cuántos días de datos del camión A se usan (en escala logarítmica: 1, 10, 100, 1 000). En vertical, cuántos ceros tiene la probabilidad de todos esos días juntos (con el mejor λ): −100 quiere decir 10⁻¹⁰⁰, un 1 precedido de 99 ceros tras la coma. La línea <b style="color:var(--warn)">roja</b> discontinua es lo más pequeño que guarda un número normal del ordenador. El punto <b style="color:var(--point)">naranja</b> es tu elección.</p>
+  <div class="controls col">
+    <div class="slider"><label for="lg-n">Días de datos <output id="lg-n-o"></output></label><input type="range" id="lg-n" min="0" max="10" step="1" value="3"><div class="ends"><span>1</span><span>1 000</span></div></div>
+  </div>
+  <div class="big3 col" id="lg-big"></div>
+  <p class="qcard col" id="lg-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 8</p>
+    <h2>Porcentajes: el más verosímil es el que has visto</h2>
+    <p>Otro tipo de dato: de las 40 entregas de un cliente, 3 llegaron tarde. Cada entrega es un «sí o no» con la misma probabilidad p de llegar tarde, así que el número de retrasos sigue una <strong>binomial</strong> (<a href="distribuciones-es.html" target="_self">tema 8</a>). Para cada p posible se calcula la probabilidad de «3 tarde de 40»: si p es muy pequeño, 3 retrasos son demasiados; si es muy grande, son muy pocos.</p>
+    <p>La cima está siempre en <strong>retrasos / entregas</strong>: 3 / 40 = 7,5 %. Otra vez, lo que cualquiera calcularía. Pero ahora se sabe <em>por qué</em> es la mejor estimación y, sobre todo, se ve la forma de la curva alrededor (idea 3).</p>
+  </div>
+  <figure class="fig"><svg id="bi" role="img" aria-label="Verosimilitud del porcentaje de entregas tarde"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> En horizontal, el porcentaje de entregas tarde que se supone. La curva <b style="color:var(--mean)">azul</b> es la verosimilitud de cada suposición, dividida entre la de la cima (así la cima vale 1 y el resto se lee como «cuántas veces menos»). La raya discontinua marca la cima y el punto <b style="color:var(--point)">naranja</b>, el porcentaje que eliges abajo.</p>
+  <div class="controls col">
+    <div class="slider"><label for="bi-n">Entregas <output id="bi-n-o"></output></label><input type="range" id="bi-n" min="0" max="5" step="1" value="3"><div class="ends"><span>5</span><span>200</span></div></div>
+    <div class="slider"><label for="bi-k">Llegaron tarde <output id="bi-k-o"></output></label><input type="range" id="bi-k" min="0" max="40" step="1" value="3"><div class="ends"><span>0</span><span>todas</span></div></div>
+    <div class="slider"><label for="bi-p">Porcentaje que supones <output id="bi-p-o"></output></label><input type="range" id="bi-p" min="0" max="100" step="0.5" value="20"><div class="ends"><span>0 %</span><span>100 %</span></div></div>
+  </div>
+  <div class="big3 col" id="bi-big"></div>
+  <p class="qcard col" id="bi-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 8</p>
+    <h2>Más datos, cima más estrecha: más certeza</h2>
+    <p>Un 10 % de retrasos puede venir de 1 de 10 entregas o de 100 de 1 000. La cima está en el mismo sitio, pero la curva no tiene la misma forma. Con 10 entregas es una loma ancha: un 3 % o un 25 % explican los datos casi igual de bien. Con 1 000 es un pico afilado: cualquier valor un poco lejos del 10 % hace los datos muchísimo menos probables.</p>
+    <p>La anchura de la cima mide <strong>cuánto se sabe</strong>. Una regla habitual es quedarse con los valores cuya verosimilitud es al menos un 14,7 % de la de la cima: salen intervalos del 95 %, como los del <a href="intervalos-de-confianza-y-bootstrap-es.html" target="_self">tema 12</a>, y casi iguales al de Wilson. Y como allí, para partir la anchura por la mitad hacen falta cuatro veces más datos.</p>
+  </div>
+  <figure class="fig"><svg id="an" role="img" aria-label="Curvas de verosimilitud del diez por ciento con distinto número de entregas"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cuatro curvas de verosimilitud, todas con un 10 % de entregas tarde: con 10, 40, 200 y 1 000 entregas. La elegida va en <b style="color:var(--mean)">azul</b> gruesa; las demás, en gris. La franja azul es el intervalo: los porcentajes que quedan por encima de la línea discontinua del 14,7 %.</p>
+  <div class="controls col">
+    <div class="slider"><label for="an-n">Entregas (siempre un 10 % tarde) <output id="an-n-o"></output></label><input type="range" id="an-n" min="0" max="3" step="1" value="0"><div class="ends"><span>10</span><span>1 000</span></div></div>
+  </div>
+  <div class="big3 col" id="an-big"></div>
+  <p class="qcard col" id="an-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 de 8</p>
+    <h2>Si el ruido es una campana, salen los mínimos cuadrados</h2>
+    <p>Aquí empieza lo interesante para el aprendizaje automático. Se quiere una recta que diga el consumo de un camión según la carga que lleva. Los puntos no caen justo en la recta: hay un <strong>ruido</strong> (viento, conductor, tráfico). Si se supone que ese ruido tiene forma de <strong>campana</strong> (una normal) de anchura fija, la probabilidad de cada trayecto depende de lo lejos que quede de la recta, y la cuenta de la log-verosimilitud se reduce a esto:</p>
+    <p class="note"><strong>log-verosimilitud = un número fijo − (suma de los errores al cuadrado) / (2 × anchura²)</strong></p>
+    <p>Hacer máxima la verosimilitud es lo mismo que hacer <strong>mínima la suma de los errores al cuadrado</strong>: los <strong>mínimos cuadrados</strong> de la <a href="regresion-lineal-polinomial-es.html" target="_self">regresión lineal</a> y del <a href="minimos-cuadrados-como-proyeccion-es.html" target="_self">tema 4</a>. No son un capricho: son la respuesta correcta <em>si</em> el ruido es una campana.</p>
+  </div>
+  <figure class="fig"><svg id="ls" role="img" aria-label="Recta de consumo frente a carga, suma de cuadrados y log-verosimilitud según la pendiente"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> A la izquierda (arriba en el móvil), 12 trayectos: carga en toneladas y consumo en litros cada 100 km. La recta <b style="color:var(--mean)">azul</b> tiene la pendiente que eliges (y pasa siempre por el centro de los datos); las rayas <b style="color:var(--sample)">violetas</b> son los errores. A la derecha, para cada pendiente, la suma de los errores al cuadrado (un valle) y la log-verosimilitud con ruido de anchura 2 (una colina). El punto <b style="color:var(--point)">naranja</b> es tu pendiente.</p>
+  <div class="controls col">
+    <div class="slider"><label for="ls-b">Pendiente: litros más por cada tonelada <output id="ls-b-o"></output></label><input type="range" id="ls-b" min="0" max="1" step="0.01" value="0.2"><div class="ends"><span>0</span><span>1</span></div></div>
+  </div>
+  <div class="big3 col" id="ls-big"></div>
+  <p class="qcard col" id="ls-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 de 8</p>
+    <h2>Si el ruido tiene colas gordas, sale el error absoluto</h2>
+    <p>Cambiar la forma del ruido cambia la pérdida. Nueve descargas en el muelle de un cliente duraron 18, 22, 15, 25, 20, 17, 23, 19 y <strong>95</strong> minutos (ese día faltaba un albarán). ¿Cuál es la duración típica?</p>
+    <p>Con ruido en <strong>campana</strong>, un dato a 70 minutos del centro es casi imposible, así que la máxima verosimilitud mueve el centro hacia él para que no lo sea tanto: sale la <strong>media</strong>, 28,2 minutos. Con ruido de <strong>colas gordas</strong> (la distribución de <strong>Laplace</strong>, que admite sorpresas grandes), la cuenta se convierte en la <strong>suma de errores absolutos</strong> (sin elevar al cuadrado), y su mínimo es la <strong>mediana</strong>: 20 minutos, como en el <a href="media-varianza-y-desviacion-tipica-es.html" target="_self">tema 7</a>. Elegir pérdida es elegir qué se cree del ruido.</p>
+  </div>
+  <div class="seg col" role="group" aria-label="Forma del ruido"><button type="button" id="la-0" aria-pressed="true">Ruido en campana (normal)</button><button type="button" id="la-1" aria-pressed="false">Colas gordas (Laplace)</button></div>
+  <figure class="fig"><svg id="la" role="img" aria-label="Nueve tiempos de descarga, la forma del ruido y la pérdida según el valor central"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Arriba, las 9 descargas (puntos <b style="color:var(--point)">naranjas</b>) y la forma del ruido centrada en el valor que eliges (en <b style="color:var(--mean)">azul</b>): la altura de la curva sobre cada punto es lo probable que lo ve. Abajo, la pérdida de cada valor central (menos log-verosimilitud: más abajo, mejor); las rayas marcan la media y la mediana.</p>
+  <div class="controls col">
+    <div class="slider"><label for="la-m">Duración típica que supones (min) <output id="la-m-o"></output></label><input type="range" id="la-m" min="10" max="50" step="0.2" value="40"><div class="ends"><span>10</span><span>50</span></div></div>
+  </div>
+  <div class="big3 col" id="la-big"></div>
+  <p class="qcard col" id="la-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 6 de 8</p>
+    <h2>Si la respuesta es sí o no, sale la pérdida logarítmica</h2>
+    <p>Un modelo da a cada entrega una probabilidad de llegar tarde según los kilómetros del viaje, con una curva en forma de S: la <a href="regresion-logistica-es.html" target="_self">regresión logística</a>. La verosimilitud de una entrega es la probabilidad que el modelo le dio <strong>a lo que pasó</strong>: si llegó tarde, su probabilidad de tarde; si llegó a tiempo, la de a tiempo. Se multiplican las 40 y se toma el logaritmo.</p>
+    <p>Con el signo cambiado y dividida entre el número de entregas, esa cuenta es la <strong>pérdida logarítmica</strong> (<em>log loss</em>), también llamada <strong>entropía cruzada</strong>, la que minimizan la regresión logística y casi todas las redes que clasifican. (La entropía tendrá su propio tema más adelante en la colección.) Castiga muchísimo estar muy seguro y equivocarse: dar un 1 % a algo que pasa cuesta 4,6; dar un 50 %, solo 0,69.</p>
+  </div>
+  <figure class="fig"><svg id="lo" role="img" aria-label="Curva de probabilidad de retraso según los kilómetros y castigo de cada entrega"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Arriba, cada entrega es un punto: arriba del todo las que llegaron <b style="color:var(--point)">tarde</b> y abajo del todo las que llegaron <b style="color:var(--sample)">a tiempo</b>, según los km del viaje. La curva <b style="color:var(--mean)">azul</b> es la probabilidad de retraso que da el modelo. Abajo, la barra <b style="color:var(--warn)">roja</b> de cada entrega es su castigo: menos el logaritmo de la probabilidad que el modelo dio a lo que pasó.</p>
+  <div class="controls col">
+    <div class="slider"><label for="lo-m">Punto medio: km con un 50 % de retraso <output id="lo-m-o"></output></label><input type="range" id="lo-m" min="0" max="320" step="1" value="100"><div class="ends"><span>0 km</span><span>320 km</span></div></div>
+    <div class="slider"><label for="lo-b">Inclinación de la S <output id="lo-b-o"></output></label><input type="range" id="lo-b" min="0.2" max="10" step="0.1" value="6"><div class="ends"><span>suave</span><span>de golpe</span></div></div>
+  </div>
+  <div class="rowb col"><button type="button" id="lo-fit" class="primary">Ajuste de máxima verosimilitud</button></div>
+  <div class="big3 col" id="lo-big"></div>
+  <p class="qcard col" id="lo-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 7 de 8</p>
+    <h2>Con pocos datos, la máxima verosimilitud se lo cree todo</h2>
+    <p>Un cliente nuevo: 5 entregas, ninguna tarde. La máxima verosimilitud dice <strong>0 %</strong>: «este cliente nunca tendrá un retraso». Es la respuesta que hace más probables esos 5 datos, y es absurda: en la flota llega tarde un 8 % de las entregas. Con pocos datos, la máxima verosimilitud <strong>sobreajusta</strong>: se cree lo que ha visto al pie de la letra.</p>
+    <p>El arreglo es añadir lo que ya se sabe antes de ver los datos, una <strong>previa</strong> (<em>prior</em>, el enfoque <a href="bayes-es.html" target="_self">bayesiano</a>). Aquí equivale a sumar unas cuantas <strong>entregas imaginarias</strong> con la puntualidad media de la flota. La cima de «verosimilitud × previa» se llama <strong>MAP</strong> (máximo a posteriori). En logaritmos es «log-verosimilitud + un castigo por alejarse de lo normal»: lo mismo que hace la <strong>regularización</strong> en los modelos de aprendizaje automático.</p>
+  </div>
+  <div class="chips col" id="mp-d" role="group" aria-label="Datos del cliente"></div>
+  <figure class="fig"><svg id="mp" role="img" aria-label="Verosimilitud, previa y su combinación para el porcentaje de entregas tarde de un cliente"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> La curva <b style="color:var(--point)">naranja</b> discontinua es la verosimilitud (solo los datos del cliente); la <b style="color:var(--sample)">violeta</b>, la previa (lo que se sabe de la flota, más estrecha cuantas más entregas imaginarias); la <b style="color:var(--mean)">azul</b>, las dos juntas. Cada curva está escalada para que su cima valga 1. Los rombos marcan las cimas.</p>
+  <div class="controls col">
+    <div class="slider"><label for="mp-m">Entregas imaginarias con un 8 % tarde <output id="mp-m-o"></output></label><input type="range" id="mp-m" min="0" max="50" step="1" value="0"><div class="ends"><span>0 (solo los datos)</span><span>50</span></div></div>
+  </div>
+  <div class="big3 col" id="mp-big"></div>
+  <p class="qcard col" id="mp-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 8 de 8</p>
+    <h2>Sin fórmula: subir la colina a pasos</h2>
+    <p>Para la Poisson o la binomial, la cima tiene fórmula (la media, k / n). Para la regresión logística de la idea 6, no: hay que <strong>buscarla</strong>. El método más usado es el del excursionista con niebla: mirar hacia dónde sube el terreno justo donde estás, dar un paso en esa dirección y repetir. Es el <a href="descenso-de-gradiente-es.html" target="_self">descenso de gradiente</a> de la serie ML (aquí «ascenso», porque se sube por la verosimilitud; bajar por la pérdida es lo mismo). La pendiente del terreno se calcula con derivadas, que tendrán su propio tema más adelante.</p>
+  </div>
+  <figure class="fig"><svg id="gd" role="img" aria-label="Mapa de la log-verosimilitud de la regresión logística y el camino de los pasos"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Es un mapa del terreno: cada punto es un modelo de la idea 6 (punto medio en horizontal, inclinación en vertical) y cuanto más <b style="color:var(--mean)">azul</b> oscuro, más verosímil, como las curvas de nivel de un mapa de montaña. La estrella es la cima. El camino <b style="color:var(--point)">naranja</b> son los pasos dados desde la esquina de abajo a la izquierda.</p>
+  <div class="decs">
+    <div class="dec"><h3>Tamaño del paso</h3><p>Cuánto se avanza cada vez en la dirección en que sube.</p><div class="seg" role="group" aria-label="Tamaño del paso"><button type="button" id="gd-s0" aria-pressed="false">Pequeño</button><button type="button" id="gd-s1" aria-pressed="true">Bueno</button><button type="button" id="gd-s2" aria-pressed="false">Demasiado grande</button></div></div>
+    <div class="dec"><h3>Caminar</h3><p>Da pasos y mira cómo sube la log-verosimilitud.</p><div class="rowb"><button type="button" id="gd-1" class="primary">1 paso</button><button type="button" id="gd-10">+10 pasos</button><button type="button" id="gd-re">↺ Empezar de nuevo</button></div></div>
+  </div>
+  <div class="big3 col" id="gd-big"></div>
+  <p class="qcard col" id="gd-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta completa</h2>
+    <ol class="steps">
+      <li><div><strong>Elige un modelo de cómo se generan los datos</strong>: Poisson para conteos, binomial para sí/no, normal para medidas con ruido en campana…</div></li>
+      <li><div><strong>Escribe la probabilidad de cada dato</strong> según los parámetros y multiplícalas (si los datos son independientes).</div></li>
+      <li><div><strong>Toma logaritmos</strong>: el producto pasa a ser una suma y la cima no se mueve.</div></li>
+      <li><div><strong>Busca la cima</strong>: con fórmula si la hay (la media, k / n) o subiendo a pasos si no.</div></li>
+      <li><div><strong>Mira la anchura de la cima</strong>: dice cuánto se sabe y da intervalos.</div></li>
+      <li><div><strong>Desconfía con pocos datos</strong>: añade una previa o regularización para no creerte un 0 % o un 100 %.</div></li>
+      <li><div><strong>Y al revés</strong>: cada función de pérdida esconde una suposición sobre el ruido. Cuadrados = campana; absolutos = colas gordas; pérdida logarítmica = sí/no.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>Dónde aparece en la telemetría de flota</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6L34 32H6Z"/><path d="M20 16v8M20 28v1"/></svg><h3>¿Es raro este día?</h3><p>Con λ = 2,5 alertas al día ajustado por máxima verosimilitud, un día con 9 alertas tiene una probabilidad del 0,09 % (9 o más, del 0,11 %). Pasar de «se ve mucho» a «es un día anómalo» exige primero un modelo de lo normal.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13"/><path d="M20 12v8l6 4"/></svg><h3>Tiempos de parada y de llegada</h3><p>Las paradas en el muelle se ajustan con una lognormal (<a href="distribuciones-es.html" target="_self">tema 8</a>) por máxima verosimilitud. Con ella se calcula la probabilidad de que una parada pase de 45 minutos y se cobra o no el tiempo de espera.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="10" width="28" height="22" rx="2"/><path d="M6 16h28M13 6v8M27 6v8"/></svg><h3>Riesgo de retraso por entrega</h3><p>El modelo que da el riesgo de cada entrega se entrena minimizando la pérdida logarítmica, es decir, por máxima verosimilitud. Por eso sus porcentajes se pueden leer como probabilidades y usarse para decidir con euros.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 30h24M12 30V18M20 30V10M28 30V22"/></svg><h3>Rankings de conductores</h3><p>Un conductor nuevo con 0 alertas en 3 días no es «el más suave de la flota». Con una previa (las alertas medias de la flota) su estimación se queda cerca de la media hasta que acumula días, y el ranking deja de premiar la suerte.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Conexiones</p>
+    <h2>Con los modelos de la serie ML y los otros temas</h2>
+    <p>Casi todos los modelos de la serie se entrenan maximizando una verosimilitud, aunque no lo digan. La <a href="regresion-lineal-polinomial-es.html" target="_self">regresión lineal</a> con mínimos cuadrados es máxima verosimilitud con ruido normal (y la proyección del <a href="minimos-cuadrados-como-proyeccion-es.html" target="_self">tema 4</a> es su cima). La <a href="regresion-logistica-es.html" target="_self">regresión logística</a> maximiza la verosimilitud de una Bernoulli, y el <a href="descenso-de-gradiente-es.html" target="_self">descenso de gradiente</a> es la forma de buscar la cima. El enfoque <a href="bayes-es.html" target="_self">bayesiano</a> multiplica la verosimilitud por una previa: de ahí sale la regularización. Los <a href="procesos-gaussianos-es.html" target="_self">procesos gaussianos</a> eligen la escala de su kernel maximizando la verosimilitud de los datos, y el <a href="filtro-de-kalman-es.html" target="_self">filtro de Kalman</a> ajusta cuánto ruido tienen el GPS y el movimiento de la misma manera.</p>
+    <p>En esta colección se apoya en la media y la mediana del <a href="media-varianza-y-desviacion-tipica-es.html" target="_self">tema 7</a>, las distribuciones del <a href="distribuciones-es.html" target="_self">tema 8</a>, la independencia del <a href="probabilidad-condicional-e-independencia-es.html" target="_self">tema 9</a> y el muestreo del <a href="muestreo-y-teorema-central-del-limite-es.html" target="_self">tema 11</a>; la anchura de la cima conecta con los intervalos del <a href="intervalos-de-confianza-y-bootstrap-es.html" target="_self">tema 12</a>, y comparar las cimas de dos modelos es una de las <a href="pruebas-de-hipotesis-y-p-valor-es.html" target="_self">pruebas de hipótesis</a> del tema 13. Los temas de entropía y de derivadas, más adelante, completan la idea 6 y la idea 8.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo que ayuda y dónde engaña</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Lo que ayuda</h3><ul class="pc">
+      <li>Una sola receta para cualquier tipo de dato: conteos, porcentajes, tiempos, medidas, sí/no.</li>
+      <li>Explica de dónde sale cada función de pérdida y cuándo conviene otra.</li>
+      <li>Con muchos datos es la mejor estimación posible, y la anchura de la cima dice cuánto fiarse.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Dónde engaña</h3><ul class="pc">
+      <li>Todo depende del modelo elegido: si las alertas no son Poisson (conductores muy distintos mezclados), la cima es la respuesta exacta a la pregunta equivocada.</li>
+      <li>Con pocos datos se lo cree todo: 0 de 5 da un 0 %.</li>
+      <li>Supone datos independientes; con días o camiones que se parecen entre sí, la cima sale demasiado afilada.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Parámetro</dt><dd>El número que no se ve y que decide la forma de los datos: λ para las alertas, p para los retrasos.</dd>
+      <dt>Verosimilitud</dt><dd>Con los datos fijos, la probabilidad que cada valor del parámetro daba a esos datos. Sirve para comparar valores entre sí.</dd>
+      <dt>Log-verosimilitud</dt><dd>Su logaritmo: la suma de los logaritmos de la probabilidad de cada dato. Misma cima, sin números diminutos.</dd>
+      <dt>Máxima verosimilitud</dt><dd>Quedarse con el valor del parámetro que hace los datos más probables (la cima de la curva).</dd>
+      <dt>Independientes</dt><dd>Datos en que lo que pasa en uno no cambia las probabilidades del otro. Permite multiplicar.</dd>
+      <dt>Función de pérdida</dt><dd>Lo que un modelo intenta hacer pequeño al entrenar. Muchas son menos la log-verosimilitud de algún modelo de ruido.</dd>
+      <dt>Pérdida logarítmica (entropía cruzada)</dt><dd>La media de menos el logaritmo de la probabilidad dada a lo que pasó. La de los clasificadores.</dd>
+      <dt>Sobreajuste</dt><dd>Creerse los datos demasiado: con 0 retrasos de 5, decir que nunca habrá retrasos.</dd>
+      <dt>Previa y MAP</dt><dd>Lo que se sabía antes de los datos, y la cima de verosimilitud × previa. En logaritmos, verosimilitud más un castigo: regularización.</dd>
+      <dt>Gradiente</dt><dd>La dirección en la que más sube la colina desde donde estás. Se usa para buscar la cima a pasos.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: las cuentas detrás de todo</summary>
+    <p style="padding-top:10px">No hacen falta para entender la idea:</p>
+    <div class="formula">Poisson:   P(k alertas) = e^(−λ) · λ^k / k!
+log-verosimilitud de 14 días:  35 · log λ − 14 · λ − (suma de log k!)
+cima: derivada 35/λ − 14 = 0  →  λ = 35 / 14 = 2,5  (la media)
+con λ = 2,5: log-verosimilitud = −25,11  →  probabilidad 1,24 · 10⁻¹¹
+
+binomial (3 tarde de 40):  3 · log p + 37 · log(1 − p) + constante
+cima: 3/p − 37/(1 − p) = 0  →  p = 3/40 = 7,5 %
+
+normal (σ fija):  log-verosimilitud = constante − Σ errores² / (2σ²)
+                  → máxima verosimilitud = mínimos cuadrados
+Laplace:          constante − Σ |errores| / b  → mediana
+sí/no:            Σ log(probabilidad dada a lo que pasó)
+                  → menos esto, dividido entre n = pérdida logarítmica
+
+con previa (m entregas imaginarias al 8 %):
+                  p = (tarde + 0,08 · m) / (entregas + m)
+                  0 de 5 con m = 20  →  1,6 / 25 = 6,4 %</div>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2>Todo en minuto y medio</h2>
+    <p>Un repaso animado: λ moviéndose sobre los 14 días de alertas hasta la cima, el producto diminuto que se convierte en suma de logaritmos, la cima que se afila con más datos, las tres pérdidas que salen de tres formas de ruido, el cliente con 0 retrasos de 5 y la subida a pasos por la colina. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xACoAAEAAgMBAQEAAAAAAAAAAAAABwgEBgUDAgEBAQEBAQAAAAAAAAAAAAAAAAABAgMQAQACAQMCAwMFCwcGCQoEBwABAgMFEQQGEgchMUEiEzJhUTYUQnJxtFJ0gbM1FSN1kbFiczOyw6EkNBaCgxeU01WSQ8FjlaLkhFa1JUU30lREZFPUGJPRwqPwEQEBAQADAQEBAQEAAAAAAAAAEQFBEiECUTFxIv/AABEIBDgHgAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AISAdWAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHd0no3qHXeN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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//9k=" aria-label="Animación: máxima verosimilitud">
+      <source src="maxima-verosimilitud-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"A":[3,1,4,0,4,2,3,1,3,2,1,6,3,2],"B":[3,1,1,0,2,1,1,0,0,1,0,2,2,0],"largo":[3,1,4,0,4,2,3,1,3,2,1,6,3,2,4,1,4,2,5,2,0,4,2,2,1,2,5,4,0,2,5,2,2,3,2,4,3,4,1,3,1,1,2,3,3,4,3,1,4,1,1,3,6,5,3,5,1,0,3,4,4,0,4,5,0,0,1,2,2,0,5,2,3,2,5,3,2,5,3,2,3,1,1,3,2,2,3,2,1,2,3,3,5,2,4,3,6,4,1,4,4,3,3,2,3,3,1,2,1,4,1,0,1,2,2,2,5,1,4,3,2,3,6,2,4,1,5,4,3,2,1,4,1,3,3,2,2,5,4,3,4,4,4,3,2,3,4,3,3,5,2,3,3,3,2,2,3,0,3,1,6,2,1,2,1,2,1,1,1,2,4,3,3,3,0,8,2,5,0,1,3,4,2,3,3,2,0,2,3,3,5,1,4,3,1,1,1,2,3,0,2,1,3,3,3,2,1,0,4,5,2,2,3,3,2,1,3,1,2,2,2,3,3,2,2,1,0,1,3,0,2,5,2,3,2,3,1,2,2,4,3,5,4,3,1,0,4,1,3,2,4,2,3,1,2,2,3,3,1,0,1,1,0,0,3,0,4,1,1,1,1,3,4,4,1,1,2,2,0,4,2,2,4,2,0,2,5,1,4,1,2,2,2,1,3,4,4,4,3,0,2,5,5,2,1,3,1,2,2,2,3,5,2,2,1,1,2,3,4,1,3,5,5,3,3,2,1,2,4,1,2,4,1,2,1,4,4,5,2,4,1,5,1,2,3,3,6,2,3,1,3,2,2,3,3,3,3,1,5,0,3,7,2,4,4,2,4,1,0,4,2,1,2,5,2,2,5,2,2,1,3,4,4,5,2,0,5,4,4,4,3,3,4,3,2,0,3,1,2,1,2,3,2,3,7,3,1,3,3,2,1,5,4,4,1,2,5,1,1,5,2,3,4,2,1,5,2,2,1,1,3,5,2,1,5,2,1,3,1,1,4,4,3,1,2,1,3,3,3,1,1,1,2,1,2,2,3,0,6,3,3,1,6,1,2,2,0,4,3,1,2,2,2,2,6,2,2,1,0,3,2,1,1,3,4,0,3,2,2,1,2,3,0,3,1,4,3,2,1,2,2,3,4,1,4,3,1,2,2,2,5,2,2,3,1,1,5,1,1,1,0,1,5,6,1,3,2,0,2,2,2,3,3,1,3,3,4,2,6,1,3,2,5,5,4,1,2,2,5,6,2,1,2,2,4,4,4,2,5,6,3,2,3,2,4,5,2,3,2,1,5,2,1,0,7,4,4,1,2,4,2,0,3,4,1,3,6,2,1,1,2,0,3,2,0,4,1,1,2,0,4,1,1,2,3,1,2,1,3,3,6,2,1,2,2,3,3,2,5,3,0,1,4,4,2,2,2,5,5,3,3,2,5,1,5,4,4,4,1,2,1,1,2,4,2,4,4,3,1,2,4,7,4,2,1,1,1,1,5,4,1,2,1,3,1,4,4,1,3,0,1,2,1,5,0,1,0,3,2,6,2,0,5,4,2,2,2,4,3,3,1,5,7,3,1,3,3,5,4,1,5,2,1,1,2,2,4,3,4,7,2,3,1,3,3,5,0,7,2,1,2,4,3,0,6,2,4,3,1,3,5,3,0,2,0,2,5,3,2,3,1,5,3,7,2,2,2,1,4,3,4,0,4,3,3,0,2,3,2,3,1,3,0,2,4,3,0,2,3,2,2,4,5,1,1,1,2,0,1,6,2,2,3,8,2,2,6,3,2,2,0,0,1,2,2,3,3,5,4,5,1,3,0,0,3,0,6,0,3,3,1,1,4,4,2,1,4,1,4,7,3,0,1,0,3,3,2,2,3,2,0,1,2,4,1,5,4,2,4,1,0,1,4,5,2,3,1,5,0,2,1,2,5,3,3,3,2,1,1,3,1,1,2,1,4,0,4,6,4,2,4,2,3,3,1,1,3,4,0,5,3,4,3,1,3,4,1,2,5,4,2,2,2,0,2,4,2,2,2,2,2,4,3,3,0,1,1,1,5,2,2,3,1,2,5,3,1,1,2,1,1,2,5,5,2,6,3,5,5,2,1,1,6,0,2,3,4,0,3,2,4,5,1,0,2,4,2,2,3,3,3,3,4,1,3,1,3,1,1,4,5,3,2,6,3,6,2,6,5,7,0,0,4,1,0,3,4,3,3,2,0,1,3,5,5,4,4,4,3,3,1,3,0,5,3,1,2,2,1,1],"carga":[4.0,6.0,7.0,9.0,10.0,12.0,13.0,15.0,17.0,19.0,21.0,24.0],"cons":[24.5,26.4,30.5,29.4,25.2,29.4,28.6,31.0,28.4,33.0,33.9,38.0],"desc":[18.0,22.0,15.0,25.0,20.0,17.0,23.0,19.0,95.0],"km":[25.0,26.0,35.0,42.0,54.0,81.0,83.0,93.0,94.0,95.0,96.0,100.0,109.0,109.0,123.0,128.0,140.0,141.0,150.0,153.0,174.0,175.0,178.0,181.0,183.0,191.0,197.0,232.0,234.0,247.0,249.0,252.0,261.0,261.0,263.0,269.0,273.0,292.0,300.0,302.0],"tarde":[0,0,0,0,0,0,0,0,1,1,0,1,0,0,1,0,1,0,0,0,0,1,0,0,0,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1],"lg":[163.804,2.118]};
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g,"\u00a0");s=fr?i+","+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const pc=(v,d)=>f1(100*v,d??1)+" %";
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+const redraws=[];window.addEventListener("resize",()=>redraws.forEach(g=>g()));
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+const SUP={"0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹","-":"⁻"};
+const sup=n=>String(n).split("").map(c=>SUP[c]).join("");
+/* número a partir de su log10: "1,2 · 10⁻¹¹" */
+const sciL=(l10,d)=>{let e=Math.floor(l10),m=10**(l10-e);if(+m.toFixed(d??1)>=10){m/=10;e++;}return f1(m,d??1)+" · 10"+sup(e);};
+const mean=a=>a.reduce((s,v)=>s+v,0)/a.length;
+const LF=[0];for(let k=1;k<=2000;k++)LF.push(LF[k-1]+Math.log(k));
+const lpois=(k,l)=>k*Math.log(l)-l-LF[k];
+const llpois=(x,l)=>x.reduce((s,k)=>s+lpois(k,l),0);
+const llbin=(k,n,p)=>(k?k*Math.log(p):0)+(n-k?(n-k)*Math.log(1-p):0);
+const bis=(f,lo,hi)=>{const flo=f(lo)>0;for(let i=0;i<80;i++){const m=(lo+hi)/2;if((f(m)>0)===flo)lo=m;else hi=m;}return (lo+hi)/2;};
+const tk=(a,b,n)=>{const raw=(b-a)/n,p=10**Math.floor(Math.log10(raw)),m=raw/p,st=(m<1.5?1:m<3?2:m<7?5:10)*p,out=[];for(let v=Math.ceil(a/st-1e-9)*st;v<=b+1e-9;v+=st)out.push(+v.toFixed(10));return out;};
+/* panel con ejes, en coordenadas del viewBox */
+function axes(svg,o){const FS=o.FS,L=o.x+(o.padL??FS*3.4),R=o.x+o.w-(o.padR??FS*0.9),T=o.y+(o.padT??FS*2.2),B=o.y+o.h-(o.padB??FS*2.6);
+  const sx=v=>L+(v-o.x0)/(o.x1-o.x0)*(R-L),sy=v=>B-(v-o.y0)/(o.y1-o.y0)*(B-T),g=el("g",null,svg);
+  for(const v of (o.yt||[])){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},g);txt(g,L-7,sy(v)+FS*0.3,(o.fy||(v=>f1(v,0)))(v),{"text-anchor":"end","font-size":FS*0.8});}
+  for(const v of (o.xt||[])){if(o.grid!==false)el("line",{x1:sx(v),x2:sx(v),y1:T,y2:B,class:"g-line","stroke-opacity":.55},g);
+    const s=(o.fx||(v=>f1(v,0)))(v),w=s.length*FS*0.8*0.62,X=sx(v);let a="middle",xx=X;if(X+w/2>o.x+o.w-3){a="end";xx=o.x+o.w-3;}else if(X-w/2<o.x+3){a="start";xx=o.x+3;}else if((o.yt||[]).length&&X-w/2<L-4){a="start";xx=L-2;}
+    txt(g,xx,B+FS*1.05,s,{"text-anchor":a,"font-size":FS*0.8});}
+  el("line",{x1:L,x2:R,y1:B,y2:B,class:"g-axis"},g);
+  if(o.xl)txt(g,R,o.y+o.h-FS*0.25,o.xl,{"text-anchor":"end","font-size":FS*0.85,class:"t-ink"});
+  if(o.yl)txt(g,L,T-FS*0.75,o.yl,{"font-size":FS*0.8});
+  return {L,R,T,B,sx,sy,FS};}
+const dot=(g,x,y,r,fill,extra)=>el("circle",Object.assign({cx:x,cy:y,r,fill,stroke:"var(--point-ring)","stroke-width":r>6?2:1.2},extra||{}),g);
+const pathOf=(pts)=>pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join("");
+const diamond=(g,x,y,r,col)=>el("path",{d:`M${x} ${y-r}L${x+r} ${y}L${x} ${y+r}L${x-r} ${y}Z`,fill:col,stroke:"var(--point-ring)","stroke-width":1.5},g);
+/* etiqueta que no se sale del panel */
+const lab=(g,x,y,s,FS,A,extra)=>{extra=extra||{};const fz=extra["font-size"]||FS*0.8,w=s.length*fz*0.6,an=extra["text-anchor"]||"middle",left=an==="middle"?x-w/2:an==="end"?x-w:x;let dx=0;if(left<A.L+2)dx=A.L+2-left;else if(left+w>A.R-2)dx=A.R-2-(left+w);return txt(g,x+dx,y,s,Object.assign({"font-size":fz},halo(5),extra,{"text-anchor":an}));};
+
+/* ---------- juguete: alertas de frenada ---------- */
+(function(){const svg=$("toy"),inL=$("t-l"),DATA=[D.A,D.B];let tr=0;
+  chips($("t-c"),["Camión A · ruta urbana","Camión B · autovía"],i=>{tr=i;draw();});
+  $("t-best").onclick=()=>{inL.value=mean(DATA[tr]).toFixed(1);draw();};
+  inL.addEventListener("input",draw);
+  function draw(){const x=DATA[tr],lam=+inL.value,n=x.length,lh=mean(x),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14;
+    const cols=nw?7:14,rows=nw?2:1,cw=(W-4)/cols,ch=nw?150:126,stripH=rows*ch+FS*0.8;
+    const pH=nw?400:330,H=stripH+(nw?2*pH+10:pH);svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const P=x.map(k=>Math.exp(lpois(k,lam)));
+    x.forEach((k,i)=>{const cx=2+(i%cols)*cw+cw/2,y0=Math.floor(i/cols)*ch,g=el("g",null,svg);
+      el("rect",{x:cx-cw/2+3,y:y0+3,width:cw-6,height:ch-8,rx:8,fill:"none",stroke:"var(--line)"},g);
+      txt(g,cx,y0+FS*1.0,"día "+(i+1),{"text-anchor":"middle","font-size":FS*0.66});
+      txt(g,cx,y0+FS*2.6,String(k),{"text-anchor":"middle","font-size":FS*1.7,"font-weight":800,style:"fill:var(--point)"});
+      const bb=y0+ch-FS*1.55,hb=ch-FS*4.6,h=Math.max(1.5,hb*Math.min(1,P[i]/0.45)),bw=Math.min(cw*0.42,26);
+      el("rect",{x:cx-bw/2,y:bb-h,width:bw,height:h,rx:3,fill:"var(--mean)","fill-opacity":P[i]<0.02?0.45:0.85},g);
+      el("line",{x1:cx-cw*0.36,x2:cx+cw*0.36,y1:bb,y2:bb,stroke:"var(--line)"},g);
+      txt(g,cx,bb+FS*1.0,P[i]>=0.095?pc(P[i],0):P[i]>=0.0095?pc(P[i],1):pc(P[i],2),{"text-anchor":"middle","font-size":FS*0.66,style:P[i]<0.02?"fill:var(--warn)":"fill:var(--mean)","font-weight":700});});
+    /* ajuste: días esperados frente a días observados */
+    const p1=nw?{x:0,y:stripH,w:W,h:pH}:{x:0,y:stripH,w:W*0.48,h:pH},p2=nw?{x:0,y:stripH+pH+10,w:W,h:pH}:{x:W*0.5,y:stripH,w:W*0.5,h:pH};
+    const cnt=Array(10).fill(0);x.forEach(k=>cnt[Math.min(9,k)]++);
+    const ymax=Math.max(6,Math.ceil(Math.max(...cnt)+0.5));
+    const A=axes(svg,Object.assign({},p1,{x0:-0.6,x1:8.6,y0:0,y1:ymax,xt:[0,1,2,3,4,5,6,7,8],yt:tk(0,ymax,4),xl:"alertas en un día",yl:"días (de 14)",FS,grid:false,padL:FS*2.4,padT:FS*2.4}));
+    for(let k=0;k<=8;k++){const e=n*Math.exp(lpois(k,lam));el("rect",{x:A.sx(k)-(A.sx(0.36)-A.sx(0)),y:A.sy(Math.min(ymax,e)),width:2*(A.sx(0.36)-A.sx(0)),height:A.sy(0)-A.sy(Math.min(ymax,e)),fill:"var(--mean)","fill-opacity":.28,stroke:"var(--mean)","stroke-width":1.5},svg);}
+    const r=nw?12:9;for(let k=0;k<=8;k++)for(let j=0;j<cnt[k];j++)dot(svg,A.sx(k),A.sy(j+0.5),r,"var(--point)");
+    /* curva de log-verosimilitud */
+    const lmax=llpois(x,lh),y0=lmax-36,y1=lmax+(nw?7:4);
+    const Bc=axes(svg,Object.assign({},p2,{x0:0,x1:6,y0,y1,xt:[0,1,2,3,4,5,6],yt:tk(y0,y1,4),fy:v=>f1(v,0),xl:"λ que supones",yl:"log-verosimilitud de los 14 días",FS,padL:FS*2.8,padT:FS*2.4}));
+    const pts=[];for(let i=1;i<=300;i++){const l=6*i/300,v=llpois(x,l);if(v>=y0)pts.push([Bc.sx(l),Bc.sy(v)]);}
+    el("path",{d:pathOf(pts),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    el("line",{x1:Bc.sx(lh),x2:Bc.sx(lh),y1:Bc.sy(lmax),y2:Bc.B,stroke:"var(--ink)","stroke-width":1.5,"stroke-dasharray":"5 4"},svg);
+    lab(svg,Bc.sx(lh),Bc.sy(lmax)-FS*1.15,"cima: λ = "+f1(lh,1)+" (la media)",FS,Bc,{class:"t-ink","font-weight":700});
+    const lc=llpois(x,lam),yc=Bc.sy(Math.max(y0,lc));dot(svg,Bc.sx(lam),yc,nw?11:8,"var(--point)");
+    if(lc<y0)txt(svg,Bc.sx(lam),yc-FS*0.9,"más abajo",Object.assign({"text-anchor":"middle","font-size":FS*0.72,style:"fill:var(--warn)"},halo(4)));
+    else if(Math.abs(lam-lh)>0.35)lab(svg,Bc.sx(lam)+(lam<lh?-1:1)*FS*0.2,yc+FS*1.5,f1(lc,1),FS,Bc,{style:"fill:var(--point)","font-weight":700});
+    $("t-l-o").textContent=f1(lam,1);
+    const ratio=(lmax-lc)/Math.LN10;
+    $("t-big").innerHTML=`<div><b>1 entre ${sciL(-lc/Math.LN10,1)}</b><span>probabilidad que da λ = ${f1(lam,1)} a los 14 días juntos (multiplicando las de cada día)</span></div><div><b>${f1(lc,1)}</b><span>log-verosimilitud: la suma de los logaritmos de las 14 probabilidades</span></div><div><b style="color:var(--mean)">${ratio<0.0005?"en la cima":"×"+(ratio<5?f1(10**ratio,ratio<1?2:0):sciL(ratio,1))}</b><span>${ratio<0.0005?"ningún λ da más probabilidad a estos 14 días":"veces más probables serían los datos con el mejor λ"}</span></div>`;
+    const iw=P.indexOf(Math.min(...P)),kw=x[iw];let m;
+    if(Math.abs(lam-lh)<0.05)m=`<b>En la cima.</b> λ = ${f1(lh,1)} es el valor que da más probabilidad a los 14 días juntos, y es exactamente la media: ${x.reduce((s,v)=>s+v,0)} alertas entre 14 días. Ningún día recibe una probabilidad ridícula: el peor, el de ${kw} alertas, tiene un ${pc(P[iw],1)}. Esto es la estimación de máxima verosimilitud.`;
+    else if(lam<lh)m=`Con λ = ${f1(lam,1)}, el día ${iw+1} (${kw} alertas) recibe solo un <b>${P[iw]<0.001?pc(P[iw],2):pc(P[iw],1)}</b>: este λ dice que un día así casi no puede pasar, y pasó. Las barras azules de abajo esperan más días tranquilos de los que hubo. Sube λ.`;
+    else m=`Con λ = ${f1(lam,1)}, el día ${iw+1} (${kw} ${kw===1?"alerta":"alertas"}) recibe solo un <b>${P[iw]<0.001?pc(P[iw],2):pc(P[iw],1)}</b>: con tantas alertas de media, un día tan tranquilo sería rarísimo. Las barras azules esperan más días movidos de los que hubo. Baja λ.`;
+    $("t-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 1: producto y logaritmos ---------- */
+(function(){const svg=$("lg"),inN=$("lg-n"),NN=[1,2,5,14,30,60,100,200,365,500,1000],L=D.largo;
+  const cum=[0];L.forEach(k=>cum.push(cum[cum.length-1]+k));
+  const best=n=>{const lh=cum[n]/n;let s=0;for(let i=0;i<n;i++)s+=lpois(L[i],lh);return {lh,ll:s};};
+  const curve=[];for(let n=1;n<=1000;n=Math.max(n+1,Math.round(n*1.04)))curve.push([n,best(n).ll/Math.LN10]);curve.push([1000,best(1000).ll/Math.LN10]);
+  function draw(){const n=NN[+inN.value],nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?520:360;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const lx=Math.log10,A=axes(svg,{x:0,y:0,w:W,h:H,x0:0,x1:3,y0:-850,y1:0,xt:[0,1,2,3],fx:v=>f1(10**v,0),yt:[0,-200,-400,-600,-800],fy:v=>v?"10"+sup(v):"1",xl:"días de datos (escala log.)",yl:"probabilidad de todos los días juntos",FS,padL:FS*3.6});
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(-308),y2:A.sy(-308),stroke:"var(--warn)","stroke-width":2,"stroke-dasharray":"7 5"},svg);
+    txt(svg,A.L+6,A.sy(-308)+FS*1.2,"por debajo, el ordenador guarda un 0",Object.assign({"font-size":FS*0.75,style:"fill:var(--warn)"},halo(5)));
+    el("path",{d:pathOf(curve.map(([d,v])=>[A.sx(lx(d)),A.sy(v)])),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    const b=best(n),y=b.ll/Math.LN10;dot(svg,A.sx(lx(n)),A.sy(y),nw?11:8,"var(--point)");
+    lab(svg,A.sx(lx(n))+(n<=2?FS*0.6:-FS*0.6),A.sy(y)+FS*1.5,"10"+sup(Math.round(y)),FS,A,{"text-anchor":n<=2?"start":"end",class:"t-ink","font-weight":700,"font-size":FS*0.9});
+    let prod=1;for(let i=0;i<n;i++)prod*=Math.exp(lpois(L[i],b.lh));
+    $("lg-n-o").textContent=f1(n,0);
+    const ps=prod===0?"0":prod>1e-3?f1(prod,3):sciL(Math.log10(prod),1);
+    $("lg-big").innerHTML=`<div><b ${prod===0?'style="color:var(--warn)"':""}>${ps}</b><span>producto de las ${f1(n,0)} probabilidades, calculado directamente por el ordenador</span></div><div><b style="color:var(--mean)">${f1(b.ll,1)}</b><span>suma de sus logaritmos (log-verosimilitud): siempre un número manejable</span></div><div><b>${f1(b.lh,2)}</b><span>λ más verosímil con ${f1(n,0)} ${n===1?"día":"días"}: la media, igual con producto que con logaritmos</span></div>`;
+    let m;if(prod===0)m=`Con ${f1(n,0)} días, el producto tiene unos ${f1(-y,0)} ceros tras la coma, más de los que caben en un número normal del ordenador (unos 308): el cálculo directo da <b>0</b>, y todos los λ parecerían igual de malos. La suma de logaritmos (${f1(b.ll,1)}) no tiene ningún problema y su cima sigue en la media, ${f1(b.lh,2)}.`;
+    else if(n<=5)m=`Con ${n} ${n===1?"día":"días"} el producto todavía es un número normal (${ps}). Pero cada día multiplica por algo menor que 1, típicamente entre 0,1 y 0,3. Sube los días.`;
+    else m=`Con ${f1(n,0)} días el producto ya es ${ps}: cada día añade más o menos un cero. Todavía cabe en el ordenador, pero se acerca a la línea roja. La suma de logaritmos, ${f1(b.ll,1)}, es mucho más cómoda y tiene la cima en el mismo λ (${f1(b.lh,2)}).`;
+    $("lg-msg").innerHTML=m;}
+  inN.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 2: binomial ---------- */
+(function(){const svg=$("bi"),inN=$("bi-n"),inK=$("bi-k"),inP=$("bi-p"),NN=[5,10,20,40,100,200];
+  function draw(){const n=NN[+inN.value];inK.max=n;const k=Math.min(+inK.value,n),p=+inP.value/100,ph=k/n,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?460:330;
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const lmax=llbin(k,n,Math.min(1-1e-12,Math.max(1e-12,ph))),rel=q=>Math.exp(llbin(k,n,q)-lmax);
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0,x1:1,y0:0,y1:1.12,xt:[0,0.2,0.4,0.6,0.8,1],fx:v=>f1(100*v,0)+" %",yt:[0,0.25,0.5,0.75,1],fy:v=>f1(v,2),xl:"porcentaje de entregas tarde que se supone",yl:"verosimilitud (cima = 1)",FS,padL:FS*3.2,padT:FS*2.4});
+    const pts=[];for(let i=0;i<=600;i++){const q=Math.min(1-1e-9,Math.max(1e-9,i/600));pts.push([A.sx(q),A.sy(rel(q))]);}
+    el("path",{d:pathOf(pts)+`L${A.sx(1)} ${A.sy(0)}L${A.sx(0)} ${A.sy(0)}Z`,fill:"var(--mean)","fill-opacity":.1},svg);
+    el("path",{d:pathOf(pts),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    el("line",{x1:A.sx(ph),x2:A.sx(ph),y1:A.sy(1),y2:A.B,stroke:"var(--ink)","stroke-width":1.5,"stroke-dasharray":"5 4"},svg);
+    lab(svg,A.sx(ph),A.sy(1)-FS*0.6,`cima: ${k}/${n} = ${pc(ph,1)}`,FS,A,{class:"t-ink","font-weight":700});
+    const rp=rel(Math.min(1-1e-12,Math.max(1e-12,p)));dot(svg,A.sx(p),A.sy(rp),nw?11:8,"var(--point)");
+    $("bi-n-o").textContent=f1(n,0);$("bi-k-o").textContent=k;$("bi-p-o").textContent=pc(p,1);
+    const times=rp>0?1/rp:Infinity,tt=times<10?f1(times,1):times<1e6?f1(times,0):times===Infinity?"infinitas":sciL(Math.log10(times),1);
+    $("bi-big").innerHTML=`<div><b style="color:var(--mean)">${pc(ph,1)}</b><span>máxima verosimilitud: ${k} tarde / ${n} entregas</span></div><div><b>${pc(p,1)}</b><span>el porcentaje que supones</span></div><div><b>${Math.abs(p-ph)<0.0026?"×1":"×"+tt}</b><span>${Math.abs(p-ph)<0.0026?"estás en la cima":"veces más probables son los datos con "+pc(ph,1)+" que con "+pc(p,1)}</span></div>`;
+    let m;if(k===0)m=`Ninguna entrega tarde: la cima está en <b>0 %</b>, pegada a la pared. La máxima verosimilitud dice que este cliente <em>nunca</em> sufrirá un retraso. Con ${n} entregas eso es creerse demasiado los datos: la idea 7 lo arregla.`;
+    else if(k===n)m=`Todas tarde: la cima está en el 100 %. Igual que con 0, es una respuesta extrema que solo se sostiene con muchos datos (idea 7).`;
+    else if(Math.abs(p-ph)<0.0026)m=`En la cima: ${k} de ${n} es un ${pc(ph,1)}, y ningún otro porcentaje hace «${k} tarde de ${n}» más probable. Mueve el porcentaje y mira cuánto baja la curva.`;
+    else m=`Con un ${pc(p,1)}, «${k} tarde de ${n}» es <b>${tt} veces</b> menos probable que con un ${pc(ph,1)}. ${p<ph?"Con tan pocos retrasos supuestos, ver "+k+" sería mucha mala suerte.":"Con tantos retrasos supuestos, ver solo "+k+" sería mucha buena suerte."} ${n<=20?"Fíjate en lo ancha que es la curva con tan pocas entregas.":"Prueba a cambiar las entregas manteniendo el porcentaje: la curva se estrecha (idea 3)."}`;
+    $("bi-msg").innerHTML=m;}
+  [inN,inK,inP].forEach(i=>i.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 3: anchura ---------- */
+(function(){const svg=$("an"),inN=$("an-n"),NN=[10,40,200,1000],C=Math.exp(-3.841459/2);
+  const ci=n=>{const k=n/10,ph=0.1,g=q=>llbin(k,n,q)-llbin(k,n,ph)+3.841459/2;return [bis(g,1e-9,ph),bis(g,ph,1-1e-9)];};
+  function draw(){const s=+inN.value,n=NN[s],nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?480:340;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0,x1:0.45,y0:0,y1:1.15,xt:[0,0.1,0.2,0.3,0.4],fx:v=>f1(100*v,0)+" %",yt:[0,0.5,1],fy:v=>f1(v,1),xl:"porcentaje de entregas tarde",yl:"verosimilitud (cima = 1)",FS,padL:FS*2.6,padT:FS*2.4});
+    const [lo,hi]=ci(n);
+    el("rect",{x:A.sx(lo),y:A.T,width:A.sx(hi)-A.sx(lo),height:A.B-A.T,fill:"var(--mean)","fill-opacity":.12},svg);
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(C),y2:A.sy(C),stroke:"var(--muted)","stroke-width":1.5,"stroke-dasharray":"6 4"},svg);
+    txt(svg,A.R-4,A.sy(C)-FS*0.4,"14,7 % de la cima",Object.assign({"text-anchor":"end","font-size":FS*0.72},halo(4)));
+    NN.forEach((m,j)=>{const k=m/10,lm=llbin(k,m,0.1),pts=[];for(let i=1;i<=500;i++){const q=0.45*i/500;pts.push([A.sx(q),A.sy(Math.exp(llbin(k,m,q)-lm))]);}
+      el("path",{d:pathOf(pts),fill:"none",stroke:j===s?"var(--mean)":"var(--muted)","stroke-width":j===s?3.5:1.5,"stroke-opacity":j===s?1:.55},svg);});
+    [lo,hi].forEach((v,j)=>lab(svg,A.sx(v)+(j?1:-1)*FS*0.3,A.B-FS*1.4,pc(v,1),FS,A,{"text-anchor":j?"start":"end",style:"fill:var(--mean)","font-weight":700}));
+    $("an-n-o").textContent=f1(n,0);
+    $("an-big").innerHTML=`<div><b>${f1(n/10,0)} de ${f1(n,0)}</b><span>entregas tarde: siempre un 10 %</span></div><div><b style="color:var(--mean)">${pc(lo,1)} a ${pc(hi,1)}</b><span>intervalo del 95 % por verosimilitud</span></div><div><b>${f1(100*(hi-lo),1)} puntos</b><span>anchura del intervalo</span></div>`;
+    const m=[`Con 10 entregas y 1 retraso, la cima es una loma: cualquier porcentaje entre el ${pc(lo,1)} y el ${pc(hi,1)} explica los datos razonablemente. Saber que «es un 10 %» con 10 entregas es saber muy poco.`,
+      `Con 40 entregas, la curva se estrecha: del ${pc(lo,1)} al ${pc(hi,1)}. Cuatro veces más datos, más o menos la mitad de anchura.`,
+      `Con 200 entregas: del ${pc(lo,1)} al ${pc(hi,1)}. El intervalo de Wilson del tema 12 daría casi lo mismo: las dos formas de razonar coinciden cuando hay datos suficientes.`,
+      `Con 1 000 entregas, un pico afilado: del ${pc(lo,1)} al ${pc(hi,1)}. Ya se puede decir con bastante seguridad que el retraso real anda entre el 8 y el 12 %. Para afinar más, harían falta 4 000.`][s];
+    $("an-msg").innerHTML=m;}
+  inN.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 4: mínimos cuadrados ---------- */
+(function(){const svg=$("ls"),inB=$("ls-b"),X=D.carga,Y=D.cons,n=X.length,xm=mean(X),ym=mean(Y),SG=2;
+  const ss=b=>{const a=ym-b*xm;return X.reduce((s,x,i)=>s+(Y[i]-a-b*x)**2,0);};
+  const ll=b=>-n*Math.log(SG*Math.sqrt(2*Math.PI))-ss(b)/(2*SG*SG);
+  let sxx=0,sxy=0;X.forEach((x,i)=>{sxx+=(x-xm)**2;sxy+=(x-xm)*(Y[i]-ym);});const bh=sxy/sxx;
+  function draw(){const b=+inB.value,a=ym-b*xm,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?1060:420;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const p1=nw?{x:0,y:0,w:W,h:480}:{x:0,y:0,w:W*0.56,h:H},p2=nw?{x:0,y:490,w:W,h:280}:{x:W*0.58,y:0,w:W*0.42,h:H/2},p3=nw?{x:0,y:780,w:W,h:280}:{x:W*0.58,y:H/2,w:W*0.42,h:H/2};
+    const A=axes(svg,Object.assign({},p1,{x0:0,x1:26,y0:20,y1:42,xt:[0,5,10,15,20,25],yt:[20,25,30,35,40],xl:"carga (t)",yl:"consumo (L/100 km)",FS,padL:FS*2.6,padT:FS*2.2}));
+    X.forEach((x,i)=>el("line",{x1:A.sx(x),x2:A.sx(x),y1:A.sy(Y[i]),y2:A.sy(a+b*x),stroke:"var(--sample)","stroke-width":2.5},svg));
+    el("line",{x1:A.sx(0),x2:A.sx(26),y1:A.sy(a),y2:A.sy(a+b*26),stroke:"var(--mean)","stroke-width":3.5},svg);
+    X.forEach((x,i)=>dot(svg,A.sx(x),A.sy(Y[i]),nw?9:7,"var(--point)"));
+    const B1=axes(svg,Object.assign({},p2,{x0:0,x1:1,y0:0,y1:200,xt:[0,0.25,0.5,0.75,1],fx:v=>f1(v,2),yt:[0,100,200],xl:"pendiente",yl:"suma de errores² (valle)",FS,padL:FS*2.6,padT:FS*2.2}));
+    const B2=axes(svg,Object.assign({},p3,{x0:0,x1:1,y0:-45,y1:-20,xt:[0,0.25,0.5,0.75,1],fx:v=>f1(v,2),yt:[-40,-30,-20],xl:"pendiente",yl:"log-verosimilitud (colina)",FS,padL:FS*2.6,padT:FS*2.2}));
+    const c1=[],c2=[];for(let i=0;i<=200;i++){const q=i/200;c1.push([B1.sx(q),B1.sy(Math.min(205,ss(q)))]);c2.push([B2.sx(q),B2.sy(Math.max(-46,ll(q)))]);}
+    el("path",{d:pathOf(c1),fill:"none",stroke:"var(--sample)","stroke-width":3},svg);el("path",{d:pathOf(c2),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    [[B1,ss(bh)],[B2,ll(bh)]].forEach(([P,v])=>el("line",{x1:P.sx(bh),x2:P.sx(bh),y1:P.T,y2:P.B,stroke:"var(--ink)","stroke-width":1.3,"stroke-dasharray":"5 4"},svg));
+    dot(svg,B1.sx(b),B1.sy(Math.min(200,ss(b))),nw?10:7,"var(--point)");dot(svg,B2.sx(b),B2.sy(Math.max(-45,ll(b))),nw?10:7,"var(--point)");
+    $("ls-b-o").textContent=f1(b,2)+" L/100 km por t";
+    $("ls-big").innerHTML=`<div><b>${f1(b,2)}</b><span>pendiente elegida (la de máxima verosimilitud es ${f1(bh,2)})</span></div><div><b style="color:var(--sample)">${f1(ss(b),1)}</b><span>suma de los errores al cuadrado</span></div><div><b style="color:var(--mean)">${f1(ll(b),1)}</b><span>log-verosimilitud con ruido normal de anchura 2</span></div>`;
+    const near=Math.abs(b-bh)<0.015;
+    $("ls-msg").innerHTML=near?`<b>En el fondo del valle y en la cima de la colina a la vez</b>: pendiente ${f1(bh,2)}, unos ${f1(bh,2)} litros más cada 100 km por tonelada. Las dos curvas son la misma con el signo cambiado y escalada: log-verosimilitud = ${f1(-n*Math.log(SG*Math.sqrt(2*Math.PI)),1)} − suma de errores² / 8. Por eso la recta de mínimos cuadrados es la de máxima verosimilitud.`:`Con pendiente ${f1(b,2)}, la suma de errores al cuadrado es ${f1(ss(b),1)} y la log-verosimilitud ${f1(ll(b),1)}. ${b<bh?"La recta queda demasiado plana: los trayectos con mucha carga quedan por encima.":"La recta sube demasiado: los trayectos con mucha carga quedan por debajo."} Mueve la pendiente hasta que el valle toque fondo: verás que la colina llega a su cima en el mismo sitio.`;}
+  inB.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 5: normal frente a Laplace ---------- */
+(function(){const svg=$("la"),inM=$("la-m"),X=D.desc;let mode=0;
+  const mu=mean(X),med=X.slice().sort((a,b)=>a-b)[4],SG=6,BL=4;
+  const loss=(m,md)=>md?X.reduce((s,x)=>s+Math.abs(x-m)/BL,0):X.reduce((s,x)=>s+(x-m)**2/(2*SG*SG),0);
+  seg(["la-0","la-1"],i=>{mode=i;draw();});
+  function draw(){const m=+inM.value,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?720:470;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const p1={x:0,y:0,w:W,h:nw?330:220},p2={x:0,y:nw?340:230,w:W,h:nw?380:240};
+    const A=axes(svg,Object.assign({},p1,{x0:10,x1:100,y0:0,y1:1.1,xt:[10,20,30,40,50,60,70,80,90,100],xl:"minutos de descarga",FS,padL:FS*1,padT:FS*1}));
+    const dens=x=>mode?Math.exp(-Math.abs(x-m)/BL):Math.exp(-((x-m)**2)/(2*SG*SG)),pts=[];for(let i=0;i<=600;i++){const x=10+90*i/600;pts.push([A.sx(x),A.sy(dens(x))]);}
+    el("path",{d:pathOf(pts)+`L${A.R} ${A.B}L${A.L} ${A.B}Z`,fill:"var(--mean)","fill-opacity":.15,stroke:"var(--mean)","stroke-width":2.5},svg);
+    el("line",{x1:A.sx(m),x2:A.sx(m),y1:A.sy(1.05),y2:A.B,stroke:"var(--mean)","stroke-width":2},svg);
+    X.forEach((x,i)=>dot(svg,A.sx(x),A.B-(nw?14:10)-(i%3)*(nw?6:4),nw?10:7,"var(--point)"));
+    const dO=dens(95);lab(svg,A.sx(95),A.B-(nw?52:38),"lo ve con "+(dO<1e-4?"≈ 0":f1(dO,3)),FS,A,{"text-anchor":"end",style:"fill:var(--point)","font-weight":700});
+    const lmax=Math.max(loss(10,mode),loss(50,mode))*1.04,Bp=axes(svg,Object.assign({},p2,{x0:10,x1:50,y0:0,y1:lmax,xt:[10,15,20,25,30,35,40,45,50],yt:tk(0,lmax,4),fy:v=>f1(v,0),xl:"duración típica que se supone (min)",yl:mode?"pérdida: Σ |error| / 4":"pérdida: Σ error² / 72",FS,padL:FS*2.8,padT:FS*2.4}));
+    const c=[];for(let i=0;i<=400;i++){const q=10+40*i/400;c.push([Bp.sx(q),Bp.sy(loss(q,mode))]);}
+    el("path",{d:pathOf(c),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    [[mu,"media "+f1(mu,1),0],[med,"mediana "+f1(med,0),1]].forEach(([v,s,j])=>{el("line",{x1:Bp.sx(v),x2:Bp.sx(v),y1:Bp.T,y2:Bp.B,stroke:j===mode?"var(--ink)":"var(--muted)","stroke-width":j===mode?2:1.3,"stroke-dasharray":"5 4"},svg);
+      lab(svg,Bp.sx(v)+(j?-1:1)*FS*0.35,Bp.T+FS*0.6,s,FS,Bp,{"text-anchor":j?"end":"start","font-size":FS*0.78,style:j===mode?"fill:var(--ink)":"fill:var(--muted)","font-weight":j===mode?700:400});});
+    const lv=loss(m,mode);dot(svg,Bp.sx(m),Bp.sy(lv),nw?11:8,"var(--point)");
+    $("la-m-o").textContent=f1(m,1);
+    const best=mode?med:mu;
+    $("la-big").innerHTML=`<div><b>${f1(mu,1)} min</b><span>media de las 9 descargas</span></div><div><b>${f1(med,0)} min</b><span>mediana: la del medio, ordenadas</span></div><div><b style="color:var(--mean)">${f1(best,1)} min</b><span>máxima verosimilitud con ${mode?"colas gordas (Laplace)":"ruido en campana (normal)"}</span></div>`;
+    const near=Math.abs(m-best)<0.5;
+    $("la-msg").innerHTML=mode?(near?`<b>En la cima con Laplace:</b> ${f1(med,0)} minutos, la mediana. La pérdida es la suma de distancias sin elevar al cuadrado, así que el 95 solo «tira» lo mismo que cualquier otro punto, sin importar lo lejos que esté. Los 75 minutos de exceso de ese día no mueven la estimación.`:`Con colas gordas, la pérdida es una suma de distancias: tiene forma de V con tramos rectos y su punto más bajo está en la mediana (${f1(med,0)}). Aquí el valor ${f1(m,1)} pierde ${f1(lv,1)} frente a ${f1(loss(med,1),1)} de la mediana. Mueve el deslizador hasta el fondo.`)
+      :(near?`<b>En la cima con ruido en campana:</b> ${f1(mu,1)} minutos, la media. Una campana casi no deja que haya datos a 70 minutos del centro, así que la cima se desplaza hacia el 95 para no tener que llamarlo imposible. Ninguna de las otras 8 descargas duró más de 25 minutos. Cambia a colas gordas.`:`Con ruido en campana, la pérdida es la suma de los errores al cuadrado (dividida entre 2 × 6², la anchura supuesta): un valle redondo con el fondo en la media, ${f1(mu,1)}. Fíjate en lo poco que «ve» la campana el dato de 95 minutos cuando el centro está lejos.`);}
+  inM.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 6: pérdida logarítmica ---------- */
+(function(){const svg=$("lo"),inM=$("lo-m"),inB=$("lo-b"),K=D.km,Yt=D.tarde,n=K.length;
+  const prob=(m,b,x)=>1/(1+Math.exp(-b*(x-m)/100));
+  const pen=(m,b)=>K.map((x,i)=>{const p=prob(m,b,x),q=Yt[i]?p:1-p;return -Math.log(Math.max(q,1e-300));});
+  $("lo-fit").onclick=()=>{inM.value=D.lg[0].toFixed(0);inB.value=D.lg[1].toFixed(1);draw();};
+  function draw(){const m=+inM.value,b=+inB.value,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?760:520;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const p1={x:0,y:0,w:W,h:nw?440:300},p2={x:0,y:nw?450:310,w:W,h:nw?310:210};
+    const A=axes(svg,Object.assign({},p1,{x0:0,x1:330,y0:-0.08,y1:1.08,xt:[0,50,100,150,200,250,300],yt:[0,0.5,1],fy:v=>pc(v,0),xl:"km del viaje",yl:"probabilidad de llegar tarde",FS,padL:FS*3,padT:FS*2.2}));
+    const P=pen(m,b),cap=6;
+    K.forEach((x,i)=>{const p=prob(m,b,x),y=Yt[i]?1:0;el("line",{x1:A.sx(x),x2:A.sx(x),y1:A.sy(y),y2:A.sy(p),stroke:"var(--warn)","stroke-width":1.5,"stroke-opacity":.5},svg);});
+    const c=[];for(let i=0;i<=330;i+=2)c.push([A.sx(i),A.sy(prob(m,b,i))]);el("path",{d:pathOf(c),fill:"none",stroke:"var(--mean)","stroke-width":3.5},svg);
+    K.forEach((x,i)=>dot(svg,A.sx(x),A.sy(Yt[i]?1:0)+(i%2?3:-3),nw?8:6,Yt[i]?"var(--point)":"var(--sample)"));
+    txt(svg,A.L+4,A.sy(1)+FS*1.6,"tarde",{"font-size":FS*0.78,style:"fill:var(--point)","font-weight":700});txt(svg,A.L+4,A.sy(0)-FS*1.3,"a tiempo",{"font-size":FS*0.78,style:"fill:var(--sample)","font-weight":700});
+    const Bp=axes(svg,Object.assign({},p2,{x0:0,x1:330,y0:0,y1:cap,xt:[0,50,100,150,200,250,300],yt:[0,2,4,6],fy:v=>f1(v,0),xl:"km del viaje",yl:nw?"castigo: −log(prob. de lo que pasó)":"castigo de cada entrega: −log(prob. de lo que pasó)",FS,padL:FS*3,padT:FS*2.2}));
+    const bw=nw?6:5;K.forEach((x,i)=>{const h=Math.min(cap,P[i]);el("rect",{x:Bp.sx(x)-bw/2+(i%2?1:-1),y:Bp.sy(h),width:bw,height:Bp.B-Bp.sy(h),fill:"var(--warn)","fill-opacity":.8},svg);if(P[i]>cap)txt(svg,Bp.sx(x),Bp.sy(cap)-4,"▲",{"text-anchor":"middle","font-size":FS*0.7,style:"fill:var(--warn)"});});
+    const ll=-P.reduce((s,v)=>s+v,0),lossv=-ll/n,iw=P.indexOf(Math.max(...P));
+    $("lo-m-o").textContent=f1(m,0)+" km";$("lo-b-o").textContent=f1(b,1);
+    $("lo-big").innerHTML=`<div><b style="color:var(--warn)">${f1(lossv,3)}</b><span>pérdida logarítmica: castigo medio por entrega (la de máxima verosimilitud es 0,467)</span></div><div><b>${f1(ll,1)}</b><span>log-verosimilitud de las 40 entregas = −40 × la pérdida</span></div><div><b>${pc(Math.exp(-lossv),0)}</b><span>probabilidad típica que el modelo da a lo que pasó (media geométrica)</span></div>`;
+    const near=Math.abs(m-D.lg[0])<1.5&&Math.abs(b-D.lg[1])<0.06;let msg;
+    if(near)msg=`<b>Máxima verosimilitud:</b> punto medio ${f1(D.lg[0],0)} km, inclinación ${f1(D.lg[1],2)}. Pérdida ${f1(lossv,3)}, la más baja posible con esta forma de S; un modelo que dijera siempre «50 %» tendría 0,693. Aún hay entregas mal explicadas, como la de ${f1(K[iw],0)} km que llegó ${Yt[iw]?"tarde":"a tiempo"} (castigo ${f1(P[iw],2)}): los kilómetros no lo explican todo.`;
+    else if(b>=5)msg=`Con una S tan brusca, el modelo está casi seguro de todo: por debajo de ${f1(m,0)} km dice «a tiempo» y por encima, «tarde». Las entregas que le llevan la contraria reciben castigos enormes: la de ${f1(K[iw],0)} km se lleva ${f1(P[iw],1)}${P[iw]>cap?" (se sale del dibujo)":""}. Una sola equivocación muy segura pesa más que muchos aciertos. Suaviza la inclinación y mueve el punto medio.`;
+    else msg=`Pérdida ${f1(lossv,3)}. La entrega peor explicada es la de ${f1(K[iw],0)} km, que llegó ${Yt[iw]?"tarde":"a tiempo"} cuando el modelo le daba un ${pc(Math.exp(-P[iw]),0)} a eso: castigo ${f1(P[iw],2)}. ${m<130?"El punto medio está demasiado a la izquierda: muchas entregas cortas a tiempo reciben castigo.":m>200?"El punto medio está demasiado a la derecha: muchas entregas largas que llegaron tarde reciben castigo.":"Ajusta la inclinación y el punto medio, o pulsa el botón."}`;
+    $("lo-msg").innerHTML=msg;}
+  [inM,inB].forEach(i=>i.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 7: previa y MAP ---------- */
+(function(){const svg=$("mp"),inM=$("mp-m"),DS=[[0,5],[1,5],[0,40],[3,40],[16,200]],P0=0.08;let di=0;
+  chips($("mp-d"),DS.map(([k,n])=>`${k} tarde de ${n}`),i=>{di=i;draw();});
+  function draw(){const [k,n]=DS[di],m=+inM.value,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?480:340;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0,x1:0.4,y0:0,y1:1.18,xt:[0,0.1,0.2,0.3,0.4],fx:v=>pc(v,0),yt:[0,0.5,1],fy:v=>f1(v,1),xl:"porcentaje de entregas tarde",FS,padL:FS*2.6,padT:FS*1.2});
+    const a=m*P0,bq=m*(1-P0),phat=k/n,pmap=(k+a)/(n+m);
+    const lf=q=>llbin(k,n,q),pf=q=>(a?a*Math.log(q):0)+(bq?bq*Math.log(1-q):0),cf=q=>lf(q)+pf(q);
+    const curve=(f,mx,col,w,dash)=>{const pts=[];let top=f(Math.min(0.999999,Math.max(1e-9,mx)));for(let i=0;i<=400;i++){const q=Math.max(1e-9,0.4*i/400);pts.push([A.sx(q),A.sy(Math.exp(f(q)-top))]);}el("path",{d:pathOf(pts),fill:"none",stroke:col,"stroke-width":w,"stroke-dasharray":dash||"none"},svg);};
+    if(m>0)curve(pf,P0,"var(--sample)",2.5);
+    curve(lf,phat,"var(--point)",2.5,"7 5");
+    if(m>0)curve(cf,pmap,"var(--mean)",3.5);
+    diamond(svg,A.sx(phat),A.sy(1),nw?11:8,"var(--point)");
+    const yl=A.sy(1)-FS*0.9;
+    if(m>0){diamond(svg,A.sx(pmap),A.sy(1),nw?11:8,"var(--mean)");
+      const far=Math.abs(A.sx(pmap)-A.sx(phat))>FS*6;
+      lab(svg,A.sx(pmap)+(far?0:(pmap>=phat?FS*0.4:-FS*0.4)),far?yl:yl-FS*1.2,"MAP "+pc(pmap,1),FS,A,{style:"fill:var(--mean)","font-weight":700,"text-anchor":far?"middle":pmap>=phat?"start":"end"});}
+    lab(svg,A.sx(phat),yl,"datos "+pc(phat,1),FS,A,{style:"fill:var(--point)","font-weight":700});
+    $("mp-m-o").textContent=m;
+    $("mp-big").innerHTML=`<div><b style="color:var(--point)">${pc(phat,1)}</b><span>máxima verosimilitud: ${k} / ${n}</span></div><div><b style="color:var(--mean)">${pc(pmap,1)}</b><span>con la previa: (${k} + 0,08 × ${m}) / (${n} + ${m})</span></div><div><b>${f1(m,0)}</b><span>entregas imaginarias de la flota (8 % tarde)</span></div>`;
+    let msg;if(m===0)msg=`Sin previa, solo cuentan los datos: ${k} de ${n} da un <b>${pc(phat,1)}</b>.${k===0?" Un cero rotundo con solo "+n+" entregas: así es como sobreajusta la máxima verosimilitud.":k/n>0.15&&n<=5?" Un 20 % por una sola entrega tarde: también es creerse demasiado 5 datos.":""} Sube las entregas imaginarias.`;
+    else if(n<=5)msg=`Con ${m} entregas imaginarias al 8 %, el cliente pasa del ${pc(phat,1)} al <b>${pc(pmap,1)}</b>: 5 entregas reales pesan poco frente a lo que se sabe de la flota. Es lo sensato: no hay motivo para creer que este cliente es un caso extremo.`;
+    else if(n>=200)msg=`Con 200 entregas reales, la previa casi no mueve nada (${pc(phat,1)} → ${pc(pmap,1)}): cuando hay datos de sobra, la máxima verosimilitud y el MAP coinciden. La previa solo importa cuando faltan datos.`;
+    else msg=`Con ${n} entregas reales y ${m} imaginarias: ${pc(phat,1)} → <b>${pc(pmap,1)}</b>. Cuantos más datos reales, menos pesa la previa. En logaritmos, la curva azul es la naranja más la violeta: verosimilitud más un castigo por alejarse del 8 %, que es lo que hace la regularización.`;
+    $("mp-msg").innerHTML=msg;}
+  inM.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 8: subir la colina ---------- */
+(function(){const svg=$("gd"),K=D.km,Yt=D.tarde,n=K.length,STEPS=[0.7,3,5.5],U0=0.6,B0=0.6;let si=1,path=[[U0,B0]];
+  const llm=(u,b)=>{let s=0;for(let i=0;i<n;i++){const z=b*(K[i]/100-u),lp=z>=0?-Math.log1p(Math.exp(-z)):z-Math.log1p(Math.exp(z));s+=Yt[i]?lp:lp-z;}return s/n;};
+  const grad=(u,b)=>{let gu=0,gb=0;for(let i=0;i<n;i++){const d=K[i]/100-u,p=1/(1+Math.exp(-b*d)),r=Yt[i]-p;gu+=-b*r;gb+=r*d;}return [gu/n,gb/n];};
+  const best=llm(D.lg[0]/100,D.lg[1]);
+  seg(["gd-s0","gd-s1","gd-s2"],i=>{si=i;path=[[U0,B0]];draw();});
+  const step=k=>{for(let j=0;j<k;j++){const [u,b]=path[path.length-1];if(!isFinite(u)||!isFinite(b)||Math.abs(u)>50||Math.abs(b)>50)break;const [gu,gb]=grad(u,b);path.push([u+STEPS[si]*gu,b+STEPS[si]*gb]);}draw();};
+  $("gd-1").onclick=()=>step(1);$("gd-10").onclick=()=>step(10);$("gd-re").onclick=()=>{path=[[U0,B0]];draw();};
+  let cacheKey="",cells=[];
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?560:420;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0,x1:320,y0:0,y1:4.5,xt:[0,50,100,150,200,250,300],yt:[0,1,2,3,4],fy:v=>f1(v,0),xl:"punto medio (km)",yl:"inclinación de la S",FS,grid:false,padL:FS*2.4,padT:FS*2});
+    const NX=nw?48:72,NY=nw?36:40;
+    if(cacheKey!==NX+"x"+NY){cells=[];for(let i=0;i<NX;i++)for(let j=0;j<NY;j++){const u=(i+0.5)/NX*3.2,b=(j+0.5)/NY*4.5;cells.push([i,j,llm(u,b)]);}cacheKey=NX+"x"+NY;}
+    const lev=[-0.47,-0.48,-0.5,-0.53,-0.57,-0.62,-0.68,-0.75,-0.85,-1.0,-1.3];const g=el("g",null,svg);
+    cells.forEach(([i,j,v])=>{let q=lev.findIndex(t=>v>=t);if(q<0)q=lev.length;const op=0.06+0.8*Math.pow(1-q/lev.length,1.6);
+      el("rect",{x:A.sx(i/NX*320)-0.3,y:A.sy((j+1)/NY*4.5)-0.3,width:(A.R-A.L)/NX+0.6,height:(A.B-A.T)/NY+0.6,style:`fill:color-mix(in srgb,var(--mean) ${(op*100).toFixed(1)}%,var(--surface))`},g);});
+    const sx=u=>A.sx(Math.max(-0.2,Math.min(3.4,u))*100),sy=b=>A.sy(Math.max(-0.3,Math.min(4.8,b)));
+    const sxs=sx(D.lg[0]/100),sys=sy(D.lg[1]),R=nw?16:12;let st="";for(let k=0;k<10;k++){const r=k%2?R*0.45:R,a=-Math.PI/2+k*Math.PI/5;st+=(k?"L":"M")+(sxs+r*Math.cos(a)).toFixed(1)+" "+(sys+r*Math.sin(a)).toFixed(1);}
+    el("path",{d:st+"Z",fill:"var(--surface)",stroke:"var(--ink)","stroke-width":2},svg);
+    const ok=path.filter(([u,b])=>isFinite(u)&&isFinite(b));
+    el("path",{d:pathOf(ok.map(([u,b])=>[sx(u),sy(b)])),fill:"none",stroke:"var(--point)","stroke-width":2.5},svg);
+    ok.forEach(([u,b],k)=>dot(svg,sx(u),sy(b),k===ok.length-1?(nw?10:7):(nw?5:3.5),"var(--point)"));
+    const [u,b]=path[path.length-1],v=isFinite(u)&&isFinite(b)?llm(u,b):NaN,steps=path.length-1,out=!isFinite(v)||u<-0.2||u>3.4||b<-0.3||b>4.8;
+    $("gd-big").innerHTML=`<div><b>${steps}</b><span>pasos dados</span></div><div><b style="color:var(--mean)">${isFinite(v)?f1(-v,3):"—"}</b><span>pérdida logarítmica donde estás (la cima tiene ${f1(-best,3)})</span></div><div><b>${out?"fuera del mapa":f1(u*100,0)+" km · "+f1(b,2)}</b><span>punto medio e inclinación del modelo actual</span></div>`;
+    let m;const gap=isFinite(v)?best-v:Infinity;
+    if(steps===0)m=`Empezamos con un modelo malo: punto medio ${f1(U0*100,0)} km e inclinación ${f1(B0,1)} (pérdida ${f1(-v,3)}). Pulsa «1 paso» unas cuantas veces y luego «+10 pasos».`;
+    else if(si===2)m=`Con pasos demasiado grandes, cada salto se pasa de la cima y cae en la ladera de enfrente, a veces más abajo de donde estaba. ${out?"Ya se ha salido del mapa: el método ha fallado.":gap<0.01?"Ahora ha caído cerca de la cima por casualidad, pero no se queda: da más pasos y verás que vuelve a saltar.":"La pérdida no baja de forma ordenada: sube y baja según dónde caiga."} Vuelve a «Bueno».`;
+    else if(gap<0.0005)m=`<b>En la cima</b> tras ${steps} pasos: punto medio ${f1(u*100,0)} km e inclinación ${f1(b,2)}, el mismo modelo que da el botón de la idea 6. Nadie ha usado una fórmula: solo «mira hacia dónde sube y da un paso». Así se entrenan la regresión logística y las redes neuronales.`;
+    else m=`Tras ${steps} pasos, la pérdida ha bajado a ${f1(-v,3)} (la cima tiene ${f1(-best,3)}). ${si===0?"Con pasos pequeños el camino es seguro pero lento: harían falta muchos más.":"Cada paso va en la dirección en que más sube el terreno, por eso el camino cruza las bandas de color en perpendicular."}`;
+    $("gd-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+})();
+</script>
+</body>
+</html>
