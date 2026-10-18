@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sampling and the central limit theorem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content;max-width:100%}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec p b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.rowb{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+@media (max-width:620px){.seg{border-radius:14px}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#en" target="_self">← Main menu</a> · The math under ML · topic 11 · explained with drawings · <a href="sampling-and-the-central-limit-theorem-technical-en.html" target="_self">see the technical version</a> · <a href="math-under-ml-en.html" target="_self">all topics</a> · <a href="muestreo-y-teorema-central-del-limite-es.html" target="_self">en español</a></p>
+  <h1>Sampling and the central limit theorem</h1>
+  <p class="lede">You almost never look at all the data: you look at a part and compute a mean. That mean changes every time the part changes. Here you'll see how much it moves, why it moves less the more data you have, and why, wherever they come from, means end up drawing a bell.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="situ col">
+    <p class="eyebrow">The setup</p>
+    <p>A trucking company wants to know how long its trucks' <strong>stops at customer docks last on average</strong>. Each minute stopped costs about <strong>$0.70</strong> (the driver's wage and a truck that isn't working), and the company wants to bill long waits to whoever causes them.</p>
+    <p>In a year there are <strong>12,000 stops</strong>. Checking one by hand (looking at the delivery note, separating the wait from the unloading) costs <strong>$4</strong>: checking them all would be $48,000. So only a part is checked, chosen at random: a <strong>sample</strong>. The 12,000 are the <strong>population</strong>.</p>
+    <p>In the toy we cheat: we know all 12,000 stops, so we know the true answer (<strong>28.6 minutes</strong>) and can see how close each sample gets. In real life you only have the sample.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="Top, the 12,000 stops of the year and one sample; bottom, the means of all the samples drawn"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, the gray bars are the 12,000 stops: how many last between 0 and 5 minutes, between 5 and 10… The <b style="color:var(--mean)">blue</b> line is the true mean, 28.6 minutes. The <b style="color:var(--point)">orange</b> dots above are the stops of the latest sample, and the orange line is their mean. At the bottom, <b style="color:var(--point)">the means of all the samples</b> you draw pile up. The few stops longer than 200 minutes (the longest lasts 442) are drawn against the right edge.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>How many stops per sample?</h3>
+      <p>This is the <b>sample size</b>, n. Changing it clears the piled-up means.</p>
+      <div class="chips" id="t-n" role="group" aria-label="Sample size"></div>
+    </div>
+    <div class="dec">
+      <h3>Draw samples</h3>
+      <p>Each sample is n stops chosen at random from the 12,000. Its mean drops to the bottom as one more chip.</p>
+      <div class="btns"><button type="button" class="primary" id="t-1">Draw 1 sample</button><button type="button" id="t-100">Draw 100</button><button type="button" id="t-1000">Draw 1,000</button><button type="button" id="t-0">Start over</button></div>
+    </div>
+    <div class="dec">
+      <h3>The bell</h3>
+      <p>Draws on top the <b>bell</b> predicted by the central limit theorem (idea 4). With large samples, the means follow it.</p>
+      <div class="rowb"><button type="button" id="t-b" aria-pressed="false">Draw the bell</button></div>
+    </div>
+  </div>
+  <div class="big3" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Try this, in order:</strong></p>
+    <ol class="try">
+      <li>With 4 stops per sample, press “Draw 1 sample” several times: the orange dots change and their mean jumps from one side to the other.</li>
+      <li>Press “Draw 1,000”: the means pile up around 28.6, much closer together than the individual stops.</li>
+      <li>Switch to 1 stop per sample and draw 1,000: the “mean” of a single stop is the stop itself, and the bottom shows the same skewed shape as the top.</li>
+      <li>Switch to 64 and draw 1,000: the means form a narrow bell, about 4 minutes to each side. Turn on the bell.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">What you just saw</p>
+    <h2>One sample gives one mean; another sample, another</h2>
+    <p>The mean of a sample is not the mean of the population: it is an <strong>estimate</strong> that is a bit off, up or down, and each sample is off differently. But it isn't off in just any way:</p>
+    <ul>
+      <li><strong>It's right on average.</strong> The means of many samples spread around the true mean, without leaning more to one side than the other (if the sample is chosen at random).</li>
+      <li><strong>It wobbles less the bigger the sample</strong>, but slowly: with 4 times more stops, it wobbles half as much. That “how much it wobbles” has a name: the <strong>standard error</strong> (ideas 1 and 2).</li>
+      <li><strong>With large samples, the means draw a bell</strong> even if the individual data are skewed. This is the <strong>central limit theorem</strong> (idea 4), and it's the reason the bell shows up everywhere.</li>
+    </ul>
+    <p>These three facts let you say how much to trust a mean without knowing the true answer. But they only work if the sample is chosen well: if the data depend on each other or if the sample leaves out part of the population, they fail (ideas 5 and 6).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 6</p>
+    <h2>The population, the sample and the mean that wobbles</h2>
+    <p>The <strong>population</strong> is everything you want to know something about: all the stops of the year, all the trucks in the fleet, all the trips that will be made next month. A number that summarizes it (its mean, for example) is called a <strong>parameter</strong>, and it's almost never known.</p>
+    <p>The <strong>sample</strong> is the part you actually look at: the stops you check, the trucks you audit, the week of data that fits on your laptop. What you compute with it (its mean) is called a <strong>statistic</strong>, and it changes from one sample to another. Here 20 different samples from the same population are drawn, one per row; the figures below are computed with 1,000.</p>
+  </div>
+  <figure class="fig"><svg id="rows" role="img" aria-label="Twenty samples of stops, one per row, with the mean of each"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each row is a sample: the <b style="color:var(--sample)">purple</b> dots are its stops (in minutes) and the <b style="color:var(--point)">orange</b> mark is its mean. The <b style="color:var(--mean)">blue</b> line is the mean of the 12,000 stops, 28.6 minutes. Stops longer than 120 minutes are drawn against the right edge.</p>
+  <div class="rowb col"><div class="seg" role="group" aria-label="Stops per sample"><button type="button" id="r-0" aria-pressed="true">4 stops</button><button type="button" id="r-1" aria-pressed="false">16 stops</button><button type="button" id="r-2" aria-pressed="false">64 stops</button></div><button type="button" id="r-re">↻ Another 20 samples</button></div>
+  <div class="big3 col" id="r-big"></div>
+  <p class="qcard col" id="r-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 6</p>
+    <h2>The standard error and the square-root law</h2>
+    <p>How far does the mean of a sample usually land from the true mean? There's a simple calculation: take the <strong>standard deviation</strong> of the population (how far the individual stops land from their mean, <a href="mean-variance-and-standard-deviation-en.html" target="_self">topic 7</a>), which here is 30.3 minutes, and divide it by the <strong>square root</strong> of n. The result is the <strong>standard error</strong> of the mean.</p>
+    <p>With 16 stops: 30.3 / 4 = 7.6 minutes. With 64: 30.3 / 8 = 3.8. The square root has a consequence that costs money: <strong>to cut the error in half you need 4 times more data</strong>, and to cut it by 10, 100 times more.</p>
+  </div>
+  <figure class="fig"><svg id="se" role="img" aria-label="Standard error of the mean by sample size"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The <b style="color:var(--mean)">blue</b> curve is the standard error for each sample size. The <b style="color:var(--point)">orange</b> dot is the size you pick with the slider; the <b style="color:var(--sample)">purple</b> one, that of a sample 4 times larger. Notice how fast the curve drops at first and how little it drops afterwards.</p>
+  <div class="controls col">
+    <div class="slider"><label for="se-n">Stops checked <output id="se-n-o"></output></label><input type="range" id="se-n" min="0" max="8" step="1" value="2"><div class="ends"><span>4</span><span>250</span></div></div>
+  </div>
+  <div class="big3 col" id="se-big"></div>
+  <p class="qcard col" id="se-msg"></p>
+  <div class="col stack">
+    <p>In practice you don't know the population's standard deviation, so you use the sample's (with its n − 1, <a href="mean-variance-and-standard-deviation-en.html" target="_self">topic 7</a>). And if the sample is a large part of the population (checking 6,000 of the 12,000), the error is somewhat smaller than the calculation says: with the whole population, the error would be 0. With 16 out of 12,000, the difference is unnoticeable.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 6</p>
+    <h2>The law of large numbers</h2>
+    <p>Imagine you check stops one by one and, after each one, recompute the mean of all you've checked so far. At first the mean lurches around: a single 3-hour stop sends it flying. But each new stop weighs less than the one before (it's one in 10, then one in 100…), and the mean settles down <strong>close to the true mean</strong>. That's the <strong>law of large numbers</strong>.</p>
+  </div>
+  <figure class="fig"><svg id="lln" role="img" aria-label="Running mean of the stops as they are checked, with a funnel that narrows"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Horizontally, how many stops you've checked so far (the scale is stretched at the start: 1 to 10 takes as much room as 100 to 1,000). The <b style="color:var(--point)">orange</b> line is the mean of those checked so far. The <b style="color:var(--mean)">blue</b> line is the true mean and the <b style="color:var(--mean)">blue funnel</b> marks two standard errors on each side: the mean almost always stays inside.</p>
+  <div class="rowb col"><button type="button" id="l-re">↻ Another sequence of stops</button><button type="button" id="l-5" aria-pressed="false">Show 5 sequences at once</button></div>
+  <div class="big3 col" id="l-big"></div>
+  <p class="qcard col" id="l-msg"></p>
+  <div class="col stack">
+    <p>The law says the mean <strong>gets there</strong>; the standard error says <strong>how fast</strong>. And one thing the law does not say: there is no “making up for it”. If the first stops came out long, the next ones don't come out shorter to balance things; the long ones simply end up diluted among many others.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 6</p>
+    <h2>The central limit theorem: from any shape to a bell</h2>
+    <p>Stops are not bell-shaped: most are short (half last under 19 minutes) and a few are extremely long. It's a <strong>skewed</strong> shape, with a <strong>long tail</strong> to the right (<a href="distributions-en.html" target="_self">topic 8</a>). A day's hard-braking alerts are a count, 0, 1, 2…, that follows a Poisson. The day of the month is flat. And even so, the <strong>means</strong> of samples from any of them end up bell-shaped (a normal), centered on the true mean and as wide as the standard error.</p>
+    <p>Why? A mean adds up many small, independent things: some pull up and others pull down, and it's rare for all of them to pull the same way. The quirks of each data point cancel out, leaving a shape that no longer depends on the starting one.</p>
+  </div>
+  <div class="decs">
+    <div class="dec"><h3>Which data?</h3><p>Four fleet columns with very different shapes.</p><div class="chips" id="c-p" role="group" aria-label="Starting data"></div></div>
+    <div class="dec"><h3>How many per sample?</h3><p>With 1, the mean is the single data point. Keep going up.</p><div class="chips" id="c-n" role="group" aria-label="Sample size"></div></div>
+  </div>
+  <figure class="fig"><svg id="tcl" role="img" aria-label="Shape of the starting data and of the means of 4,000 samples, with the bell"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The small chart is the shape of the individual data. The big one, that of the <b style="color:var(--point)">means of 4,000 samples</b> of n data points. The <b style="color:var(--mean)">blue</b> curve is the bell predicted by the theorem. The more the bars look like the curve, the better it works.</p>
+  <div class="big3 col" id="c-big"></div>
+  <p class="qcard col" id="c-msg"></p>
+  <div class="col stack">
+    <p>How much data do you need? It depends on how skewed it is. With the day of the month, which is already symmetric, 5 are enough. With the stops, with their long tail, 30 still leave the means somewhat skewed and you need 100 or more for a good bell. The “30 is enough” rule is just that, a rule of thumb, and it fails precisely with long-tailed data.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 6</p>
+    <h2>When it fails or takes a while</h2>
+    <p>The theorem has fine print: the data must be <strong>independent</strong> (knowing one tells you nothing about the next, <a href="conditional-probability-and-independence-en.html" target="_self">topic 9</a>), drawn <strong>from the population you care about</strong> and without <strong>too</strong> long tails. Here are three fleet cases that each break one of the three conditions, all with samples of 30.</p>
+  </div>
+  <div class="chips col" id="f-q" role="group" aria-label="Case"></div>
+  <figure class="fig"><svg id="fail" role="img" aria-label="Means of 3,000 samples of 30 against the bell the calculation promises"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The bars are the <b style="color:var(--point)">means of 3,000 samples</b> of 30. The <b style="color:var(--mean)">blue</b> line is the true mean and the dashed blue curve is the bell the standard-error calculation “promises” if all went well. Means that fall off the chart pile up at the edge.</p>
+  <div class="big3 col" id="f-big"></div>
+  <p class="qcard col" id="f-msg"></p>
+  <div class="col stack">
+    <p>The most dangerous thing about the third case: <strong>more data doesn't fix it</strong>. With a million badly recorded stops, the mean comes out spot on… at the wrong value. The standard error measures how much the mean wobbles by chance, not whether the sample is skewed. The same happens with “only the trucks that report properly”, “only the customers who answer the survey” or “only the drivers who accepted the pilot”.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 6 of 6</p>
+    <h2>How to choose the sample</h2>
+    <p>There are three route types with very different stops: on the <strong>highway</strong> (fast logistics centers) they last 14 minutes on average, in the <strong>city</strong> 30 and at the <strong>port</strong> 68. With 60 stops to check, you can choose them in several ways:</p>
+    <ul>
+      <li><strong>Purely at random</strong> (simple random sampling): every stop has the same probability. By bad luck, you may get few from the port, or too many.</li>
+      <li><strong>By route type</strong> (stratified): the 60 are split ahead of time among the three types and chosen at random within each. There's no more bad luck in the split. You can split according to each group's size, or put more where stops vary more (the port).</li>
+      <li><strong>By truck</strong> (cluster sampling): 3 trucks are chosen and 20 stops of each are examined. It's convenient (three drivers, three sets of delivery notes), but the stops of one truck are very similar to each other.</li>
+    </ul>
+  </div>
+  <div class="chips col" id="d-q" role="group" aria-label="Way of choosing"></div>
+  <figure class="fig"><svg id="des" role="img" aria-label="The 60 trucks by route type and the estimates of the mean with each way of choosing"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, the fleet's 60 trucks grouped by route type; the number under each group says how many of the sample's 60 stops fall there, and the <b style="color:var(--point)">orange</b> trucks are the ones that contribute some. At the bottom, the <b style="color:var(--point)">estimates of the mean in 2,000 samples</b> made that way; the gray outline is that of “purely at random”, for comparison. “Another sample” changes the sample at the top.</p>
+  <div class="rowb col"><button type="button" id="d-re">↻ Another sample</button></div>
+  <div class="big3 col" id="d-big"></div>
+  <p class="qcard col" id="d-msg"></p>
+  <div class="col stack">
+    <p>With the stratified sample, the mean is not the plain mean of the 60: each group weighs according to its size in the population (half the stops are highway, a third city, a sixth port). If you give more stops to the port because it varies more, you have to reweight them; otherwise the mean would come out inflated.</p>
+    <p>All this is the basis for the next step: with the sample mean and its standard error you build a <strong>confidence interval</strong>: two values between which the true mean reasonably lies. It's explained in <a href="confidence-intervals-and-the-bootstrap-en.html" target="_self">topic 12</a>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The full recipe</h2>
+    <ol class="steps">
+      <li><div><strong>Define the population</strong>: all the stops of the year, those of this customer, those of next month? The answer is only valid for that population.</div></li>
+      <li><div><strong>Choose the sample at random</strong>, for real: no “the ones I had at hand” or “the trucks that report properly”.</div></li>
+      <li><div><strong>Compute the mean and its standard error</strong>: the sample's standard deviation divided by the square root of n.</div></li>
+      <li><div><strong>Remember the square-root law</strong>: half the error costs 4 times more data. Decide how much error you can afford before paying.</div></li>
+      <li><div><strong>Trust the bell with care</strong>: with symmetric data it arrives early; with long tails, it takes a while (or never arrives).</div></li>
+      <li><div><strong>Watch out for dependence</strong>: consecutive data from the same truck, the same day or the same driver are worth less than independent data.</div></li>
+      <li><div><strong>Stratify if there are distinct groups</strong> and weight each group by its real size.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where it shows up in fleet telemetry</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="8" y="6" width="24" height="28" rx="2"/><path d="M13 14h14M13 20h14M13 26h8"/></svg><h3>Audits that cost money</h3><p>Checking 16 stops costs $64 and leaves a standard error of 7.6 minutes, which in the annual cost of the stops (about $240,000) is ±$63,600. Bringing it down to ±$16,000 takes 16 times more stops: 256, about $1,000.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 32h28"/><path d="M8 32c4-18 8-24 12-24s8 6 12 24"/></svg><h3>Dashboards with daily means</h3><p>The mean fuel use of a day with 12 trips wobbles much more than that of a month with 400. Before panicking over a bad day, look at its standard error: with few trips, jumps of 10% are pure chance.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="12" cy="20" r="5"/><circle cx="28" cy="12" r="5"/><circle cx="28" cy="28" r="5"/></svg><h3>Pilots with few trucks</h3><p>Testing a new device on 3 trucks and measuring 600 trips is not 600 independent data points: the trips of one truck look alike. The effective size is closer to 3 than to 600.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6L34 32H6Z"/><path d="M20 16v8M20 28v1"/></svg><h3>Data that gets lost</h3><p>Covered docks cut the GPS signal and long stops get recorded worse. A mean over millions of records can be biased: more data doesn't correct a sample that leaves out a part.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Connections</p>
+    <h2>With the models of the ML series and the other topics</h2>
+    <p>The standard error uses the standard deviation and the n − 1 of <a href="mean-variance-and-standard-deviation-en.html" target="_self">topic 7</a>; the starting shapes (the long tail of the stops, the Poisson of the alerts) are those of <a href="distributions-en.html" target="_self">topic 8</a>; the condition that the data be independent is that of <a href="conditional-probability-and-independence-en.html" target="_self">topic 9</a>, and when they aren't, the covariance of <a href="covariance-and-correlation-en.html" target="_self">topic 10</a> says how much the error grows. The next step, confidence intervals, is <a href="confidence-intervals-and-the-bootstrap-en.html" target="_self">topic 12</a>.</p>
+    <p>In the ML series, the <a href="random-forest-and-boosting-en.html" target="_self">bagging of ensembles</a> averages many models trained on different samples so that they “wobble” less, just like a mean; the <a href="kalman-filter-en.html" target="_self">Kalman filter</a> averages noisy GPS measurements and its uncertainty drops with each one; and in <a href="gaussian-processes-en.html" target="_self">Gaussian processes</a>, several measurements at the same point reduce the noise like 1/√n. In “Preparing the data”, <a href="split-before-you-look-en.html" target="_self">splitting before looking</a> is a sample set aside (and it must be split by truck, not by trip, so there are no dependent data on both sides), and with <a href="imbalanced-classes-en.html" target="_self">imbalanced classes</a> you stratify by class so the rare class isn't left out.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>What helps and where it misleads</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>What helps</h3><ul class="pc">
+      <li>With a small, well-chosen sample you learn a lot about a huge population, and also how much to trust it.</li>
+      <li>The standard error tells you in advance how much data you need for a given error, and how much it will cost.</li>
+      <li>The bell of the central limit theorem works for almost any mean, wherever it comes from.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Where it misleads</h3><ul class="pc">
+      <li>With very long tails, the bell takes a long time to arrive or never does.</li>
+      <li>Dependent data (same truck, same day) make the real error much larger than the calculated one.</li>
+      <li>A biased sample isn't fixed with more data: the standard error doesn't see it.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Population</dt><dd>Everything you want to know something about: the 12,000 stops of the year.</dd>
+      <dt>Sample</dt><dd>The part you actually look at. Its size is called n.</dd>
+      <dt>Parameter</dt><dd>A number of the population (its mean, 28.6 minutes). It's almost never known.</dd>
+      <dt>Statistic</dt><dd>A number computed from the sample (its mean). It changes from one sample to another.</dd>
+      <dt>Sampling distribution</dt><dd>The shape of the means of many samples: what piles up at the bottom of the toy.</dd>
+      <dt>Standard error</dt><dd>How much the mean of a sample wobbles: the standard deviation divided by the square root of n.</dd>
+      <dt>Law of large numbers</dt><dd>With lots of data, the sample mean gets close to the population mean.</dd>
+      <dt>Central limit theorem</dt><dd>With lots of independent data, the mean is bell-shaped, whatever the shape of the data.</dd>
+      <dt>Stratify</dt><dd>Split the sample among known groups (route types) and choose at random within each.</dd>
+      <dt>Cluster</dt><dd>A group that's chosen whole or nearly whole (a truck with its stops). Convenient, but its data look alike.</dd>
+      <dt>Selection bias</dt><dd>When the way the sample is chosen leaves out part of the population. More data doesn't fix it.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the math behind it</summary>
+    <p style="padding-top:10px">You don't need them to understand the idea:</p>
+    <div class="formula">population:      N = 12,000 stops,  mean μ = 28.6 min,  std. dev. σ = 30.3 min
+sample of n:     mean x̄ = sum / n
+on average:      mean of the x̄ = μ                 (right on average)
+how it wobbles:  standard error = σ / √n
+                 n = 16: 30.3 / 4 = 7.6 min    n = 64: 30.3 / 8 = 3.8 min
+square-root law: 4 times more data → half the error
+finite population: error × √((N − n) / (N − 1))     (16 of 12,000: × 0.999)
+CLT:             x̄ ≈ bell with center μ and width σ / √n
+dependence:      consecutive data that look alike (ρ) count as fewer:
+                 effective n ≈ n · (1 − ρ) / (1 + ρ)  →  30 with ρ = 0.6: about 8
+stratified:      mean = 0.5 · highway mean + 0.33 · city mean + 0.17 · port mean
+                 60 stops: error 3.9 (random) → 3.0 (proportional) → 2.5 (more at the port)</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in a minute and a half</h2>
+    <p>An animated recap: the skewed population of stops, the samples that give different means, the standard error that halves with 4 times more data, the means that turn into a bell and the cases where all this fails. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xACZAAEAAgMBAQEAAAAAAAAAAAAABQYHBAEDCAIBAQEBAQAAAAAAAAAAAAAAAAABAgMQAAICAQMCBAQBBwkFBQUJAQABAwIEEQUSBiFBMRMHIlFhFDKzUnF1QhUjdIJiCIE1tDY3chYzobGRdrI0c8RFw6MkU7XBJReDZIZjVREBAQEBAAIDAQAAAAAAAAAAABEBEgIhYUHRMf/AABEIAhwDwAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AMIgA6OYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA6Cq4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA4DoA/9k=" aria-label="Animation: sampling and the central limit theorem">
+      <source src="sampling-and-the-central-limit-theorem-with-audio-en.mp4" type="video/mp4">
+      Your browser can't play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"dur":[26,32,17,13,10,14,13,17,7,17,14,18,14,11,14,19,15,13,17,10,6,9,8,4,4,5,4,3,6,11,11,8,11,16,12,16,22,16,10,13,14,21,10,8,6,4,6,10,8,17,22,23,21,26,11,15,18,7,10,10,15,11,12,14,9,13,12,15,11,18,20,15,18,27,43,13,19,19,15,9,18,9,13,22,9,9,6,8,19,39,11,9,14,26,23,13,14,13,12,9,12,14,12,11,7,7,15,12,7,15,17,38,25,15,7,16,44,18,12,15,10,9,9,11,18,16,21,14,15,5,4,9,8,12,15,25,27,30,20,12,9,8,6,6,8,10,9,4,6,9,17,19,12,9,24,25,42,66,23,21,21,21,22,19,17,8,9,7,9,8,13,18,18,17,16,12,11,9,12,12,16,8,14,9,8,8,8,10,9,6,6,14,13,8,9,5,16,7,11,15,10,14,14,13,16,13,13,10,12,7,11,8,5,7,16,19,11,13,9,8,9,3,5,4,4,3,2,2,6,14,11,16,11,4,6,8,7,8,11,7,4,5,5,6,10,20,12,14,17,18,21,12,14,28,25,12,14,20,16,10,18,8,10,9,5,11,11,6,9,7,3,4,6,9,9,9,11,9,15,12,12,13,7,5,13,12,9,10,8,9,7,8,4,10,7,4,5,5,7,4,7,36,11,12,9,9,4,3,6,7,15,9,9,32,13,7,8,8,12,11,7,8,26,29,5,6,5,8,7,18,20,21,16,12,12,18,17,11,17,14,11,7,6,5,2,5,8,7,12,13,13,4,5,7,16,27,32,11,4,7,7,12,10,10,5,7,6,8,10,9,10,9,12,13,9,7,16,12,16,15,9,6,7,9,11,6,5,6,14,4,7,6,8,7,8,17,15,14,14,8,12,9,10,11,16,15,11,23,29,38,33,22,15,13,20,18,8,10,6,9,6,5,8,9,5,11,31,12,28,15,12,12,7,16,18,12,11,6,7,14,7,7,10,18,29,18,12,15,12,11,20,36,27,19,22,8,10,7,26,28,22,17,5,10,24,14,19,23,9,17,28,23,18,23,10,11,20,10,17,13,5,7,6,10,7,14,10,13,10,10,19,19,14,8,16,21,15,16,10,7,6,10,13,10,15,21,19,26,18,15,18,16,21,10,22,13,12,7,12,22,29,31,11,9,9,7,15,16,15,18,11,8,7,11,14,18,26,11,9,12,7,7,15,23,30,22,17,25,17,18,29,18,12,13,17,19,18,21,9,7,10,8,5,5,5,7,6,9,22,17,28,24,12,11,8,14,8,18,21,7,13,27,14,22,8,11,6,10,5,2,6,22,14,20,18,14,18,34,14,18,6,17,36,16,31,23,17,30,24,21,34,41,39,14,7,14,9,11,7,9,6,16,10,10,10,19,9,10,10,14,17,12,14,12,15,14,10,11,14,37,20,19,31,9,5,4,6,25,23,31,20,6,3,8,11,7,14,7,15,27,14,8,15,9,15,8,14,14,11,8,11,5,7,7,12,7,20,15,8,19,33,21,12,12,9,9,21,21,18,19,16,21,26,17,16,42,32,21,42,27,12,17,10,9,12,12,9,8,8,16,11,9,26,15,28,37,23,10,13,18,24,19,28,38,16,27,22,14,12,28,32,10,12,11,11,10,6,12,8,8,8,7,12,15,11,8,8,15,15,16,13,11,13,6,16,11,9,19,18,16,11,6,9,18,11,21,11,8,12,13,17,11,8,4,4,4,3,7,7,4,18,11,7,15,24,11,6,5,13,11,8,10,19,9,9,6,20,38,38,23,4,8,6,5,5,7,12,17,18,11,16,15,24,13,4,5,20,22,17,23,24,24,15,15,16,12,8,10,18,22,23,23,60,38,40,63,35,28,33,50,35,28,22,11,20,16,7,9,5,5,8,6,14,7,11,15,28,32,26,21,18,27,16,19,16,17,14,36,19,19,19,22,23,23,29,11,12,8,11,7,6,8,19,22,21,34,16,6,7,8,18,42,15,44,56,47,34,71,39,21,19,9,14,13,16,18,10,21,12,19,8,12,9,11,9,4,4,7,12,7,4,4,6,7,6,13,21,25,13,14,13,7,14,15,12,24,27,31,38,36,14,12,20,13,13,16,29,39,39,24,29,28,20,32,29,16,26,18,22,9,11,8,7,4,17,15,16,25,19,21,10,13,11,15,16,8,5,5,10,14,17,6,3,4,6,6,10,11,7,6,9,11,12,35,22,19,11,10,15,19,14,13,6,2,10,16,13,6,4,12,3,5,10,11,16,13,36,14,7,10,20,16,22,13,7,16,29,39,20,10,6,7,11,14,7,9,10,11,11,10,14,14,14,10,12,11,5,8,8,14,12,11,13,12,10,5,15,7,7,12,14,16,20,28,22,62,20,18,13,10,12,22,12,9,14,16,33,34,25,16,15,13,7,8,9,9,8,20,22,25,14,8,8,11,9,9,16,16,9,8,7,9,6,7,12,12,8,7,9,12,17,14,7,16,16,17,17,9,9,11,18,15,3,5,8,17,20,47,50,51,42,14,19,20,13,16,17,12,11,10,12,10,13,5,6,4,5,9,10,10,11,22,11,16,7,7,9,7,9,14,8,9,8,4,6,5,13,8,20,13,29,25,23,25,27,36,49,24,10,3,5,9,12,12,10,8,8,11,5,10,6,7,6,7,5,4,6,5,20,13,7,5,2,4,6,4,6,4,6,9,11,13,9,14,10,12,15,11,6,10,6,5,4,8,8,3,7,21,34,16,14,15,19,15,8,12,15,7,7,9,9,12,16,17,13,6,10,19,35,21,15,24,32,23,23,12,14,9,9,9,7,3,4,6,7,7,10,13,17,10,10,9,6,4,5,5,16,13,11,9,21,10,9,7,8,8,15,7,8,18,11,10,7,2,4,10,8,4,6,8,13,18,13,14,5,11,12,18,22,14,12,7,3,5,7,5,9,10,12,8,4,8,12,10,8,8,8,7,3,7,4,5,6,8,4,10,14,17,24,12,3,5,12,19,12,11,12,5,5,5,13,9,19,15,6,20,10,13,25,14,7,13,12,7,5,6,11,9,13,24,30,37,38,11,18,17,13,7,4,4,5,4,4,5,8,8,8,16,12,14,8,10,11,11,9,6,6,6,12,17,13,9,11,8,4,9,11,6,3,4,3,4,7,15,10,18,23,13,5,10,12,30,35,28,38,13,12,10,20,19,4,9,6,10,8,9,12,12,7,14,14,12,14,9,21,17,15,14,8,5,7,9,16,16,8,10,14,18,16,7,13,8,11,5,9,6,12,23,27,10,6,5,9,10,10,11,13,15,26,17,14,5,4,4,3,5,10,8,7,6,8,6,9,10,11,14,12,11,22,15,17,14,9,8,6,7,6,6,12,10,16,14,17,10,10,31,27,27,19,20,9,6,9,12,9,8,7,7,5,3,5,3,3,3,3,5,5,6,5,4,7,9,7,9,10,10,19,12,12,13,10,6,9,10,10,9,9,6,8,4,5,3,4,7,7,6,9,8,7,6,14,15,15,7,10,5,8,5,14,5,11,14,5,6,12,17,6,6,4,3,4,11,11,9,7,10,13,7,15,7,14,26,15,15,23,22,26,29,21,21,24,17,28,8,6,14,15,10,12,18,11,15,12,11,10,17,8,8,12,6,4,7,8,9,10,7,28,12,9,5,6,14,13,15,10,23,18,8,13,10,13,13,13,13,8,4,10,9,11,9,4,3,9,7,7,4,5,6,6,7,6,6,7,10,9,21,17,15,10,15,8,4,4,8,5,12,11,6,6,17,9,5,9,17,21,14,13,14,20,40,22,29,16,17,9,7,10,7,12,9,10,9,8,10,16,52,16,15,12,8,10,7,8,15,5,8,10,7,10,12,10,17,8,11,10,6,7,7,12,6,7,6,15,8,14,6,8,9,11,8,4,3,8,10,7,12,8,6,4,10,24,11,12,17,35,7,9,12,6,9,10,14,9,12,8,12,12,9,5,14,20,22,12,10,20,21,11,11,11,10,6,13,15,12,6,5,7,12,9,16,8,3,3,3,4,7,16,14,8,25,21,14,12,6,11,13,24,29,29,35,20,13,12,7,8,8,12,12,5,7,16,6,6,8,5,5,8,5,8,11,6,8,15,13,15,18,13,20,19,10,13,18,22,13,15,25,20,28,35,22,23,15,22,17,11,11,11,14,16,8,7,10,13,13,41,41,24,25,34,26,9,10,11,30,9,20,15,21,15,15,23,18,25,18,13,11,9,10,20,10,5,7,19,25,34,39,18,16,5,5,10,5,3,3,6,13,40,47,14,5,8,15,7,7,7,9,10,14,21,18,22,43,17,10,14,30,23,30,19,24,14,19,19,20,31,35,18,24,9,16,51,38,31,23,27,17,21,16,12,14,13,6,22,19,8,16,15,16,21,12,3,6,9,17,11,11,14,12,12,14,9,22,12,13,12,9,14,22,34,31,18,24,10,12,16,19,10,6,17,13,4,6,12,11,17,15,15,19,12,12,9,7,10,7,8,6,7,6,11,11,10,20,4,3,1,3,6,9,10,6,16,14,10,6,8,7,6,8,9,6,12,7,5,7,8,8,7,8,6,3,7,5,5,9,9,29,9,6,7,14,10,5,10,6,6,10,7,6,9,8,9,6,6,4,3,9,11,15,8,8,7,4,7,5,6,3,8,11,12,7,6,11,9,10,10,6,13,4,6,7,4,6,8,8,6,8,13,12,22,22,21,26,12,8,10,12,20,23,17,14,10,8,7,11,8,7,8,6,6,3,5,5,7,9,4,15,13,12,5,8,10,8,10,17,11,7,14,14,11,28,20,14,13,10,11,11,8,8,9,11,14,17,15,16,11,9,15,5,8,33,9,17,6,9,18,26,11,6,4,7,7,7,9,11,12,11,5,12,3,8,6,7,6,6,7,7,4,8,7,13,8,12,17,10,10,20,10,8,10,6,3,2,5,10,14,16,8,13,21,12,19,13,14,16,7,17,10,11,9,12,15,14,25,21,14,4,5,7,6,5,10,17,34,37,17,17,8,13,15,11,11,10,8,17,59,45,43,28,17,39,21,20,16,18,15,18,9,10,19,10,8,18,18,25,7,9,6,4,8,16,7,6,6,7,5,19,21,14,11,31,58,25,22,30,12,9,19,12,10,6,6,10,8,5,5,16,16,11,12,15,14,6,9,9,15,7,14,11,5,13,10,13,11,19,25,30,29,10,5,8,6,10,11,6,5,4,4,6,10,20,10,8,19,23,20,6,5,7,7,20,17,17,9,6,6,6,7,10,12,18,8,10,12,24,16,16,10,13,15,10,9,10,13,8,13,11,26,36,19,12,35,30,26,16,13,18,20,11,20,18,10,17,13,18,12,14,6,9,5,8,6,9,9,14,6,13,19,7,5,4,5,6,2,4,4,3,6,5,10,10,7,12,13,8,3,3,6,5,13,11,9,10,5,5,4,2,1,3,4,4,3,3,6,6,5,11,8,6,11,4,6,4,3,3,4,5,6,7,13,20,17,16,9,5,7,7,10,4,15,6,6,10,4,4,2,2,1,2,4,4,9,14,10,8,6,5,10,9,7,6,8,6,7,7,12,15,6,6,8,6,9,9,10,8,8,9,4,3,3,8,8,9,8,6,4,7,6,12,10,9,7,7,7,13,27,9,9,11,6,5,4,2,4,5,5,6,7,18,13,14,8,9,7,6,4,3,5,8,9,6,7,2,5,6,7,11,7,11,7,9,6,7,13,7,5,5,6,22,10,3,3,2,3,4,3,3,2,3,3,7,11,6,5,6,9,4,4,12,9,9,8,4,8,8,8,10,12,4,6,5,9,7,14,14,12,11,12,13,5,5,6,12,23,12,30,23,23,15,11,22,17,15,24,41,14,13,13,30,65,34,28,31,37,22,27,15,5,4,7,13,5,3,6,2,5,13,4,9,10,21,21,16,16,23,21,18,9,13,14,32,23,19,13,19,16,11,25,45,24,12,22,13,48,28,33,14,14,23,24,15,45,40,24,15,13,25,15,15,10,21,17,24,25,16,21,28,13,19,83,37,34,14,17,13,19,17,10,19,16,10,12,9,13,13,12,17,9,17,7,19,19,15,11,16,14,14,22,16,14,17,26,20,19,18,23,38,17,15,15,19,34,24,22,31,13,10,10,11,14,11,28,16,14,23,28,21,22,27,21,25,13,14,7,6,5,14,12,15,10,10,11,8,15,7,13,44,20,18,8,10,5,11,10,5,4,3,5,11,10,7,6,9,4,8,12,4,11,6,7,16,3,3,3,4,4,4,5,5,4,7,7,5,14,6,10,7,9,11,14,22,10,34,24,11,5,19,29,18,19,25,17,11,10,14,11,6,10,4,4,10,10,11,10,15,12,4,6,2,1,6,11,8,8,9,14,8,6,5,7,8,7,11,6,7,6,4,10,8,5,7,5,8,12,17,8,8,19,12,19,28,9,16,17,20,30,23,16,17,11,12,4,13,9,11,12,11,10,10,5,5,10,6,4,15,21,29,18,15,17,17,12,6,5,3,9,8,7,9,9,11,8,4,12,8,6,5,5,6,10,6,8,6,12,6,7,10,5,7,8,6,6,11,11,8,7,9,16,17,18,26,8,4,2,5,2,4,7,4,4,5,8,4,6,9,9,10,16,13,11,8,11,9,11,10,15,8,9,10,11,16,14,17,30,26,10,5,8,7,8,8,14,19,8,9,8,4,7,7,9,26,31,20,11,23,18,18,15,16,47,27,20,20,21,11,6,7,9,8,7,7,8,10,6,7,12,13,8,9,11,18,9,15,13,15,21,13,10,12,18,14,8,8,12,23,16,14,14,14,10,10,13,15,15,10,10,9,17,32,28,45,26,19,10,13,12,14,18,16,10,12,13,14,20,17,15,32,39,26,14,12,16,24,58,31,26,18,18,15,10,19,19,31,19,21,25,9,7,13,15,7,7,6,8,21,15,38,24,15,32,37,50,75,66,65,18,12,17,19,25,17,28,56,45,45,38,42,33,20,21,21,10,14,15,18,14,19,24,16,19,26,31,16,11,13,9,36,19,13,19,15,6,8,7,8,5,6,8,10,8,8,7,10,12,8,14,11,15,10,14,14,15,19,21,20,20,10,12,5,3,5,7,19,23,32,21,23,33,31,28,23,13,10,6,11,11,10,14,12,21,43,9,5,18,19,10,18,8,8,9,9,6,24,16,17,16,7,7,10,17,13,15,12,16,5,10,8,8,3,3,7,26,14,10,14,16,11,11,10,15,20,36,36,32,24,29,14,35,27,37,17,25,23,17,11,8,22,31,23,20,12,6,4,5,7,5,11,15,15,7,8,10,6,3,13,17,13,27,33,28,23,26,38,26,18,20,5,8,8,10,10,13,14,14,13,16,12,19,8,11,14,8,8,18,15,10,3,6,9,14,33,23,20,12,12,13,18,20,12,10,21,11,17,31,30,24,35,28,21,16,24,26,39,22,16,12,14,10,17,18,10,3,2,9,10,12,10,14,6,3,3,5,11,14,13,8,13,12,12,12,10,8,8,5,9,10,17,7,15,14,13,9,7,5,11,11,16,21,14,12,11,19,17,17,21,17,38,16,26,37,15,21,20,25,11,13,9,9,20,16,5,5,9,6,4,8,9,10,7,14,11,4,3,3,5,8,6,5,17,13,9,9,5,8,12,8,13,10,10,7,5,3,5,6,6,4,3,4,6,8,6,8,18,14,28,21,26,13,18,8,9,8,3,3,7,9,16,13,3,5,5,5,5,4,4,9,11,7,6,11,12,11,6,6,4,2,6,6,6,4,8,20,18,20,8,9,10,18,13,7,7,6,14,15,14,12,15,10,6,3,8,10,12,11,20,9,15,8,7,4,6,6,8,6,4,7,13,15,12,12,5,5,10,12,7,11,9,12,6,5,7,9,11,10,8,10,14,6,6,6,7,12,6,8,4,4,4,5,5,5,5,5,3,2,3,6,10,33,20,10,10,12,11,6,7,7,4,3,8,3,5,5,12,13,8,14,9,20,29,17,18,14,8,13,13,16,19,26,26,16,13,13,10,9,19,17,29,13,11,8,7,10,9,21,22,12,9,14,16,11,16,7,7,18,5,6,12,11,8,6,3,3,5,5,7,8,10,5,6,7,7,6,3,7,12,32,29,40,31,18,18,9,11,10,7,14,21,20,22,35,21,9,6,11,12,6,14,14,26,30,17,15,10,7,8,11,20,11,15,14,11,19,13,23,15,9,14,7,5,6,8,8,4,3,7,11,7,10,11,18,11,21,15,25,27,12,11,12,19,8,8,12,15,8,6,10,7,9,15,14,4,10,18,28,29,10,19,18,23,16,13,11,23,20,15,8,11,11,12,18,21,17,16,15,18,21,17,10,16,20,10,13,10,4,6,12,9,7,13,8,6,7,11,15,11,10,11,9,7,5,10,9,36,30,15,13,15,16,17,18,14,17,38,19,13,17,25,26,32,21,15,18,20,33,43,11,16,10,4,8,8,8,5,5,6,4,6,8,9,11,11,5,7,12,11,8,9,4,4,4,6,6,6,4,5,7,3,3,4,11,13,23,28,15,12,6,12,15,16,17,16,14,13,19,10,6,7,13,13,10,14,12,5,4,2,4,4,7,19,11,10,8,2,3,3,6,5,3,7,7,5,5,5,10,17,8,14,12,12,17,9,13,6,6,5,13,23,22,19,11,22,29,27,17,11,10,17,9,9,19,21,32,23,20,27,23,19,11,5,13,9,7,11,7,4,5,6,8,11,16,12,13,11,8,10,11,24,21,11,14,11,20,7,6,5,7,8,4,3,5,12,20,13,14,8,5,11,14,10,8,13,13,10,11,10,8,7,11,9,5,15,21,19,14,13,6,7,9,9,11,7,9,5,6,6,4,5,6,6,10,7,12,15,10,18,8,10,10,14,6,4,4,6,7,8,8,6,4,5,8,13,9,14,7,11,6,8,6,4,5,11,14,13,14,14,16,8,9,11,8,11,7,11,8,8,12,18,11,8,14,4,10,17,9,16,16,16,5,5,6,7,7,7,2,4,4,6,6,7,10,21,11,22,15,9,5,10,5,10,12,9,7,10,11,15,13,9,12,7,12,11,7,5,6,3,10,15,8,8,19,18,9,4,3,8,10,6,10,9,7,6,6,16,9,8,16,25,12,27,30,10,22,9,12,7,4,8,11,10,11,10,9,6,10,10,9,7,7,4,5,5,11,7,7,8,13,14,12,30,19,17,46,17,21,19,8,7,12,6,7,12,10,11,8,7,6,6,10,11,25,22,18,39,22,11,12,7,10,18,19,12,11,13,20,13,10,16,15,15,16,9,9,15,12,10,12,13,36,15,14,30,20,18,8,13,17,20,14,15,12,17,14,17,8,8,2,4,8,8,25,11,9,7,6,6,4,4,14,11,16,8,16,13,10,10,11,16,24,10,4,6,8,13,19,12,29,23,8,14,15,15,7,7,10,10,14,23,34,38,22,37,26,27,18,8,3,6,6,8,14,7,4,7,10,9,8,5,7,6,9,16,11,13,14,18,29,27,26,27,16,14,15,24,31,57,19,15,6,6,4,10,15,9,11,16,30,30,22,16,19,18,12,7,14,9,9,14,13,20,10,15,8,5,4,7,6,4,11,7,8,11,9,12,15,13,20,12,8,10,7,10,10,9,13,16,4,5,8,11,9,6,8,13,5,4,4,2,3,8,6,8,6,10,14,23,18,24,21,14,24,14,14,38,35,16,16,11,11,6,8,5,8,11,16,38,11,7,5,6,11,10,8,6,6,6,8,5,7,11,13,7,12,17,17,8,5,7,6,4,9,15,18,27,29,12,20,17,18,30,25,37,24,15,10,10,5,7,8,7,3,2,8,19,12,15,8,8,9,14,29,34,13,13,13,10,15,29,18,27,39,16,34,50,35,52,35,40,35,17,18,15,12,8,7,5,13,6,9,8,6,12,9,18,15,17,15,20,26,17,16,33,18,37,21,14,7,6,4,5,11,12,10,7,7,5,4,16,17,11,16,30,17,15,8,5,14,64,25,10,21,29,27,40,23,21,26,18,20,16,19,18,7,10,6,6,4,10,10,10,19,23,17,6,12,11,11,16,12,12,19,22,14,27,35,56,32,25,32,28,23,18,14,11,9,13,12,7,9,23,35,10,8,14,15,15,14,14,9,19,11,11,24,32,23,19,13,11,11,22,15,19,21,21,16,21,20,18,13,5,11,17,13,13,15,10,16,21,26,31,10,15,12,21,29,32,23,65,35,16,23,10,28,34,43,45,34,14,11,16,14,17,12,9,13,19,17,11,6,21,11,9,17,10,13,14,7,9,6,7,11,10,7,7,7,10,4,2,5,7,8,10,9,8,9,13,13,12,7,9,6,5,7,9,15,19,18,12,11,10,21,19,11,7,14,9,11,11,17,9,12,12,16,24,18,13,17,8,9,6,4,3,2,6,11,11,17,14,10,6,11,15,22,11,10,6,12,15,16,13,11,9,16,10,15,15,8,5,5,6,4,8,15,16,6,3,7,16,11,14,11,8,14,10,14,27,17,32,11,16,14,37,23,12,23,8,11,8,16,13,17,14,8,3,11,12,7,7,13,6,20,14,10,18,16,9,14,15,21,11,6,10,8,4,4,8,6,13,10,9,5,5,6,9,10,16,5,7,8,5,7,6,9,8,11,7,14,15,28,18,11,11,9,6,7,8,7,7,5,7,5,13,12,17,8,10,10,15,19,7,14,6,14,12,7,11,11,7,6,9,5,5,13,17,22,32,38,10,10,22,15,36,31,15,21,48,25,29,16,14,16,22,24,24,64,24,10,16,19,10,28,18,10,15,22,60,19,11,12,12,14,12,7,9,16,25,17,22,25,18,16,18,63,42,21,19,15,27,9,8,16,21,20,27,13,18,11,8,14,11,12,19,12,19,52,32,40,42,18,10,13,6,10,14,20,24,40,26,42,39,37,27,36,20,28,40,22,14,11,14,19,28,57,76,50,29,14,24,28,21,19,18,6,9,15,16,11,14,20,44,51,45,32,14,13,8,11,23,34,41,31,40,27,10,14,16,8,9,4,6,17,13,28,27,17,8,16,24,11,12,23,16,20,8,8,16,10,7,6,8,6,9,16,34,23,44,41,28,30,50,67,57,36,41,33,29,28,54,21,20,12,22,34,50,29,26,32,29,28,27,27,22,26,12,12,8,11,10,17,31,15,12,30,31,27,20,14,16,19,18,12,6,6,7,5,9,6,7,11,17,17,27,16,10,19,11,11,6,13,18,12,6,9,12,21,40,29,19,15,13,7,6,8,5,4,11,9,15,23,19,24,18,11,11,12,14,14,12,20,16,12,19,11,12,24,20,32,20,14,13,10,10,9,15,18,14,10,47,26,38,15,10,20,11,7,9,8,9,11,18,17,18,29,40,22,8,6,14,11,9,9,21,18,14,10,7,32,22,20,15,23,12,5,6,10,31,22,12,12,9,7,10,13,10,18,16,16,12,15,17,21,12,17,12,13,19,33,19,10,12,22,16,44,12,25,33,38,18,29,37,43,25,18,29,25,17,11,14,8,12,14,7,11,21,20,10,9,15,8,9,17,14,11,17,32,27,12,6,8,4,7,13,4,6,10,9,13,16,24,65,40,18,10,7,12,15,18,18,33,38,40,19,6,6,8,5,6,18,14,7,5,7,12,12,17,17,9,16,12,27,15,13,10,9,13,11,19,19,32,22,31,36,22,53,57,39,22,17,14,15,8,10,8,20,23,37,68,42,63,38,32,14,14,25,23,15,14,10,8,5,12,19,15,8,8,24,10,9,8,14,7,10,8,8,5,10,8,8,15,16,41,30,22,18,53,51,26,22,14,18,12,10,13,23,26,27,20,6,7,8,12,26,27,9,10,10,15,13,6,5,6,3,5,6,13,12,9,10,11,17,10,4,21,23,18,45,16,10,9,12,10,15,12,21,20,8,9,6,7,9,27,17,7,9,6,18,21,33,18,10,12,6,5,5,7,4,3,9,8,8,12,15,10,9,20,28,28,41,11,12,10,5,8,12,14,6,7,9,9,12,15,26,21,54,33,25,26,19,14,22,7,4,15,19,20,19,18,10,10,7,14,18,17,15,9,23,25,18,22,32,39,35,35,22,34,37,39,14,19,23,27,7,4,7,6,10,11,18,13,8,13,12,7,4,27,17,14,6,5,7,11,17,11,15,24,15,14,6,6,4,9,10,23,20,25,25,21,11,25,19,7,7,6,14,22,36,66,26,9,7,11,3,5,10,8,9,7,21,42,17,11,12,18,20,23,30,39,62,38,21,18,46,44,40,51,55,98,33,27,30,34,21,9,10,9,10,20,25,12,9,12,23,19,19,9,9,7,11,11,8,6,10,8,17,17,14,21,10,18,12,18,12,8,4,7,11,7,20,17,9,26,17,30,6,22,20,17,18,10,17,19,19,13,8,11,18,17,14,11,16,29,20,12,38,12,14,13,24,18,8,6,8,10,8,8,5,4,5,5,7,5,16,7,13,17,32,42,15,17,22,28,27,16,27,20,14,15,12,9,12,41,31,10,13,8,12,14,15,17,14,19,21,23,18,24,18,28,20,30,25,19,11,16,17,16,18,17,10,7,12,14,27,51,44,36,32,24,14,4,10,14,14,15,22,28,23,17,20,25,53,20,22,12,10,33,19,16,11,18,13,6,9,16,15,15,11,8,10,7,7,6,7,13,13,22,21,17,10,12,7,13,7,5,5,3,6,6,7,11,4,6,10,17,16,11,18,24,51,79,35,44,30,14,18,29,7,17,10,24,21,18,30,19,42,17,12,7,12,12,18,26,28,33,37,24,13,8,14,11,7,6,8,10,10,7,11,4,6,12,14,23,19,20,17,12,15,21,7,6,3,3,3,4,6,12,20,11,9,13,9,9,4,9,11,7,5,4,8,7,5,6,12,20,30,22,19,18,21,22,11,8,8,13,10,8,14,26,13,12,20,14,20,9,9,13,26,29,10,5,5,10,15,23,15,13,9,16,9,11,14,25,15,18,11,19,15,13,9,8,8,8,17,10,13,20,11,5,9,5,6,8,12,11,9,18,18,40,18,16,15,19,19,18,40,25,25,22,15,21,8,17,8,9,12,10,10,20,52,50,34,18,12,23,29,40,43,51,24,14,9,11,12,14,8,11,18,18,5,8,9,16,15,20,15,17,25,18,19,19,23,18,21,8,9,16,21,12,9,13,17,20,18,18,26,14,8,16,11,17,12,8,20,18,9,10,11,11,14,8,9,14,19,18,12,5,15,9,9,11,15,15,10,12,32,72,35,33,11,14,19,15,34,36,33,8,8,14,11,6,7,18,23,28,24,41,8,6,20,29,25,18,7,8,10,8,19,27,19,26,21,21,15,45,15,14,23,31,11,8,10,8,8,9,11,20,8,17,15,19,15,43,13,23,16,14,28,20,27,41,21,46,52,27,18,23,34,46,39,25,18,13,15,23,18,15,11,19,19,10,23,37,31,24,23,15,28,48,57,44,38,40,68,31,28,19,12,18,33,18,31,37,38,57,30,55,33,37,15,28,26,20,13,18,36,38,27,18,13,14,8,11,24,23,21,17,26,33,53,28,16,14,10,14,14,12,15,27,35,22,23,26,33,24,13,19,13,14,15,27,20,23,21,17,28,21,27,28,11,7,3,7,13,13,13,14,13,16,18,13,31,42,28,66,127,110,99,43,29,13,14,26,20,10,29,62,81,25,35,20,20,29,52,28,22,13,16,12,13,22,23,24,27,36,55,23,11,19,28,48,50,79,60,31,43,23,17,23,20,32,24,53,24,32,23,43,26,35,7,8,26,27,26,37,89,32,27,21,30,20,11,7,16,20,31,14,11,12,23,28,24,15,20,17,29,58,42,20,62,56,50,39,34,30,14,13,17,21,25,31,13,11,12,17,18,51,33,27,13,39,34,29,21,24,21,39,23,20,18,27,30,44,45,47,38,49,47,43,17,17,15,8,23,46,59,55,78,24,43,14,20,23,30,38,44,26,19,15,20,19,11,23,14,15,13,12,21,17,11,11,10,7,18,34,16,39,73,26,31,25,37,9,18,17,25,37,11,15,19,28,44,49,27,36,22,33,28,25,27,13,15,11,23,42,18,8,14,14,12,44,29,18,18,23,49,43,20,18,46,17,19,36,36,28,18,22,30,31,45,39,59,45,54,35,66,79,68,30,31,8,11,16,13,19,29,61,44,18,7,11,23,40,35,23,18,19,23,31,31,70,50,48,60,65,34,15,11,18,27,31,41,61,31,90,178,116,59,48,20,23,17,19,19,54,28,31,24,51,63,23,16,22,18,26,27,17,18,26,25,27,32,28,50,24,18,22,30,33,36,39,37,26,32,40,43,35,31,11,9,11,22,35,29,15,20,31,35,20,12,10,8,17,21,52,72,66,29,33,32,14,9,9,21,17,10,13,20,11,32,19,30,33,19,18,18,16,24,22,10,13,9,11,15,15,26,22,16,36,38,27,23,18,19,12,31,44,12,9,12,11,5,12,8,15,20,38,19,42,18,35,43,37,17,36,40,14,5,6,7,14,16,20,15,25,17,9,4,10,9,6,6,8,15,6,8,16,21,29,58,25,17,29,50,39,26,14,21,23,13,12,10,16,16,30,46,38,49,54,70,34,36,65,54,30,29,69,35,21,31,22,11,7,11,10,26,18,10,10,7,19,14,31,34,69,40,45,13,13,11,24,21,28,18,11,13,28,24,46,29,22,18,17,13,14,12,9,25,34,24,17,9,17,13,38,14,19,34,22,53,57,59,27,38,38,85,72,20,30,73,43,57,37,37,11,8,13,16,10,23,33,23,11,23,23,38,63,43,37,51,40,16,29,36,28,38,31,27,43,21,12,17,13,28,22,12,15,8,26,28,41,48,46,25,40,32,23,11,30,29,25,12,28,29,48,41,26,37,18,11,17,31,53,43,37,39,34,27,37,28,28,51,48,33,45,38,49,29,22,14,32,62,82,67,56,41,49,39,23,42,57,58,45,34,35,38,21,21,16,35,19,14,13,21,17,47,57,16,23,31,18,22,27,22,25,32,26,28,17,30,23,46,100,134,62,58,41,46,28,19,23,19,40,51,49,39,34,51,44,39,84,61,43,35,60,38,29,49,70,97,43,47,32,39,18,21,41,41,13,29,36,31,32,28,50,42,19,16,44,65,71,37,45,63,51,59,78,88,73,66,29,27,43,83,63,79,57,30,38,44,27,20,25,23,14,26,21,28,14,29,31,77,25,12,23,38,15,25,40,66,50,20,10,39,41,56,37,30,27,19,20,14,16,33,32,23,54,75,52,19,40,63,36,62,32,27,23,27,26,52,35,40,36,37,23,25,49,58,26,23,16,15,15,11,20,35,35,26,29,21,38,96,18,26,28,31,27,14,18,18,21,23,20,65,27,24,15,18,43,36,23,14,24,19,30,22,19,22,12,29,17,23,31,85,68,70,39,33,31,48,25,32,109,42,16,16,19,47,48,65,35,32,35,22,28,25,30,16,8,25,27,27,87,89,70,37,40,40,32,58,63,60,32,23,42,41,29,34,33,27,26,39,41,25,20,27,18,24,25,15,7,9,14,19,40,36,32,37,28,62,36,23,20,40,28,20,31,51,34,44,28,53,26,24,22,16,20,31,21,55,48,45,27,27,41,23,19,15,11,21,17,43,21,21,15,7,9,13,11,18,9,16,48,57,64,38,27,43,30,37,21,27,28,10,14,23,30,33,52,38,23,36,80,43,68,43,18,14,12,27,28,21,24,46,35,22,28,18,26,40,36,26,27,14,36,88,54,16,14,10,6,10,14,13,28,27,17,24,14,15,13,19,19,17,22,29,30,46,23,28,57,41,13,26,23,32,33,39,56,43,50,21,15,18,41,24,21,30,22,13,7,17,12,19,27,17,24,10,13,11,17,22,25,33,22,12,10,22,15,16,22,22,15,7,18,16,9,10,15,8,13,17,24,25,16,9,13,13,34,26,31,29,13,23,19,11,19,36,29,24,18,17,32,30,34,38,9,14,23,26,13,12,22,27,32,17,23,44,36,56,59,60,31,21,17,32,50,24,14,18,37,35,40,41,43,32,36,42,32,60,26,22,16,30,45,25,26,21,12,11,18,26,18,21,64,55,30,15,20,21,18,16,16,22,33,22,56,81,49,46,75,35,25,21,15,27,26,29,30,28,55,40,25,15,14,21,26,31,26,33,39,21,29,35,29,48,41,26,42,79,33,31,45,50,64,84,26,37,17,14,12,21,12,18,11,40,29,29,18,17,38,38,21,19,22,53,40,43,59,128,95,38,22,53,51,18,18,18,19,30,40,65,21,27,26,17,31,17,12,35,39,51,73,29,54,45,49,57,59,38,35,35,53,16,39,23,68,61,100,56,95,73,62,57,15,10,8,14,17,31,36,59,33,38,28,17,10,15,13,15,13,11,58,45,22,23,26,14,31,20,30,24,18,93,45,19,18,14,30,36,20,50,36,19,36,44,24,16,19,16,26,31,18,13,16,36,25,34,24,31,23,31,20,17,49,59,25,45,35,59,24,25,22,18,13,42,36,28,14,30,49,36,18,28,11,37,42,21,15,26,42,44,43,29,67,39,36,36,27,37,63,16,17,35,57,33,40,36,33,22,36,53,80,57,43,58,182,74,46,80,30,9,21,43,63,69,75,36,50,25,12,15,10,9,10,12,18,13,13,16,20,27,37,35,38,43,35,33,20,24,38,24,44,28,43,74,53,33,36,26,17,32,12,25,18,31,23,53,31,11,55,41,32,29,24,27,19,56,30,37,57,37,47,29,17,14,29,43,23,37,21,24,34,12,21,20,11,21,25,29,24,18,11,14,11,12,19,30,33,33,26,39,54,31,23,15,16,16,44,64,24,34,27,12,18,15,21,28,20,41,35,21,11,40,23,24,27,39,17,7,12,8,11,37,24,32,17,75,40,39,30,21,35,27,17,15,16,19,22,16,15,44,30,49,30,31,21,9,10,20,37,49,28,22,13,18,28,28,18,23,24,28,24,25,12,5,9,12,9,24,37,60,36,24,25,34,52,23,19,8,10,19,26,66,54,29,18,20,42,17,12,15,14,24,18,19,19,21,37,16,8,6,8,12,18,21,22,9,9,15,9,10,11,17,12,7,9,10,19,15,15,13,12,37,9,16,12,15,8,13,10,17,32,15,8,19,45,32,10,6,15,37,27,13,25,12,11,10,10,16,11,15,27,38,52,30,11,15,18,21,17,22,13,22,46,34,28,32,33,35,30,22,42,18,31,17,22,14,8,7,7,19,14,12,9,12,14,21,15,9,12,21,28,16,13,18,14,8,13,13,17,26,18,11,10,18,19,27,20,27,19,14,16,16,16,17,27,18,8,14,37,45,19,23,35,41,68,60,11,18,13,10,6,5,8,18,31,34,47,27,16,41,37,24,31,18,38,16,14,14,15,9,18,25,23,28,19,30,19,12,13,14,19,26,18,12,21,47,68,51,41,35,79,54,54,27,47,41,35,32,32,116,98,91,46,23,11,14,23,31,18,32,27,52,41,41,29,24,30,43,57,36,21,33,62,42,34,29,38,59,33,43,78,77,42,22,28,58,71,107,61,53,33,46,40,28,27,41,60,72,161,129,54,78,41,25,42,32,36,30,32,16,35,65,49,79,90,112,145,52,68,53,67,50,116,161,94,83,70,64,82,41,22,47,53,40,30,18,23,14,23,33,27,51,65,60,37,29,22,12,20,36,19,30,30,36,51,69,41,56,41,13,50,46,37,69,67,42,45,49,41,14,22,18,16,23,73,33,40,21,13,17,35,41,46,73,70,42,27,27,36,32,31,26,21,16,16,50,72,103,73,54,67,45,70,59,70,39,87,69,73,41,29,45,20,46,33,54,35,36,38,57,34,45,48,62,35,37,27,26,49,75,38,36,15,15,12,20,14,33,12,21,29,21,10,16,11,25,26,25,26,35,30,35,36,24,40,66,72,49,50,23,17,13,13,24,17,15,9,10,7,17,18,30,50,46,41,35,25,9,15,13,11,12,15,25,16,11,24,30,39,29,15,32,49,28,32,46,105,99,72,42,28,26,19,28,28,24,16,20,19,25,16,26,24,57,29,65,159,75,119,106,36,25,39,38,49,46,70,43,22,18,21,16,19,20,20,22,20,34,32,42,19,22,19,9,35,17,30,39,56,34,10,20,21,31,27,48,47,32,86,42,13,19,27,35,25,25,18,18,28,22,33,27,28,24,42,37,23,26,44,41,22,17,13,31,32,43,51,34,50,37,37,13,17,17,14,20,12,15,6,10,10,31,31,37,9,11,9,24,37,33,31,30,27,34,39,30,20,44,29,20,59,44,32,16,12,29,24,40,21,32,31,24,35,28,23,31,16,31,36,35,35,20,18,22,16,31,36,51,18,35,22,15,14,29,30,29,38,46,53,52,39,36,15,15,6,9,13,11,10,21,17,17,41,34,39,35,34,43,28,32,20,16,22,15,5,8,18,12,17,15,8,9,4,13,12,16,16,9,9,20,26,18,13,14,8,12,7,7,14,15,11,14,13,16,26,20,9,14,10,20,28,22,24,11,6,8,12,24,15,11,9,8,11,7,14,8,29,22,20,9,13,6,13,11,14,19,26,39,45,41,22,12,19,20,15,15,23,30,18,10,5,7,8,6,14,34,18,24,20,23,22,19,27,30,20,22,15,15,21,23,10,16,10,13,19,10,7,15,17,7,15,12,8,12,10,13,16,46,45,34,26,25,26,17,21,14,12,13,22,28,6,16,16,17,31,18,11,5,5,12,9,7,12,9,8,7,12,10,10,11,6,8,8,9,11,11,20,19,22,16,12,27,11,20,13,19,10,14,17,7,7,13,21,21,14,14,8,7,10,12,18,18,22,18,22,55,22,20,15,19,21,13,15,17,16,18,31,31,21,21,44,23,32,18,9,8,12,12,10,9,7,6,7,3,7,11,14,21,15,15,5,9,9,15,22,18,10,14,21,27,17,11,11,8,4,8,13,18,12,13,8,6,10,5,7,27,36,34,32,22,15,36,24,15,21,18,30,17,12,11,25,31,27,22,23,13,17,14,16,16,18,14,22,23,14,18,15,18,25,17,16,17,17,40,32,15,16,13,40,21,12,18,14,13,13,10,10,5,7,13,33,25,30,17,32,64,43,25,22,38,16,28,15,11,14,20,28,42,18,18,24,24,33,26,19,7,4,10,8,12,18,17,26,16,21,18,9,5,7,21,31,30,33,37,24,37,30,19,95,63,35,36,10,30,33,17,9,11,9,22,9,21,13,9,12,8,9,9,4,5,9,5,5,5,13,23,40,19,27,26,13,19,18,14,10,6,12,17,16,14,12,20,21,9,13,18,14,13,11,18,15,16,18,35,14,44,18,17,12,15,21,55,60,28,26,24,16,22,23,17,13,21,19,32,37,17,7,10,10,8,8,21,18,43,43,14,19,37,13,9,11,11,28,16,37,15,11,16,21,22,42,67,97,48,49,30,47,12,11,12,12,29,13,11,8,11,9,19,28,9,5,12,17,9,12,8,16,10,10,16,17,28,29,13,17,11,25,45,53,92,70,80,68,60,56,41,67,25,11,10,26,20,14,11,17,17,30,22,31,17,23,81,41,29,37,18,15,13,17,10,24,23,23,20,19,7,18,13,21,19,17,22,44,30,19,24,7,7,7,9,7,15,14,17,18,16,13,26,33,52,32,29,23,24,13,10,10,9,17,25,31,26,42,53,53,35,63,27,13,10,26,28,21,9,12,11,6,19,22,45,37,42,26,35,27,36,36,20,23,27,20,22,36,56,44,13,25,59,40,24,29,31,44,28,60,67,30,46,36,44,43,37,38,28,20,21,21,28,30,14,27,27,40,47,43,47,20,46,89,74,40,47,33,64,38,20,16,15,26,27,31,26,48,39,38,68,55,34,28,47,45,27,46,20,9,9,6,11,16,18,17,13,27,12,23,28,27,34,16,31,37,55,17,23,24,9,13,18,15,23,32,25,23,35,21,29,52,40,41,36,47,20,11,11,12,26,49,51,69,40,28,14,31,38,33,17,13,22,24,42,38,25,15,20,46,90,41,44,27,30,8,10,7,23,21,29,29,16,26,43,40,44,59,56,40,17,14,13,25,47,39,52,14,21,14,28,49,65,66,78,115,53,32,19,34,50,53,36,49,41,121,92,79,49,59,106,53,41,18,24,60,30,29,24,26,22,24,18,27,48,62,23,51,63,86,43,32,47,94,44,47,53,40,47,35,64,26,35,29,32,23,8,29,45,51,46,49,39,42,75,44,29,75,47,49,42,53,63,56,32,23,30,75,27,30,41,32,39,37,54,99,60,58,61,55,48,18,25,19,21,33,45,35,30,29,21,52,99,63,104,98,42,61,68,58,26,23,10,17,21,16,13,36,19,35,38,65,26,32,59,46,23,12,14,33,68,55,70,85,81,42,55,31,35,52,74,54,77,114,113,72,65,53,48,61,83,62,71,63,56,32,41,38,44,66,74,79,48,22,23,29,35,66,61,96,56,30,49,27,16,18,28,52,47,64,52,23,18,12,17,10,9,11,27,39,33,38,34,118,36,15,10,9,14,31,30,29,30,35,24,37,36,35,39,47,25,31,15,7,10,17,25,29,40,15,15,16,14,20,28,31,30,75,50,38,55,88,36,20,40,54,57,37,42,19,13,33,17,19,28,31,18,16,25,21,45,34,66,45,60,51,40,18,27,27,31,22,16,12,16,28,23,15,13,10,7,10,11,13,37,47,67,45,40,23,11,8,10,18,53,38,16,16,24,15,15,22,24,30,28,27,47,54,44,44,35,30,33,33,89,60,52,98,39,35,54,44,35,22,24,18,33,39,30,47,24,17,28,31,18,15,17,16,21,22,29,27,32,24,30,33,41,40,29,27,47,33,31,58,55,55,28,19,24,62,21,11,20,25,17,29,31,23,24,20,25,19,13,13,20,36,24,16,22,38,28,51,28,50,52,19,27,24,23,18,21,17,22,37,57,67,67,55,38,20,34,26,28,15,23,43,34,45,34,33,24,8,15,23,31,60,63,20,78,29,24,21,37,38,42,17,17,32,24,15,21,18,22,28,18,21,42,32,28,22,28,35,22,26,55,21,36,48,20,12,13,32,23,25,28,27,64,52,25,29,38,21,26,21,13,12,24,24,12,24,22,7,8,5,7,40,83,60,31,18,15,22,41,36,56,40,14,21,37,43,58,29,26,27,32,39,52,34,20,19,20,19,15,28,43,56,59,56,35,27,31,14,20,10,33,41,27,27,22,48,63,48,31,39,39,34,25,14,10,11,8,9,31,30,40,27,49,42,51,65,57,100,41,31,37,32,38,86,49,44,30,21,10,19,41,36,56,24,24,24,35,33,40,66,29,28,33,23,30,14,12,15,9,36,73,86,79,77,46,34,13,27,25,11,11,20,11,13,7,10,14,7,8,16,17,39,49,64,27,18,25,32,24,23,16,16,24,47,48,57,44,45,57,29,43,47,59,19,18,22,8,9,11,12,11,10,13,13,31,29,27,39,32,30,47,57,39,19,17,26,13,15,19,11,27,24,13,11,19,40,39,37,30,58,74,25,26,34,29,34,42,24,44,39,54,46,36,58,51,78,67,120,48,40,25,16,22,13,17,36,41,28,25,35,62,40,37,40,32,35,36,57,33,32,35,23,22,24,14,15,12,13,13,14,25,44,52,29,32,18,27,37,28,28,40,47,30,21,11,14,14,18,27,15,14,16,10,14,14,22,31,40,30,32,33,47,17,19,16,20,35,35,33,23,28,30,19,28,23,10,14,22,29,29,28,36,41,16,14,19,21,33,46,39,29,57,29,27,63,59,55,41,58,146,85,49,63,101,70,34,36,23,37,30,36,33,44,15,22,26,30,16,35,24,31,24,23,20,12,12,30,18,22,11,26,15,12,15,24,15,18,27,27,20,27,44,98,14,34,53,50,58,76,49,25,25,38,29,23,16,27,19,22,19,42,60,128,56,30,36,20,20,33,34,50,31,27,28,44,64,84,62,36,30,32,17,15,10,19,26,20,37,38,34,46,47,27,22,14,27,28,45,30,19,39,53,24,44,29,59,59,37,32,31,9,21,22,37,11,23,27,19,55,65,34,24,36,76,69,44,86,46,73,72,51,34,27,29,57,46,28,54,71,55,78,61,107,65,37,30,34,37,28,25,16,17,46,38,24,21,18,23,19,39,26,26,54,44,69,48,59,119,49,53,28,30,24,29,18,10,20,26,51,47,43,27,16,23,16,40,69,65,85,57,37,101,59,82,41,45,58,23,14,15,18,23,20,18,15,13,22,21,16,13,13,10,17,27,17,17,19,34,25,24,18,15,15,87,97,74,61,25,18,32,33,54,45,51,46,51,51,70,42,35,26,29,37,21,24,28,33,32,35,65,82,135,49,34,25,55,78,55,45,57,104,165,84,109,80,144,317,209,167,37,58,28,30,58,30,111,69,93,62,83,57,57,21,49,73,58,52,34,31,45,58,82,121,142,121,107,78,122,67,46,60,32,36,23,23,159,53,86,58,36,23,45,43,50,111,48,21,34,78,76,128,157,125,68,70,110,109,87,90,77,102,76,144,123,102,39,18,28,32,97,59,40,67,27,39,27,11,10,19,30,36,29,40,53,57,118,137,65,47,34,45,79,139,106,64,39,22,70,56,46,114,66,61,73,30,22,136,115,38,35,42,63,60,36,44,82,56,35,27,14,43,57,56,63,107,73,38,74,25,31,67,127,92,75,66,57,56,106,106,180,150,89,68,171,87,119,60,77,60,50,37,33,45,93,94,54,69,22,32,111,30,35,67,148,181,97,167,225,116,93,53,50,100,88,79,75,47,65,53,46,23,30,30,52,52,48,37,31,26,44,23,16,27,62,63,51,122,94,54,54,78,52,70,50,51,55,17,43,55,61,57,46,81,62,78,29,80,68,63,34,25,37,9,29,24,21,27,73,63,85,36,29,48,27,10,13,17,21,37,50,37,49,42,43,27,42,36,64,28,53,28,39,24,20,36,18,38,98,94,34,48,43,46,43,68,118,90,124,65,156,61,33,31,50,73,30,38,48,142,78,33,18,23,37,44,42,30,34,38,124,78,38,33,33,14,22,31,38,25,28,37,57,58,29,46,89,60,17,36,62,55,42,72,86,66,53,55,81,68,35,30,38,48,37,56,39,64,118,116,83,84,25,61,36,25,26,20,26,27,31,57,58,38,35,25,46,26,25,62,44,45,52,22,30,51,49,58,33,36,32,35,20,20,32,26,38,75,65,55,62,35,29,20,111,53,48,39,33,32,32,41,36,45,41,36,35,78,36,36,51,60,34,23,28,55,68,54,42,38,37,21,15,22,65,60,25,19,25,20,30,25,22,16,28,38,47,60,49,78,39,56,42,34,28,42,46,72,40,45,30,44,80,42,69,38,76,66,72,37,80,61,45,69,42,39,35,28,54,104,50,95,114,68,77,148,71,47,31,88,106,55,48,64,51,81,67,100,87,75,49,56,75,33,49,85,102,91,66,38,29,31,24,34,32,34,68,66,81,33,50,36,82,37,30,53,126,48,45,35,81,163,119,128,70,39,56,46,69,56,97,72,65,91,80,122,69,42,68,77,52,33,30,37,38,27,25,41,72,118,61,36,52,45,65,85,58,52,26,17,35,95,36,22,24,43,20,29,61,21,18,35,62,39,60,80,36,38,32,33,41,27,15,13,12,19,40,34,28,27,46,43,45,34,47,81,72,108,100,89,36,39,31,59,67,74,62,105,35,57,48,33,30,38,50,82,53,39,69,101,52,39,51,46,66,44,37,156,165,210,146,76,111,163,99,70,82,68,33,55,78,32,86,45,29,25,34,40,22,33,48,37,16,16,19,39,36,51,175,109,75,96,130,162,106,47,22,21,26,21,16,22,25,26,75,97,43,68,57,39,33,126,83,46,44,64,62,52,34,30,20,29,45,57,53,92,87,91,45,40,37,67,57,51,47,95,59,40,50,50,93,124,102,75,67,112,102,106,29,23,30,51,70,66,28,39,31,15,17,22,34,57,60,57,44,47,30,52,53,84,90,62,57,55,56,18,19,67,65,114,68,32,35,36,31,66,116,64,144,148,60,93,90,76,34,50,38,98,50,27,45,30,74,45,68,41,37,47,38,60,44,91,112,42,116,101,56,65,65,89,110,144,58,65,22,22,19,33,35,47,47,51,63,41,42,42,36,27,39,57,123,94,82,42,44,81,162,128,184,233,325,220,96,82,118,67,60,40,35,22,52,39,46,61,50,32,30,23,34,30,61,49,62,38,20,25,50,77,110,67,51,54,45,60,80,101,54,100,33,33,31,36,36,67,42,62,34,39,50,76,38,16,53,34,35,37,76,88,118,149,119,76,116,128,101,34,31,45,38,64,187,116,97,110,176,42,36,78,64,27,44,26,51,79,56,32,49,42,40,34,32,25,48,82,46,27,49,88,90,119,121,88,63,42,43,21,58,34,45,55,52,50,36,34,56,73,35,40,20,28,37,23,59,30,64,28,49,21,24,18,31,26,30,41,28,27,38,28,41,20,70,98,39,30,31,47,66,93,119,51,53,47,62,52,23,25,97,74,105,75,55,53,46,68,49,21,43,57,44,43,63,67,38,76,110,69,131,222,112,56,40,47,40,48,53,34,60,136,49,58,58,51,67,48,90,79,53,80,88,168,141,100,223,172,156,239,127,107,71,185,95,57,41,125,176,99,69,213,115,106,73,239,119,57,75,92,80,62,32,33,114,50,113,289,333,238,294,330,113,138,78,35,81,62,85,51,105,135,104,68,58,77,64,48,83,104,160,194,87,96,66,42,63,66,94,79,116,101,112,170,297,163,55,35,92,208,228,320,174,111,191,211,203,205,156,64,130,134,89,77,129,90,58,88,139,189,218,188,139,54,67,62,161,110,127,170,87,57,129,205,76,91,177,102,107,112,95,79,28,29,41,66,173,418,442,271,115,102,166,130,134,214,108,79,172,182,225,190,97,183,125,148,170,176,89,121,66,94,84,183,115,106,100,45,58,73,60,71,95,118,144,204,260,161,158,134,100,83,57,80,136,103,84,62,23,31,17,48,64,54,37,57,43,98,65,65,38,62,65,67,115,52,21,12,14,19,22,35,59,37,66,43,28,45,63,72,37,71,69,40,41,45,43,33,76,48,54,48,51,23,70,110,73,97,72,83,61,27,25,24,22,12,18,32,42,30,70,52,56,45,31,37,26,19,12,21,36,37,33,33,52,38,38,46,42,48,60,46,101,53,48,51,46,27,33,24,28,41,57,50,38,99,67,121,57,55,98,48,27,49,91,95,83,51,55,72,49,23,47,27,18,21,44,25,31,78,72,53,34,19,47,25,33,55,38,36,59,54,82,102,135,46,50,48,42,20,25,53,73,43,41,39,57,37,30,18,36,85,76,78,85,40,53,92,105,67,40,31,58,39,42,47,40,27,39,29,28,54,67,22,18,35,25,44,68,88,139,50,32,29,28,49,57,36,32,21,24,17,56,72,51,45,62,54,91,238,210,91,57,53,137,98,138,61,88,54,53,64,39,146,72,62,145,175,46,70,120,67,74,57,48,127,165,89,51,87,96,80,91,51,45,43,97,92,58,49,99,110,79,71,106,86,78,61,25,53,60,100,361,176,172,112,73,55,57,68,160,147,93,138,78,110,110,80,100,154,161,56,31,44,51,34,67,91,149,134,235,118,87,114,119,54,46,76,83,61,61,65,66,89,115,73,209,166,120,235,157,74,44,44,44,27,36,35,85,103,66,113,92,37,51,116,105,73,80,63,91,99,81,117,214,170,225,218,138,117,196,167,195,72,107,47,140,132,164,95,89,55,44,63,62,62,66,133,173,298,165,100,105,136,62,95,81,103,112,90,64,65,119,50,68,71,71,84,103,97,165,113,262,75,160,108,59,46,48,65,70,135,106,86,74,99,96,179,105,83,68,53,53,43,21,17,19,11,64,62,26,16,19,18,32,38,44,38,59,56,157,130,92,63,43,28,37,51,96,82,99,85,61,71,78,58,48,46,19,32,20,78,61,63,67,28,69,46,78,118,127,25,20,24,19,27,70,107,66,37,59,77,58,38,85,149,171,152,82,77,40,89,44,33,35,37,81,97,53,60,64,114,40,34,25,37,63,53,138,61,60,42,24,27,35,30,27,34,29,55,70,63,92,27,22,55,36,63,70,65,54,31,19,13,27,34,46,29,36,67,42,36,35,101,126,208,383,152,112,28,37,33,40,46,18,31,30,20,22,42,33,71,75,61,35,26,54,50,53,55,74,84,55,58,48,59,27,29,62,31,26,35,22,30,39,57,55,57,42,47,51,59,73,83,87,74,62,43,58,91,55,67,54,46,29,30,47,57,75,45,17,34,37,53,113,125,32,29,29,71,41,36,64,24,24,16,15,28,51,50,42,44,60,40,48,40,69,109,111,133,75,58,62,52,70,60,33,26,40,134,100,40,51,39,25,113,252,136,94,68,92,111,139,60,52,77,73,34,42,75,26,71,61,117,136,115,84,67,46,54,65,31,30,13,12,15,32,40,48,41,28,54,74,39,39,53,33,28,45,52,82,62,79,88,174,79,68,41,62,84,153,96,116,99,174,117,83,108,83,54,26,45,90,82,116,76,99,121,78,38,41,49,75,29,76,92,70,41,36,54,68,77,34,35,43,45,38,49,92,44,86,48,35,27,53,69,106,59,35,113,112,29,24,36,85,172,70,90,70,58,49,31,27,32,50,29,74,58,84,47,31,66,82,30,49,26,44,71,66,55,52,53,38,55,43,23,38,101,132,89,54,45,91,108,58,65,124,96,84,57,28,56,77,97,142,98,67,79,41,20,27,28,26,38,63,47,21,15]};
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g,",");s=fr?i+"."+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+const redraws=[];window.addEventListener("resize",()=>redraws.forEach(g=>g()));
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+const toggle=(id,cb)=>{const b=$(id);let on=b.getAttribute("aria-pressed")==="true";b.onclick=()=>{on=!on;b.setAttribute("aria-pressed",String(on));cb(on);};return()=>on;};
+/* ---- statistics ---- */
+const mean=a=>a.reduce((s,v)=>s+v,0)/a.length;
+const sdev=a=>{const m=mean(a);return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/(a.length-1));};
+const skew=a=>{const m=mean(a),n=a.length;let m2=0,m3=0;for(const v of a){const d=v-m;m2+=d*d;m3+=d*d*d;}m2/=n;m3/=n;return m2>0?m3/m2**1.5:0;};
+const quant=(a,q)=>{const s=a.slice().sort((x,y)=>x-y);return s[Math.min(s.length-1,Math.max(0,Math.floor(q*(s.length-1))))];};
+const phi=z=>Math.exp(-z*z/2)/Math.sqrt(2*Math.PI);
+const tk=(a,b,n)=>{const raw=(b-a)/n,p=10**Math.floor(Math.log10(raw)),m=raw/p,st=(m<1.5?1:m<3?2:m<7?5:10)*p,out=[];for(let v=Math.ceil(a/st-1e-9)*st;v<=b+1e-9;v+=st)out.push(+v.toFixed(10));return out;};
+/* ---- the population ---- */
+const P=D.dur,N=P.length,MU=mean(P),SIG=Math.sqrt(P.reduce((s,v)=>s+(v-MU)**2,0)/N);
+const STR=[[0,6000],[6000,10000],[10000,12000]],SNAME=["highway","city","port"];
+const smean=(n,r)=>{let s=0;for(let i=0;i<n;i++)s+=P[Math.floor(r()*N)];return s/n;};
+/* ---- a panel with axes ---- */
+function axes(svg,o){const L=o.x+o.padL,R=o.x+o.w-o.padR,T=o.y+o.padT,B=o.y+o.h-o.padB,FS=o.FS;
+  const lg=!!o.log,tx=v=>lg?Math.log10(v):v;
+  const sx=v=>L+(tx(v)-tx(o.x0))/(tx(o.x1)-tx(o.x0))*(R-L),sy=v=>B-(v-o.y0)/(o.y1-o.y0)*(B-T);
+  const g=el("g",null,svg);
+  for(const v of (o.yt||[])){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},g);txt(g,L-7,sy(v)+FS*0.32,o.fy(v),{"text-anchor":"end","font-size":FS*0.8});}
+  for(const v of o.xt){const s=o.fx(v),w=s.length*FS*0.8*0.62,x=sx(v);let a="middle",xx=x;if(x+w/2>o.x+o.w-2){a="end";xx=o.x+o.w-2;}else if(x-w/2<o.x+2){a="start";xx=o.x+2;}
+    el("line",{x1:x,x2:x,y1:B,y2:B+5,class:"g-axis"},g);txt(g,xx,B+FS+4,s,{"text-anchor":a,"font-size":FS*0.8});}
+  el("line",{x1:L,x2:R,y1:B,y2:B,class:"g-axis"},g);
+  if(o.xl)txt(g,R,B+FS*2.35,o.xl,{"text-anchor":"end","font-size":FS*0.82,class:"t-ink"});
+  if(o.yl)txt(g,o.x+(o.ylx??4),T-(o.yly??FS*0.75),o.yl,Object.assign({"font-size":FS*0.82,class:"t-ink","font-weight":700},halo(5)));
+  return {L,R,T,B,sx,sy,FS};}
+function bars(svg,A,counts,x0,bw,ymax,fill,op){const g=el("g",null,svg);counts.forEach((c,k)=>{if(!c)return;const a=A.sx(x0+k*bw),b=A.sx(x0+(k+1)*bw),y=A.sy(Math.min(c,ymax));el("rect",{x:a+0.4,y,width:Math.max(0.6,b-a-0.8),height:A.B-y,fill,"fill-opacity":op??0.75},g);});return g;}
+function binit(vals,x0,x1,bw){const nb=Math.round((x1-x0)/bw),c=new Array(nb).fill(0);for(const v of vals){let k=Math.floor((v-x0)/bw);if(k<0)k=0;if(k>=nb)k=nb-1;c[k]++;}return c;}
+function bell(A,mu,s,scale,x0,x1){let d="";for(let i=0;i<=240;i++){const x=x0+(x1-x0)*i/240,y=scale*phi((x-mu)/s)/s;d+=(i?"L":"M")+A.sx(x).toFixed(1)+" "+Math.max(A.T-4,A.sy(y)).toFixed(1);}return d;}
+const vline=(svg,A,x,col,w,dash)=>el("line",Object.assign({x1:A.sx(x),x2:A.sx(x),y1:A.T,y2:A.B,stroke:col,"stroke-width":w||2.5},dash?{"stroke-dasharray":dash}:{}),svg);
+
+/* ---------- toy ---------- */
+(function(){const svg=$("toy"),NS=[1,4,16,64],rnd=mulberry32(2026);let n=4,M=[],last=[],showB=false;
+  const PC=binit(P,0,200,5);
+  chips($("t-n"),NS.map(v=>v===1?"1 stop":v+" stops"),i=>{n=NS[i];M=[];draw1();},1);
+  function one(){last=[];for(let i=0;i<n;i++)last.push(P[Math.floor(rnd()*N)]);M.push(mean(last));}
+  function draw1(){if(!last.length||last.length!==n){last=[];for(let i=0;i<n;i++)last.push(P[Math.floor(rnd()*N)]);}draw();}
+  $("t-1").onclick=()=>{one();draw();};$("t-100").onclick=()=>{for(let k=0;k<100;k++)one();draw();};$("t-1000").onclick=()=>{for(let k=0;k<1000;k++)one();draw();};
+  $("t-0").onclick=()=>{M=[];draw();};
+  toggle("t-b",v=>{showB=v;draw();});
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,H=nw?860:600,FS=nw?24:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const xt=nw?[0,50,100,150,200]:[0,20,40,60,80,100,120,140,160,180,200],fx=v=>f1(v,0);
+    const h1=nw?430:300,pm=Math.max(...PC),ty=FS*1.1,sy0=ty+(nw?56:40);
+    const A=axes(svg,{x:0,y:0,w:W,h:h1,padL:nw?70:56,padR:nw?20:14,padT:sy0+(nw?118:84),padB:nw?72:50,x0:0,x1:200,y0:0,y1:pm*1.05,xt,yt:tk(0,pm,nw?3:4),fx,fy:v=>f1(v,0),xl:"stop duration (minutes)",yl:"The 12,000 stops of the year",FS});
+    bars(svg,A,PC,0,5,1e9,"var(--muted)",0.45);
+    vline(svg,A,MU,"var(--mean)",3);txt(svg,A.sx(MU)+6,A.B-8,"true mean "+f1(MU,1),Object.assign({"font-size":FS*0.78,style:"fill:var(--mean)","font-weight":700},halo(5)));
+    /* sample strip */
+    const r=mulberry32(7+M.length);
+    txt(svg,4,ty,`Your latest sample: ${n} ${n===1?"stop":"stops"}`,{"font-size":FS*0.82,class:"t-ink","font-weight":700});
+    el("line",{x1:A.L,x2:A.R,y1:sy0,y2:sy0,class:"g-line"},svg);
+    const lm=mean(last),lx=A.sx(Math.min(lm,200));el("line",{x1:lx,x2:lx,y1:sy0-(nw?22:16),y2:A.B,stroke:"var(--point)","stroke-width":3},svg);
+    for(const v of last){const x=A.sx(Math.min(v,200)),j=(r()-0.5)*(nw?24:18);el("circle",{cx:x,cy:sy0+j,r:nw?7:5,fill:v>200?"none":"var(--point)",stroke:"var(--point)","stroke-width":1.5,"fill-opacity":.75},svg);}
+    const lab="its mean "+f1(lm,1),right=lx>A.R-(nw?220:150);txt(svg,lx+(right?-8:8),sy0+(nw?44:32),lab,Object.assign({"font-size":FS*0.8,"text-anchor":right?"end":"start",style:"fill:var(--point)","font-weight":700},halo(5)));
+    /* panel of means */
+    const bw=n>=64?1:n>=16?2:5,MC=binit(M,0,200,bw),mm=Math.max(4,...MC),se=SIG/Math.sqrt(n);
+    let ym=mm*1.12;if(showB&&M.length)ym=Math.max(ym,M.length*bw*phi(0)/se*1.05);
+    const B2=axes(svg,{x:0,y:h1,w:W,h:H-h1,padL:nw?70:56,padR:nw?20:14,padT:nw?70:44,padB:nw?72:50,x0:0,x1:200,y0:0,y1:ym,xt,yt:tk(0,ym,3),fx,fy:v=>f1(v,0),xl:"mean of each sample (minutes)",yl:`The means of your ${f1(M.length,0)} samples`,FS});
+    if(!M.length)txt(svg,(B2.L+B2.R)/2,(B2.T+B2.B)/2,"No means yet: press “Draw 1 sample”",{"text-anchor":"middle","font-size":FS*0.85});
+    bars(svg,B2,MC,0,bw,1e9,"var(--point)",0.75);
+    vline(svg,B2,MU,"var(--mean)",2.5,"7 5");
+    if(showB&&M.length)el("path",{d:bell(B2,MU,se,M.length*bw,0,200),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    const k=M.length,sm=k>1?sdev(M):NaN;
+    $("t-big").innerHTML=`<div><b>${f1(k,0)}</b><span>samples drawn, of ${n} ${n===1?"stop":"stops"} each</span></div><div><b>${k?f1(mean(M),1):"—"}</b><span>mean of all the means (the true one: ${f1(MU,1)})</span></div><div><b style="color:var(--point)">${k>1?f1(sm,1):"—"}</b><span>how much the means wobble (their standard deviation)</span></div><div><b style="color:var(--mean)">${f1(se,1)}</b><span>what the calculation predicts: ${f1(SIG,1)} / √${n}</span></div>`;
+    let m;
+    if(k<20)m=`The latest sample gave a mean of <b>${f1(lm,1)} minutes</b>, ${f1(Math.abs(lm-MU),1)} minutes ${lm>MU?"above":"below"} the true one (${f1(MU,1)}). Draw more samples: each one will give another mean. With ${k} ${k===1?"mean":"means"} you can't see the shape yet; press “Draw 1,000”.`;
+    else if(n===1)m=`With a single stop per sample, the “mean” is the stop itself, so the bottom shows the same shape as the top: skewed, with most under 30 minutes and a long tail. The means wobble <b>${f1(sm,1)} minutes</b>, the same as the individual stops (${f1(SIG,1)}).`;
+    else{const sk=skew(M);m=`The ${f1(k,0)} means are centered on <b>${f1(mean(M),1)}</b>, almost the true mean: the mean of a sample is right on average. They wobble <b>${f1(sm,1)} minutes</b>, and the calculation ${f1(SIG,1)} / √${n} = ${f1(se,1)} predicts it. ${n===4?"The tail on the right still shows: with 4 stops, a single long stop drags the mean.":n===16?"The shape already looks like a bell, though the right tail is still a bit longer than the left.":"It's now an almost perfect bell, and much narrower than the population."}${showB?` The blue curve is the bell with center ${f1(MU,1)} and width ${f1(se,1)}.`:""}`;
+      if(n>1&&k>=200&&Math.abs(sk)>0.6)m+=` Skewness of the means: ${f1(sk,1)} (0 would be a symmetric bell).`;}
+    $("t-msg").innerHTML=m;}
+  for(let k=0;k<1;k++)one();
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 1: twenty samples ---------- */
+(function(){const svg=$("rows"),NS=[4,16,64];let n=4,seed=1,S=[];
+  function gen(){const r=mulberry32(100+seed*7+n);S=[];for(let k=0;k<1000;k++){const a=[];for(let i=0;i<n;i++)a.push(P[Math.floor(r()*N)]);S.push(a);}}
+  seg(["r-0","r-1","r-2"],i=>{n=NS[i];gen();draw();});
+  $("r-re").onclick=()=>{seed++;gen();draw();};
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,H=nw?820:520,FS=nw?24:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,padL:nw?56:44,padR:nw?22:14,padT:nw?96:66,padB:nw?72:50,yly:nw?54:38,x0:0,x1:120,y0:0,y1:20,xt:nw?[0,30,60,90,120]:[0,20,40,60,80,100,120],fx:v=>f1(v,0),fy:v=>"",xl:"stop duration (minutes)",yl:"20 samples, one per row",FS});
+    vline(svg,A,MU,"var(--mean)",3);
+    const rr=mulberry32(5);
+    S.slice(0,20).forEach((a,k)=>{const y=A.sy(19.5-k);el("line",{x1:A.L,x2:A.R,y1:y,y2:y,class:"g-line"},svg);txt(svg,A.L-8,y+FS*0.3,String(k+1),{"text-anchor":"end","font-size":FS*0.7});
+      for(const v of a)el("circle",{cx:A.sx(Math.min(v,120)),cy:y+(rr()-0.5)*(nw?16:10),r:nw?(n>16?4:6):(n>16?3:4.5),fill:"var(--sample)","fill-opacity":n>16?0.35:0.55},svg);
+      const m=mean(a),x=A.sx(Math.min(m,120)),hh=nw?15:11;el("rect",{x:x-(nw?4:3),y:y-hh,width:nw?8:6,height:2*hh,rx:2,fill:"var(--point)",stroke:"var(--point-ring)","stroke-width":1.5},svg);});
+    txt(svg,A.sx(MU)+6,A.T-8,"true mean "+f1(MU,1),Object.assign({"font-size":FS*0.78,style:"fill:var(--mean)","font-weight":700},halo(5)));
+    const ms=S.map(mean),m20=ms.slice(0,20),lo=Math.min(...m20),hi=Math.max(...m20),rms=Math.sqrt(mean(ms.map(v=>(v-MU)**2))),se=SIG/Math.sqrt(n);
+    $("r-big").innerHTML=`<div><b>${f1(lo,1)}</b><span>the lowest mean of the 20 drawn (minutes)</span></div><div><b>${f1(hi,1)}</b><span>the highest</span></div><div><b style="color:var(--point)">${f1(rms,1)}</b><span>how far they “usually” land from ${f1(MU,1)}, measured in 1,000 samples</span></div><div><b style="color:var(--mean)">${f1(se,1)}</b><span>standard error: ${f1(SIG,1)} / √${n}</span></div>`;
+    $("r-msg").innerHTML=n===4?`With 4 stops, the means go from <b>${f1(lo,1)}</b> to <b>${f1(hi,1)}</b> minutes. One long stop landing in the sample is enough to send its mean flying. With 1,000 samples like these (20 are drawn here), the mean usually lands about <b>${f1(rms,1)}</b> minutes from ${f1(MU,1)}, almost what the calculation says: ${f1(se,1)}. With only 20 samples that figure would be shakier. Try 16.`
+      :n===16?`With 16 stops (4 times more), the means go from <b>${f1(lo,1)}</b> to <b>${f1(hi,1)}</b>: they land about half as far from the true one as with 4: measured in 1,000 samples, <b>${f1(rms,1)}</b> minutes, against the calculation's ${f1(se,1)}. A long stop still weighs, but now it's one in 16.`
+      :`With 64 stops, all the means fall between <b>${f1(lo,1)}</b> and <b>${f1(hi,1)}</b>, packed around ${f1(MU,1)} (in 1,000 samples they usually land <b>${f1(rms,1)}</b> minutes away; the calculation says ${f1(se,1)}). Notice that the purple dots (the individual stops) are just as scattered as before: what narrows is the mean, not the data.`;}
+  gen();redraws.push(draw);draw();})();
+
+/* ---------- idea 2: standard error ---------- */
+(function(){const svg=$("se"),inp=$("se-n"),NS=[4,9,16,25,36,64,100,144,250];
+  function draw(){const n=NS[+inp.value],n4=4*n,s1=SIG/Math.sqrt(n),s4=SIG/Math.sqrt(n4);$("se-n-o").textContent=n;
+    const nw=narrowOf(svg),W=nw?600:900,H=nw?560:400,FS=nw?24:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,padL:nw?60:50,padR:nw?22:16,padT:nw?60:42,padB:nw?72:50,x0:0,x1:1000,y0:0,y1:32,xt:nw?[0,250,500,750,1000]:[0,100,200,300,400,500,600,700,800,900,1000],yt:[0,10,20,30],fx:v=>f1(v,0),fy:v=>f1(v,0),xl:"stops checked (n)",yl:"standard error of the mean (minutes)",FS});
+    let d="";for(let i=0;i<=400;i++){const x=1+999*(i/400)**2;d+=(i?"L":"M")+A.sx(x).toFixed(1)+" "+A.sy(Math.min(32,SIG/Math.sqrt(x))).toFixed(1);}
+    el("path",{d,fill:"none",stroke:"var(--mean)","stroke-width":3.5},svg);
+    for(const [x,s,col,lab,anc] of [[n,s1,"var(--point)",`n = ${n}: ±${f1(s1,1)} min`,0],[n4,s4,"var(--sample)",`4 × ${n} = ${n4}: ±${f1(s4,1)} min`,1]]){
+      el("line",{x1:A.sx(x),x2:A.sx(x),y1:A.sy(s),y2:A.B,stroke:col,"stroke-width":2,"stroke-dasharray":"6 4"},svg);
+      el("line",{x1:A.L,x2:A.sx(x),y1:A.sy(s),y2:A.sy(s),stroke:col,"stroke-width":1.5,"stroke-dasharray":"3 4"},svg);
+      el("circle",{cx:A.sx(x),cy:A.sy(s),r:nw?11:8,fill:col,stroke:"var(--point-ring)","stroke-width":2.5},svg);
+      const tx=A.sx(x)+(nw?16:12),right=tx>A.R-(nw?300:230);
+      txt(svg,right?A.sx(x)-(nw?16:12):tx,A.sy(s)-(nw?16:12)-(!anc&&Math.abs(A.sy(s1)-A.sy(s4))<FS*1.3?FS*1.15:0),lab,Object.assign({"font-size":FS*0.85,"font-weight":700,"text-anchor":right?"end":"start",style:`fill:${col}`},halo(6)));}
+    $("se-big").innerHTML=`<div><b style="color:var(--point)">±${f1(s1,1)} min</b><span>standard error with ${n} stops; checking them costs $${f1(4*n,0)}</span></div><div><b style="color:var(--sample)">±${f1(s4,1)} min</b><span>with ${n4} stops (4 times more); it costs $${f1(4*n4,0)}</span></div><div><b>±$${f1(Math.round(84*s1)*100,0)}</b><span>error in the annual cost of the stops with ${n} (each minute of error in the mean is $8,400)</span></div>`;
+    $("se-msg").innerHTML=`With <b>${n}</b> stops, the sample mean “usually” lands about <b>${f1(s1,1)} minutes</b> from the true one (${f1(SIG,1)} / √${n} = ${f1(SIG,1)} / ${f1(Math.sqrt(n),n===250?1:0)}). To cut that in half, to ${f1(s4,1)} minutes, double isn't enough: you need <b>${n4}</b>, and the cost goes from $${f1(4*n,0)} to $${f1(4*n4,0)}. ${n<=16?"At first, each extra stop helps a lot.":n>=100?"Here the curve is almost flat: each extra stop barely improves anything, and costs the same.":"The curve starts to flatten."} In dollars: 12,000 stops a year × $0.70/min = $8,400 for each minute of error, so the estimate of the annual cost of the stops (about $240,000) has an error of about ±$${f1(Math.round(84*s1)*100,0)}.`;}
+  inp.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 3: law of large numbers ---------- */
+(function(){const svg=$("lln"),NM=2000;let seed=3,five=false,SEQ=[];
+  const gen=()=>{SEQ=[];for(let k=0;k<5;k++){const r=mulberry32(seed*31+k),run=[];let s=0;for(let i=1;i<=NM;i++){s+=P[Math.floor(r()*N)];run.push(s/i);}SEQ.push(run);}};
+  $("l-re").onclick=()=>{seed++;gen();draw();};toggle("l-5",v=>{five=v;draw();});
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,H=nw?560:420,FS=nw?24:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,padL:nw?60:50,padR:nw?24:16,padT:nw?60:42,padB:nw?72:50,x0:1,x1:NM,y0:0,y1:80,log:true,xt:nw?[1,10,100,1000]:[1,10,100,1000,2000],yt:[0,20,40,60,80],fx:v=>f1(v,0),fy:v=>f1(v,0),xl:"stops checked (stretched scale)",yl:"mean of those checked so far (minutes)",FS});
+    let up="",dn="";for(let i=0;i<=200;i++){const x=10**(Math.log10(NM)*i/200),h=2*SIG/Math.sqrt(x);up+=(i?"L":"M")+A.sx(x).toFixed(1)+" "+A.sy(Math.min(80,MU+h)).toFixed(1);dn=" L"+A.sx(x).toFixed(1)+" "+A.sy(Math.max(0,MU-h)).toFixed(1)+dn;}
+    el("path",{d:up+dn.replace(/^ L/," L")+"Z",fill:"var(--mean)","fill-opacity":.12,stroke:"var(--mean)","stroke-opacity":.4},svg);
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(MU),y2:A.sy(MU),stroke:"var(--mean)","stroke-width":2.5},svg);
+    const cp=el("clipPath",{id:"lln-c"},el("defs",null,svg));el("rect",{x:A.L,y:A.T,width:A.R-A.L,height:A.B-A.T},cp);
+    (five?SEQ:SEQ.slice(0,1)).forEach((run,k)=>{let d="";run.forEach((v,i)=>{d+=(i?"L":"M")+A.sx(i+1).toFixed(1)+" "+A.sy(v).toFixed(1);});el("path",{d,fill:"none",stroke:k?"var(--sample)":"var(--point)","stroke-width":k?2:3,"stroke-opacity":k?0.8:1,"clip-path":"url(#lln-c)"},svg);});
+    txt(svg,A.R-4,A.sy(MU)+FS*1.25,"true mean "+f1(MU,1),Object.assign({"font-size":FS*0.78,"text-anchor":"end",style:"fill:var(--mean)","font-weight":700},halo(5)));
+    const R0=SEQ[0];
+    $("l-big").innerHTML=`<div><b>${f1(R0[9],1)}</b><span>mean after 10 stops</span></div><div><b>${f1(R0[99],1)}</b><span>after 100</span></div><div><b style="color:var(--point)">${f1(R0[NM-1],1)}</b><span>after 2,000 (the true one: ${f1(MU,1)})</span></div>`;
+    let mx=0,im=0;for(let i=0;i<10;i++)if(R0[i]>mx){mx=R0[i];im=i;}
+    $("l-msg").innerHTML=`In this sequence, after ${im+1} ${im?"stops":"stop"} the mean reached <b>${f1(mx,1)}</b> minutes; after 100 it was at ${f1(R0[99],1)} and after 2,000, at <b>${f1(R0[NM-1],1)}</b>, ${f1(Math.abs(R0[NM-1]-MU),1)} minutes from the true one. The funnel narrows like 1/√n: with 100 stops it measures ±${f1(2*SIG/10,1)} minutes; with 2,000, ±${f1(2*SIG/Math.sqrt(2000),1)}.${five?" The five sequences each start off on their own side and all end up together: none of them “knows” what the others are doing, but they all get there.":" Press “Show 5 sequences at once”."}`;}
+  gen();redraws.push(draw);draw();})();
+
+/* ---------- idea 4: CLT ---------- */
+(function(){const svg=$("tcl"),NS=[1,2,5,10,30,100];let pi=0,n=5;
+  const pois=(r,l)=>{let k=0,p=1;const L=Math.exp(-l);do{k++;p*=r();}while(p>L);return k-1;};
+  const POP=[
+    {name:"Stop duration",draw:r=>P[Math.floor(r()*N)],mu:MU,s:SIG,x0:0,x1:200,unit:"minutes",lat:false},
+    {name:"Hard-braking alerts in a day",draw:r=>pois(r,0.8),mu:0.8,s:Math.sqrt(0.8),x0:-0.5,x1:6.5,unit:"alerts",lat:true},
+    {name:"Day of the month of refueling",draw:r=>1+Math.floor(r()*30),mu:15.5,s:Math.sqrt((900-1)/12),x0:0.5,x1:30.5,unit:"day",lat:true},
+    {name:"Load: returns empty or full",draw:r=>r()<0.35?0:20+3*gauss(r),mu:13,s:Math.sqrt(0.65*409-169),x0:-2,x1:30,unit:"tonnes",lat:false}];
+  chips($("c-p"),POP.map(p=>p.name),i=>{pi=i;draw();});
+  chips($("c-n"),NS.map(v=>"n = "+v),i=>{n=NS[i];draw();},2);
+  function draw(){const p=POP[pi],r=mulberry32(77+pi*13+n),reps=4000,M=[];for(let k=0;k<reps;k++){let s=0;for(let i=0;i<n;i++)s+=p.draw(r);M.push(s/n);}
+    const se=p.s/Math.sqrt(n);
+    const nw=narrowOf(svg),W=nw?600:900,H=nw?880:420,FS=nw?24:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    /* population */
+    const rp=mulberry32(5+pi),PV=[];for(let k=0;k<20000;k++)PV.push(p.draw(rp));
+    const pb=p.lat?1:(p.x1-p.x0)/40,PC=binit(PV,p.x0,p.x1,pb),pm=Math.max(...PC);
+    const p1=nw?{x:0,y:0,w:W,h:300}:{x:0,y:0,w:W*0.34,h:H},p2=nw?{x:0,y:300,w:W,h:H-300}:{x:W*0.36,y:0,w:W*0.64,h:H};
+    const A=axes(svg,Object.assign({},p1,{padL:nw?20:14,padR:nw?20:10,padT:nw?64:44,padB:nw?72:50,x0:p.x0,x1:p.x1,y0:0,y1:pm*1.08,xt:tk(Math.ceil(p.x0),Math.floor(p.x1),nw?5:3),fx:v=>f1(v,0),fy:v=>"",xl:p.unit,yl:"The individual data",FS}));
+    bars(svg,A,PC,p.x0,pb,1e9,"var(--muted)",0.5);vline(svg,A,p.mu,"var(--mean)",2.5);
+    /* means */
+    let x0,x1,bw;
+    if(p.lat&&1/n>=(Math.min(p.x1,p.mu+4.5*se)-Math.max(p.x0,p.mu-4.5*se))/45){bw=1/n;x0=Math.max(p.x0,p.mu-4.5*se);x0=Math.floor(x0*n)/n-0.5/n;x1=Math.min(p.x1,p.mu+4.5*se);x1=Math.ceil(x1*n)/n+0.5/n;x0=Math.max(x0,p.lat?p.x0:x0);}
+    else{x0=n===1?p.x0:Math.max(p.x0,p.mu-4.5*se);x1=n===1?p.x1:Math.min(p.x1,p.mu+4.5*se);bw=(x1-x0)/40;}
+    const MC=binit(M,x0,x1,bw),mm=Math.max(...MC),bh=reps*bw*phi(0)/se,ym=Math.max(mm,Math.min(bh,mm*1.6))*1.1;
+    const B=axes(svg,Object.assign({},p2,{padL:nw?20:14,padR:nw?20:14,padT:nw?64:44,padB:nw?72:50,x0,x1,y0:0,y1:ym,xt:tk(x0,x1,nw?4:6),fx:v=>f1(v,(x1-x0)<4?1:0),fy:v=>"",xl:"mean of each sample ("+p.unit+")",yl:`Means of 4,000 samples of ${n}`,FS}));
+    bars(svg,B,MC,x0,bw,ym,"var(--point)",0.72);
+    el("path",{d:bell(B,p.mu,se,reps*bw,x0,x1),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    const sk=skew(M),sm=Math.sqrt(mean(M.map(v=>(v-mean(M))**2))),d=p.lat?(p.name.startsWith("Hard")?2:1):1;
+    $("c-big").innerHTML=`<div><b style="color:var(--point)">${f1(sk,2)}</b><span>skewness of the means (0 = symmetric like the bell; that of the individual data: ${f1(skew(PV),1)})</span></div><div><b>${f1(sm,d)}</b><span>how much the means wobble</span></div><div><b style="color:var(--mean)">${f1(se,d)}</b><span>what the calculation predicts: ${f1(p.s,d)} / √${n}</span></div>`;
+    const good=Math.abs(sk)<0.25;let m;
+    if(pi===0)m=n===1?`With n = 1 the means are individual stops: the usual skewed shape, nothing like the bell.`:`With ${n} stops per sample, the skewness drops from ${f1(skew(PV),1)} to <b>${f1(sk,2)}</b>. ${good?"It's now an almost perfect bell.":n<30?"There are still more stray high means than low ones: the tail of the long stops shows. Raise n.":"It looks a lot like the bell, but the right tail still peeks out: with data this skewed, 30 falls short. Try 100."}`;
+    else if(pi===1)m=n<5?`Alerts are whole numbers (0, 1, 2…), so the means of ${n} can only be ${n===1?"0, 1, 2…":"0, ½, 1, 1½…"}: separate bars skewed to the right (most days have 0 or 1 alerts). Raise n.`:`With ${n} days per sample, the means can take many values and the bars already follow the bell${good?"":", though still somewhat skewed to the right"}. A count of alerts per month (the sum of about 22 working days) is already almost normal.`;
+    else if(pi===2)m=n===1?`The day of the month is flat: any day is equally likely. Nowhere near a bell.`:n===2?`With only 2 days, the mean already has a roof shape: it's more likely to come out near 15 (many combinations give it) than at the extremes (only 1 and 1, or 30 and 30).`:`With ${n} data points, the mean of flat data is already an excellent bell: since it's symmetric, there's no tail to correct.`;
+    else m=n<5?`Two heaps: the empty return trips (0 tonnes) and the full ones (about 20). With ${n} ${n===1?"trip":"trips"} per sample, the means still have ${n===1?"those two peaks":"several peaks, one for each possible number of empty trips"}. Raise n.`:`With ${n} trips per sample, the peaks merge into a single bell around 13 tonnes, even though no actual trip carries 13 tonnes.`;
+    $("c-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 5: when it fails ---------- */
+(function(){const svg=$("fail");let ci=0;const n=30;
+  const keep=v=>v<=30?1:Math.exp(-(v-30)/40);
+  const CASES=[{name:"Delays from incidents (very heavy tail)",mu:15,x0:0,x1:60},{name:"30 consecutive stops of the same truck",mu:MU,x0:0,x1:150},{name:"Only the stops that get recorded properly",mu:MU,x0:10,x1:45}];
+  chips($("f-q"),CASES.map(c=>c.name),i=>{ci=i;draw();});
+  function draw(){const c=CASES[ci],r=mulberry32(900+ci),reps=3000,M=[];
+    for(let k=0;k<reps;k++){let s=0;
+      if(ci===0){for(let i=0;i<n;i++)s+=5*Math.pow(1-r(),-1/1.5);}
+      else if(ci===1){const t=Math.floor(r()*60),st=Math.floor(r()*170);for(let i=0;i<n;i++)s+=P[t*200+st+i];}
+      else{for(let i=0;i<n;i++){let v;do{v=P[Math.floor(r()*N)];}while(r()>keep(v));s+=v;}}
+      M.push(s/n);}
+    const nw=narrowOf(svg),W=nw?600:900,H=nw?560:420,FS=nw?24:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const bw=(c.x1-c.x0)/(nw?45:60),MC=binit(M,c.x0,c.x1,bw),se=ci===0?NaN:SIG/Math.sqrt(n);
+    const mm=Math.max(...MC),bh=ci===0?0:reps*bw*phi(0)/se,ym=Math.max(mm,bh)*1.1;
+    const A=axes(svg,{x:0,y:0,w:W,h:H,padL:nw?20:14,padR:nw?22:16,padT:nw?64:44,padB:nw?72:50,x0:c.x0,x1:c.x1,y0:0,y1:ym,xt:tk(c.x0,c.x1,nw?5:8),fx:v=>f1(v,0),fy:v=>"",xl:"mean of each sample of 30 (minutes)",yl:"Means of 3,000 samples",FS});
+    bars(svg,A,MC,c.x0,bw,ym,"var(--point)",0.72);
+    if(ci>0)el("path",{d:bell(A,c.mu,se,reps*bw,c.x0,c.x1),fill:"none",stroke:"var(--mean)","stroke-width":3,"stroke-dasharray":"8 5"},svg);
+    vline(svg,A,c.mu,"var(--mean)",3);
+    const lx=A.sx(c.mu),right=lx>A.R-(nw?260:200);txt(svg,lx+(right?-8:8),A.T+FS*0.5,"true mean "+f1(c.mu,1),Object.assign({"font-size":FS*0.8,"text-anchor":right?"end":"start",style:"fill:var(--mean)","font-weight":700},halo(5)));
+    const med=quant(M,0.5),sm=sdev(M),out=M.filter(v=>v>c.x1).length,mx=Math.max(...M);
+    $("f-big").innerHTML=`<div><b style="color:var(--point)">${f1(med,1)}</b><span>where the means are centered (half below); the true one: ${f1(c.mu,1)}</span></div><div><b>${f1(sm,1)}</b><span>how much the means wobble</span></div><div><b style="color:var(--mean)">${ci===0?"∞":f1(se,1)}</b><span>${ci===0?"what the calculation promises: the standard deviation of these data is infinite":"what the calculation promises: "+f1(SIG,1)+" / √30"}</span></div>`;
+    const m=[`Delays from incidents are almost always a few minutes, but now and then one lasts a whole day: the tail is so long that the <b>standard deviation is infinite</b> (the more data, the bigger it comes out). The mean exists (${f1(c.mu,0)} minutes), but half of the means of 30 fall below <b>${f1(med,1)}</b>, ${out} of the 3,000 fall off the chart and the largest is <b>${f1(mx,0)}</b>. A single huge incident drags the whole sample. With tails like these, the theorem doesn't hold: the means don't turn into a bell no matter how much data there is. Better to use the median or handle incidents separately.`,
+      `30 consecutive stops of one truck look alike: same route, same driver, same customers and consecutive days. Their means wobble <b>${f1(sm,1)} minutes</b>, not the ${f1(se,1)} the calculation promises: ${f1(sm/se,1)} times more. Those 30 stops are worth about <b>${f1((SIG/sm)**2,1)}</b> independent stops. The standard-error calculation assumes each data point is new; here they hardly are.`,
+      `Long stops get recorded worse (the signal is lost at covered docks): many of those over an hour are lost. The means form a beautiful, narrow bell… around <b>${f1(med,1)}</b> minutes, not ${f1(MU,1)}. The standard error (${f1(sm,1)}) says the mean is very precise, and it is: precisely wrong. Neither the theorem nor more data detects this error.`][ci];
+    $("f-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 6: designs ---------- */
+(function(){const svg=$("des"),n=60;let di=0,seed=1;
+  const NH=[6000,4000,2000],W_=NH.map(v=>v/N),SD=STR.map(([a,b])=>{const x=P.slice(a,b);return Math.sqrt(x.reduce((s,v)=>s+(v-mean(x))**2,0)/x.length);});
+  const DS=[{name:"Purely at random",nh:null},{name:"By route type, by its size",nh:[30,20,10]},{name:"By route type, more at the port",nh:[15,20,25]},{name:"3 trucks × 20 stops",nh:null}];
+  chips($("d-q"),DS.map(d=>d.name),i=>{di=i;draw();});
+  $("d-re").onclick=()=>{seed++;draw();};
+  function one(d,r){/* returns [estimate, indices] */
+    if(d===0){const ix=[];for(let i=0;i<n;i++)ix.push(Math.floor(r()*N));return [mean(ix.map(i=>P[i])),ix];}
+    if(d===3){const t=[];while(t.length<3){const k=Math.floor(r()*60);if(!t.includes(k))t.push(k);}const ix=[];t.forEach(k=>{for(let i=0;i<20;i++)ix.push(k*200+Math.floor(r()*200));});return [mean(ix.map(i=>P[i])),ix];}
+    const nh=DS[d].nh,ix=[];let est=0;STR.forEach(([a,b],h)=>{let s=0;for(let i=0;i<nh[h];i++){const j=a+Math.floor(r()*(b-a));ix.push(j);s+=P[j];}est+=W_[h]*s/nh[h];});return [est,ix];}
+  const EST=DS.map((_,d)=>{const r=mulberry32(4000+d),a=[];for(let k=0;k<2000;k++)a.push(one(d,r)[0]);return a;});
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?24:14,H=nw?960:560;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const [est,ix]=one(di,mulberry32(seed*97+di)),per=[0,0,0],tr=new Set();ix.forEach(i=>{per[i<6000?0:i<10000?1:2]++;tr.add(Math.floor(i/200));});
+    /* trucks */
+    const q=nw?26:22,gap=nw?6:5,cols=nw?15:10;let t0=0,yy=nw?40:58,top=0;
+    [30,20,10].forEach((nt,h)=>{const gx=nw?20:20+h*((W-40)/3),gy=nw?yy:58,rows=Math.ceil(nt/cols);
+      const label=`${SNAME[h]}: ${f1(NH[h],0)} stops, mean ${f1(mean(P.slice(STR[h][0],STR[h][1])),0)} min`;
+      txt(svg,gx,gy-(nw?14:12),label,{"font-size":FS*0.78,class:"t-ink","font-weight":700});
+      for(let k=0;k<nt;k++){const c=t0+k,x=gx+(k%cols)*(q+gap),y=gy+Math.floor(k/cols)*(q+gap),on=tr.has(c);el("rect",{x,y,width:q,height:q,rx:4,fill:on?"var(--point)":"var(--line)","fill-opacity":on?0.9:0.6,stroke:on?"var(--point)":"var(--muted)","stroke-opacity":on?1:0.4},svg);}
+      const ly=gy+rows*(q+gap)+FS*1.0;
+      txt(svg,gx,ly,`${per[h]} of the sample's 60`,{"font-size":FS*0.78,style:"fill:var(--point)","font-weight":700});
+      yy=ly+FS*2.4;top=Math.max(top,ly);t0+=nt;});
+    top+=nw?20:24;
+    /* histogram */
+    const x0=0,x1=80,bw=nw?2:1.5,MC=binit(EST[di],x0,x1,bw),M0=binit(EST[0],x0,x1,bw),ym=Math.max(...MC,...M0)*1.1;
+    const A=axes(svg,{x:0,y:top,w:W,h:H-top,padL:nw?20:14,padR:nw?22:16,padT:nw?70:48,padB:nw?72:50,x0,x1,y0:0,y1:ym,xt:nw?[0,20,40,60,80]:[0,10,20,30,40,50,60,70,80],fx:v=>f1(v,0),fy:v=>"",xl:"estimate of the mean (minutes)",yl:"Estimates in 2,000 samples of 60",FS});
+    bars(svg,A,MC,x0,bw,ym,"var(--point)",0.72);
+    if(di){let d="";M0.forEach((c,k)=>{const a=A.sx(x0+k*bw),b=A.sx(x0+(k+1)*bw),y=A.sy(c);d+=(k?"L":"M")+a.toFixed(1)+" "+y.toFixed(1)+"L"+b.toFixed(1)+" "+y.toFixed(1);});el("path",{d,fill:"none",stroke:"var(--muted)","stroke-width":2},svg);}
+    vline(svg,A,MU,"var(--mean)",2.5,"7 5");
+    const e=sdev(EST[di]),e0=sdev(EST[0]),neq=di?(SIG/e)**2:60;
+    $("d-big").innerHTML=`<div><b style="color:var(--point)">${f1(est,1)}</b><span>the estimate with the sample above (the true one: ${f1(MU,1)})</span></div><div><b>±${f1(e,1)}</b><span>typical error of this way of choosing (in 2,000 samples)</span></div><div><b>${f1(neq,0)}</b><span>random stops that would give the same error</span></div>`;
+    $("d-msg").innerHTML=[`At random, the split among routes changes from one sample to another: this time you got ${per[0]} highway, ${per[1]} city and ${per[2]} port (the expected split would be 30, 20 and 10). Since the port has much longer stops, a sample with many from the port gives a high mean. Typical error over the 2,000 samples: <b>±${f1(e,1)} minutes</b>, almost what the calculation says: ${f1(SIG,1)} / √60 = ${f1(SIG/Math.sqrt(60),1)}.`,
+      `With 30, 20 and 10 fixed, there's no more bad luck in the split: only the chance within each route remains. The error drops from ±${f1(e0,1)} to <b>±${f1(e,1)} minutes</b>, as if ${f1(neq,0)} random stops had been checked instead of 60. For free: the same 60 stops, better spread.`,
+      `At the port stops vary enormously (from 9 minutes to over 7 hours) and on the highway hardly at all. Putting more stops where they vary most (15, 20 and 25) and then weighting each route by its real size brings the error down to <b>±${f1(e,1)} minutes</b>: equivalent to ${f1(neq,0)} random stops. This is Neyman allocation.`,
+      `Three trucks, 20 stops from each. This time: ${[...tr].map(c=>SNAME[c<30?0:c<50?1:2]).join(", ")}. The stops of one truck look alike (same route, same customers), so 20 from one truck say little more than 1 or 2. The error shoots up to <b>±${f1(e,1)} minutes</b>: these 60 stops are worth ${f1(neq,0)} random ones. If you sample by truck for convenience, choose many trucks with few stops each, not the other way around.`][di];}
+  redraws.push(draw);draw();})();
+})();
+</script>
+</body>
+</html>

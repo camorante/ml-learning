@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Confidence intervals and the bootstrap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content;max-width:100%}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec p b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.rowb{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.yesno{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.yesno .card h3{font-size:1.05rem}
+@media (max-width:620px){.yesno{grid-template-columns:1fr}.seg{border-radius:14px}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#en" target="_self">← Main menu</a> · The math under ML · topic 12 · explained with drawings · <a href="confidence-intervals-and-the-bootstrap-technical-en.html" target="_self">see the technical version</a> · <a href="math-under-ml-en.html" target="_self">all topics</a> · <a href="intervalos-de-confianza-y-bootstrap-es.html" target="_self">en español</a></p>
+  <h1>Confidence intervals and the bootstrap</h1>
+  <p class="lede">“This truck burns 32.4 L/100 km on average.” Is that based on 10 trips or 1,000? The number is the same, but it doesn't deserve the same trust. An interval says how wrong a number could be: with a formula when there is one and, when there isn't, by resampling the data itself.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="situ col">
+    <p class="eyebrow">The setup</p>
+    <p>A trucking company wants to know the <strong>average fuel use</strong> of one truck model on its regional routes. Every trip gives a different number (more load, more wind, another driver), so they write down the fuel use of a handful of trips and take the average.</p>
+    <p>The catch: with other trips they'd get another average. How much can you trust the one you got? The answer is a <strong>confidence interval</strong>: the average, plus or minus a <strong>margin</strong>. This toy has a trick: since the trips are simulated, we know the <strong>true</strong> average fuel use of this model, and you can reveal it to see whether the interval gets it right.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="Fuel use of each trip in the sample, the average with its interval, and the intervals of earlier samples"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, each <b style="color:var(--point)">orange</b> dot is a trip, placed by its fuel use (the bottom axis, in liters per 100 km; the height means nothing, it just spreads the dots out). Below, the thick <b style="color:var(--mean)">blue</b> bar is the <b>interval</b>: it goes from the average minus the margin to the average plus the margin, and the circle is the average. Further down, in gray, the intervals of the samples you drew before.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>How many trips?</h3>
+      <p>The more trips go into the average, the less it wobbles and the narrower the interval.</p>
+      <div class="chips" id="t-n" role="group" aria-label="Number of trips"></div>
+    </div>
+    <div class="dec">
+      <h3>How confident?</h3>
+      <p>The <b>confidence level</b> says how many times out of 100 this method gets it right. More confidence needs a wider interval. The usual choice is 95%.</p>
+      <div class="seg" role="group" aria-label="Confidence level"><button type="button" id="t-c0" aria-pressed="false">90%</button><button type="button" id="t-c1" aria-pressed="true">95%</button><button type="button" id="t-c2" aria-pressed="false">99%</button></div>
+    </div>
+    <div class="dec">
+      <h3>Another sample and the true value</h3>
+      <p>Draw other random trips of the same truck and compare. When you <b>reveal</b> it, the true average fuel use appears, which in real life you never know.</p>
+      <div class="rowb"><button type="button" id="t-new" class="primary">Draw another sample</button><button type="button" id="t-rev" aria-pressed="false">Reveal the true value</button></div>
+    </div>
+  </div>
+  <div class="big3" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Try this, in order:</strong></p>
+    <ol class="try">
+      <li>With 10 trips, the average is 32.4 and the margin ±3.2: the true fuel use could be anywhere between 29.2 and 35.6. A bare “32.4” was hiding all that.</li>
+      <li>Press “Draw another sample” five or six times: each sample gives another average and another interval. Watch them wobble in gray.</li>
+      <li>Switch to 1,000 trips: the average comes out 31.9 and the margin drops to ±0.28. More data, less wobble.</li>
+      <li>Press “Reveal the true value” (32.0) and count how many of your intervals catch it. Almost all of them; every now and then, one doesn't.</li>
+      <li>Change the level to 99% and then to 90%: the interval widens and narrows. Confidence is paid for in width.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">What you just saw</p>
+    <h2>A number with its margin</h2>
+    <p>An average computed from a few data points is an <strong>estimate</strong>: a number that gets close to the true value, but would change with other data. A confidence interval adds how wrong it might be:</p>
+    <ul>
+      <li><strong>Estimate ± margin.</strong> 32.4 ± 3.2 L/100 km means “the true fuel use is, fairly surely, between 29.2 and 35.6”.</li>
+      <li><strong>The margin depends on three things:</strong> how much the data vary (trips very different from each other, more margin), how much data there is (more data, less margin, but slowly: to cut it in half you need four times as much) and the confidence you ask for (more confidence, more margin).</li>
+      <li><strong>The interval can miss.</strong> A 95% interval is built with a method that's right 95 times out of 100. The other 5 times, the true value lands outside, and there's no way to know which ones those are.</li>
+    </ul>
+    <p>There are two ways to compute the margin. <strong>With a formula</strong>, which works very well for averages and percentages (ideas 1 to 4). And by <strong>resampling</strong> the data itself, the <strong>bootstrap</strong>, which works for almost any number: a median, dollars per kilometer (ideas 5 and 6). At the end, how to compare two groups (idea 7).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 7</p>
+    <h2>With a formula: average ± 1.96 standard errors</h2>
+    <p>In <a href="sampling-and-the-central-limit-theorem-en.html" target="_self">topic 11</a> we saw that the average of n data points “wobbles” from one sample to another, and that this wobble has a bell shape (the central limit theorem) with a width called the <strong>standard error</strong>: the standard deviation of the data divided by the square root of n. Here it's used the other way around: if the average almost always lands close to the true value, the true value is almost always close to the average.</p>
+    <p>How close is “almost always close”? In a bell curve, 95% of the time you land less than <strong>1.96 standard errors</strong> from the center (<a href="distributions-en.html" target="_self">topic 8</a>). That gives the formula: <strong>average ± 1.96 × standard deviation / √n</strong>. This truck's trips vary by about 4.5 L/100 km from each other (their standard deviation, <a href="mean-variance-and-standard-deviation-en.html" target="_self">topic 7</a>).</p>
+  </div>
+  <figure class="fig"><svg id="ef" role="img" aria-label="Standard error bell curve with the interval, and the margin curve by number of trips"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> On the left (on top on a phone), the <b style="color:var(--mean)">blue</b> bell says how much the average would wobble with that number of trips; the shaded part is the central one, the share given by the chosen confidence level. Its width becomes the interval below it. On the right (below on a phone), the margin by number of trips; the <b style="color:var(--point)">orange</b> dot is your choice.</p>
+  <div class="controls col">
+    <div class="slider"><label for="ef-n">Trips <output id="ef-n-o"></output></label><input type="range" id="ef-n" min="0" max="7" step="1" value="4"><div class="ends"><span>5</span><span>1,000</span></div></div>
+    <div class="slider"><label for="ef-c">Confidence level <output id="ef-c-o"></output></label><input type="range" id="ef-c" min="80" max="99" step="1" value="95"><div class="ends"><span>80%</span><span>99%</span></div></div>
+  </div>
+  <div class="big3 col" id="ef-big"></div>
+  <p class="qcard col" id="ef-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 7</p>
+    <h2>What “95%” really means</h2>
+    <p>The 95% isn't a property of <em>your</em> interval, but of the <strong>method</strong>. Imagine 100 different teams each draw their own trips and compute their interval with the same formula. About 95 intervals will catch the true fuel use and about 5 won't. You are one of those teams, and you don't know whether you got one of the good ones.</p>
+  </div>
+  <figure class="fig"><svg id="cov" role="img" aria-label="One hundred confidence intervals from different samples and the true value"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each horizontal bar is the interval of a different sample (the most recent at the bottom). The dashed vertical line is the true fuel use, 32.0. The <b style="color:var(--mean)">blue</b> bars catch it; the thicker <b style="color:var(--warn)">red</b> ones leave it out. You see the last 100.</p>
+  <div class="decs">
+    <div class="dec"><h3>Trips per sample</h3><div class="chips" id="cv-n" role="group" aria-label="Trips per sample"></div></div>
+    <div class="dec"><h3>Confidence level</h3><div class="seg" role="group" aria-label="Level"><button type="button" id="cv-c0" aria-pressed="false">80%</button><button type="button" id="cv-c1" aria-pressed="false">90%</button><button type="button" id="cv-c2" aria-pressed="true">95%</button><button type="button" id="cv-c3" aria-pressed="false">99%</button></div></div>
+    <div class="dec"><h3>More samples</h3><div class="rowb"><button type="button" id="cv-20" class="primary">+20 samples</button><button type="button" id="cv-500">+500 at once</button><button type="button" id="cv-re">↺ Start over</button></div></div>
+  </div>
+  <div class="big3 col" id="cv-big"></div>
+  <p class="qcard col" id="cv-msg"></p>
+  <div class="yesno">
+    <div class="card pc-good"><h3>What it does mean</h3><ul class="pc">
+      <li>“If I repeated everything many times, 95% of the intervals I'd get would catch the true value.”</li>
+      <li>A narrow interval says the number is well measured; a wide one, that you need more data.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>What it doesn't mean</h3><ul class="pc">
+      <li>It doesn't say that 95% of the <em>trips</em> fall inside: the interval is for the average, and single trips land outside much more often (idea 3).</li>
+      <li>Nor that the true value “has a 95% probability” of being in this particular interval: it either is or it isn't. That sentence belongs to another way of reasoning, the <a href="bayes-en.html" target="_self">Bayesian</a> one.</li>
+      <li>And it doesn't cover measurement errors or a badly chosen sample: if all the trips are from summer, the interval is about summer.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 7</p>
+    <h2>With little data, Student's t: a bit wider</h2>
+    <p>The formula in idea 1 has a trap: it uses the standard deviation of the trips, and in real life that deviation is also computed from the sample. With 10 trips it can come out somewhat smaller or bigger than the real one. If it comes out small, the margin is too narrow and the interval misses more often than promised.</p>
+    <p>The fix was published in 1908 by a chemist at the Guinness brewery, William Gosset, under the pen name “Student”: replace the 1.96 with a somewhat bigger number that depends on n, taken from the <strong>t distribution</strong>. It's a bell curve with fatter tails, which looks more like the normal the more data there is.</p>
+  </div>
+  <figure class="fig"><svg id="tt" role="img" aria-label="Normal curve and Student's t curve with the tails that fall beyond 1.96"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The dashed gray curve is the normal bell; the <b style="color:var(--mean)">blue</b> one, Student's t for the chosen number of trips. The <b style="color:var(--warn)">red</b> areas are the times the average lands more than 1.96 “estimated standard errors” from the true value: the misses from using 1.96. The vertical blue line marks the correct multiplier, the one that leaves out only 5%.</p>
+  <div class="controls col">
+    <div class="slider"><label for="tt-n">Trips <output id="tt-n-o"></output></label><input type="range" id="tt-n" min="0" max="9" step="1" value="5"><div class="ends"><span>3</span><span>100</span></div></div>
+  </div>
+  <div class="big3 col" id="tt-big"></div>
+  <p class="qcard col" id="tt-msg"></p>
+  <div class="col stack">
+    <p>In practice, calculators and software always use the t for averages (with 1,000 data points it gives 1.96 anyway). The toy at the top was already using it: that's why with 10 trips the margin was ±3.2 and not ±2.8. And a warning: the t assumes the trips have a roughly bell-like shape; if a few trips are wildly off, not even the t fixes it.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 7</p>
+    <h2>Percentages: when the usual formula goes below 0</h2>
+    <p>A new customer has received 40 deliveries and <strong>1 arrived late</strong>: 2.5%. How much should you trust that? For a percentage, the usual formula (the <strong>Wald</strong> one) is: percentage ± 1.96 × √(p × (1 − p) / n), with p as a fraction. With 1 of 40 it gives <strong>−2.3%</strong> to 7.3%. A negative percentage of late deliveries makes no sense. And with 0 of 40 the margin comes out ±0: “this customer will surely never have a delay”. Not that either.</p>
+    <p>The problem is that, near 0% (or 100%), the bell of the percentage isn't symmetric: it's squashed against the wall (it's a binomial, <a href="distributions-en.html" target="_self">topic 8</a>). The <strong>Wilson</strong> interval takes that into account: it looks for all the true percentages for which what you observed would be normal. It never goes outside 0 to 100% and, when there are no delays at all, it still gives a margin.</p>
+  </div>
+  <figure class="fig"><svg id="pr" role="img" aria-label="Wald and Wilson intervals for the percentage of late deliveries"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The <b style="color:var(--point)">orange</b> dot is the observed percentage. The <b style="color:var(--sample)">purple</b> bar is the Wald interval and the <b style="color:var(--mean)">blue</b> one, the Wilson interval. The <b style="color:var(--warn)">reddish</b> strip on the left is negative percentages: impossible.</p>
+  <div class="controls col">
+    <div class="slider"><label for="pr-n">Deliveries <output id="pr-n-o"></output></label><input type="range" id="pr-n" min="0" max="5" step="1" value="1"><div class="ends"><span>20</span><span>600</span></div></div>
+    <div class="slider"><label for="pr-k">Arrived late <output id="pr-k-o"></output></label><input type="range" id="pr-k" min="0" max="30" step="1" value="1"><div class="ends"><span>0</span><span>30</span></div></div>
+  </div>
+  <div class="big3 col" id="pr-big"></div>
+  <p class="qcard col" id="pr-msg"></p>
+  <div class="col stack">
+    <p>A handy shortcut, the <strong>rule of 3</strong>: if in n deliveries there hasn't been a single delay, the true percentage is almost surely below 3 / n. With 40 deliveries and no delays, below 7.5%; with 300, below 1%.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 7</p>
+    <h2>The bootstrap: resampling your own data</h2>
+    <p>Formulas exist for averages and percentages. What about the <strong>median</strong>? Or a truck's <strong>dollars per kilometer</strong>, which are total dollars divided by total kilometers? There are formulas, but complicated ones. The <strong>bootstrap</strong> (Bradley Efron, 1979) skips them with an almost cheeky idea: the best picture we have of “all possible trips” is the trips we have.</p>
+    <p>So you draw, <strong>with replacement</strong>, as many trips as there are (here 12) from those same 12: some come out two or three times and others not at all. With that made-up sample you compute the number. You repeat that a thousand times and look at how much it wobbles: the central 95% of those thousand numbers is the interval (the <strong>percentile bootstrap</strong>).</p>
+  </div>
+  <div class="chips col" id="bs-q" role="group" aria-label="Which number"></div>
+  <figure class="fig"><svg id="bs" role="img" aria-label="Twelve trips with how many times each comes out in the last resample, and histogram of the number across all resamples"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, the 12 trips of a delivery truck, with their cost (diesel and tolls) and their km. The last one is a long trip. After each resample, each trip shows how many times it came out (×0 in gray: it didn't come out). At the bottom, the histogram of the chosen number across all the resamples so far; the black line is the number with the 12 real trips and the <b style="color:var(--mean)">blue</b> band, the central 95% interval (it appears from 200 resamples on).</p>
+  <div class="rowb col"><button type="button" id="bs-1" class="primary">1 resample</button><button type="button" id="bs-100">+100</button><button type="button" id="bs-1k">+1,000</button><button type="button" id="bs-re">↺ Start over</button></div>
+  <div class="big3 col" id="bs-big"></div>
+  <p class="qcard col" id="bs-msg"></p>
+  <div class="col stack">
+    <p>The nice part is that the method doesn't change with the number: average, median, a ratio, a percentage, a model's precision… You resample and recompute. The price is doing the calculation thousands of times, which a computer does in an instant.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 6 of 7</p>
+    <h2>When the bootstrap fools you</h2>
+    <p>The bootstrap assumes the data are a good miniature picture of all possible data, and that each data point is <strong>independent</strong> of the others. When that fails, the interval comes out too narrow and promises a confidence it doesn't have. Three typical cases:</p>
+  </div>
+  <div class="chips col" id="fa-q" role="group" aria-label="Case"></div>
+  <figure class="fig"><svg id="fa" role="img" aria-label="Data and bootstrap result in a case where it fails"></svg></figure>
+  <p class="howto col" id="fa-how"></p>
+  <div class="big3 col" id="fa-big"></div>
+  <p class="qcard col" id="fa-msg"></p>
+  <div class="col stack">
+    <p>The general rule: <strong>resample what is truly independent</strong>. If the trips come in trucks, resample trucks; if they are consecutive days of a series, resample chunks of several days (the “block” bootstrap). It's the same idea as splitting by truck before training a model (<a href="split-before-you-look-en.html" target="_self">split before you look</a>).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 7 of 7</p>
+    <h2>Comparing two depots: does the difference include 0?</h2>
+    <p>The trucks at the South depot seem to burn more than those at the North. Is it a real difference or the wobble of the sample? You compute an interval for the <strong>difference of averages</strong>. If the whole interval is above 0, the South burns more (with the chosen confidence). If it includes 0, the data aren't enough to say: the difference could be zero, or even the other way around.</p>
+    <p>A detail that fools a lot of people: the margin of the difference isn't the sum of the two margins, but something smaller (the square root of the sum of their squares: the errors of two independent groups rarely both go the worst way at the same time). That's why two intervals that overlap can give a difference that does <strong>not</strong> include 0.</p>
+  </div>
+  <figure class="fig"><svg id="dp" role="img" aria-label="Fuel use of the trips from two depots with their intervals and the interval of the difference"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, the trips from each depot (<b style="color:var(--sample)">North</b> and <b style="color:var(--point)">South</b>) with their average and their interval. At the bottom, the interval of the difference South − North, with the 0 line marked: <b style="color:var(--good)">green</b> if it doesn't include 0 and gray if it does.</p>
+  <div class="controls col">
+    <div class="slider"><label for="dp-n">Trips per depot <output id="dp-n-o"></output></label><input type="range" id="dp-n" min="10" max="200" step="10" value="20"><div class="ends"><span>10</span><span>200</span></div></div>
+  </div>
+  <div class="big3 col" id="dp-big"></div>
+  <p class="qcard col" id="dp-msg"></p>
+  <div class="col stack">
+    <p>This way of looking (is 0 inside?) is the gateway to <strong>hypothesis tests</strong> and the famous p-values, which are topic 13 of this collection. An interval also shows something the p-value hides: <strong>how big</strong> the difference is. 1.4 L/100 km over 100,000 km a year is 1,400 liters, about $2,300 per truck at $1.65/L.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The complete recipe</h2>
+    <ol class="steps">
+      <li><div><strong>Never a number on its own</strong>: give it with its interval and the number of data points it was computed from.</div></li>
+      <li><div><strong>For an average</strong>: average ± t × standard deviation / √n (with lots of data, t ≈ 1.96 for 95%).</div></li>
+      <li><div><strong>For a percentage</strong>, especially if it's small or there's little data: Wilson, not Wald.</div></li>
+      <li><div><strong>For any other number</strong> (median, ratio, a model's metric): the bootstrap, resampling thousands of times and keeping the central 95%.</div></li>
+      <li><div><strong>Resample what's independent</strong>: whole trucks, blocks of days. Be wary with very little data or with maxima and minima.</div></li>
+      <li><div><strong>To compare two groups</strong>, the interval of the difference: does it include 0? And what is it worth in dollars?</div></li>
+      <li><div><strong>To know how much data you need</strong>: desired margin → n ≈ (1.96 × deviation / margin)². Cutting the margin in half costs four times as much data.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where it shows up in fleet telemetry</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13"/><circle cx="20" cy="20" r="5"/><path d="M20 7v8M20 25v8"/></svg><h3>Does the new tire save fuel?</h3><p>A test with 30 trucks gives savings of 0.8 ± 0.6 L/100 km. Over 100,000 km a year that's between $330 and $2,300 per truck. With the interval in hand you decide whether it's worth the price, or whether you need to test with more trucks first.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="10" width="28" height="22" rx="2"/><path d="M6 16h28M13 6v8M27 6v8"/><path d="M14 24l4 4 8-8"/></svg><h3>On-time rate per customer</h3><p>A customer with 0 delays in 12 deliveries doesn't have a 0% delay rate: Wilson says it could be as high as 24%. Rankings of customers with few shipments are sorted by the end of the interval, not by the bare percentage.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 32h28M8 32V8"/><path d="M12 26h4v6h-4zM19 18h4v14h-4zM26 22h4v10h-4z"/></svg><h3>A model's score</h3><p>“The breakdown model gets 81% right” on the test set. Is it 81 ± 2 or 81 ± 9? A bootstrap over the trucks in the test set tells you, and keeps you from celebrating one-point improvements that are pure noise.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 30L20 8l12 22z"/><path d="M14 24h12"/></svg><h3>How many trips to measure</h3><p>To know the fuel use of a new model with a margin of ±0.5 L/100 km, with trips that vary by 4.5: n = (1.96 × 4.5 / 0.5)² = 311.2, so you need 312 trips. For ±0.25, about 1,245. You work it out before spending money on the test.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Connections</p>
+    <h2>With the models of the ML series and the other topics</h2>
+    <p>This topic builds on the standard error and the central limit theorem from <a href="sampling-and-the-central-limit-theorem-en.html" target="_self">topic 11</a>, on the standard deviation from <a href="mean-variance-and-standard-deviation-en.html" target="_self">topic 7</a> and on the normal and binomial distributions from <a href="distributions-en.html" target="_self">topic 8</a>; the variance of a difference comes from the covariance in <a href="covariance-and-correlation-en.html" target="_self">topic 10</a>. In the ML series, the <strong>bagging</strong> of <a href="random-forest-and-boosting-en.html" target="_self">ensembles</a> (and the random forest) is literally the bootstrap: it trains a tree on each resample and averages them. <a href="gaussian-processes-en.html" target="_self">Gaussian processes</a> give an uncertainty band for every prediction, <a href="linear-and-polynomial-regression-en.html" target="_self">linear regression</a> has intervals for its weights and for its predictions, and the <a href="bayes-en.html" target="_self">Bayesian</a> approach gives “credible intervals”, which really can be read as probabilities. In “Preparing the data”, <a href="split-before-you-look-en.html" target="_self">split before you look</a> explains why you split by truck (the same thing as the bootstrap by trucks) and the <a href="end-to-end-project-en.html" target="_self">complete project</a> monitors metrics that, without their interval, don't tell you whether the model has really gotten worse.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>Where it helps and where it fools you</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Where it helps</h3><ul class="pc">
+      <li>It turns “32.4” into “between 29.2 and 35.6”: it prevents expensive decisions based on numbers that are pure chance.</li>
+      <li>It tells you how much data you need before you collect it.</li>
+      <li>The bootstrap gives an interval for almost any number, with no formulas, in a few lines of code.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Where it fools you</h3><ul class="pc">
+      <li>It only measures the chance in the sample: it doesn't cover biased data, badly calibrated sensors or trips that don't look like future ones.</li>
+      <li>With dependent data (trips by the same truck, consecutive days) it comes out too narrow if you don't account for it.</li>
+      <li>The “95%” is almost always misread: it belongs to the method, not to your particular interval.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Estimate</dt><dd>A number computed from a sample (the average of 10 trips) to get close to a true value nobody knows.</dd>
+      <dt>Standard error</dt><dd>How much the estimate would wobble from one sample to another. For an average, the standard deviation of the data divided by √n.</dd>
+      <dt>Confidence interval</dt><dd>Estimate ± margin: the range where, with the chosen confidence level, the true value lies.</dd>
+      <dt>Confidence level</dt><dd>How many times out of 100 the method gets it right (90%, 95%, 99%). Higher level, more width.</dd>
+      <dt>Student's t</dt><dd>The fat-tailed bell curve used instead of the normal when the standard deviation also comes from the sample. It gives a multiplier somewhat bigger than 1.96.</dd>
+      <dt>Wald and Wilson</dt><dd>Two formulas for the interval of a percentage. Wald is the simple one and fails near 0% and 100%; Wilson doesn't.</dd>
+      <dt>Bootstrap</dt><dd>Drawing from the sample, with replacement, another sample of the same size; repeating it thousands of times and seeing how much the number wobbles.</dd>
+      <dt>Percentile bootstrap</dt><dd>The interval that leaves out the lowest 2.5% and the highest 2.5% of the resampled numbers.</dd>
+      <dt>Block bootstrap</dt><dd>Resampling whole groups (trucks, weeks) instead of single data points, when the data within a group resemble each other.</dd>
+      <dt>Coverage</dt><dd>The fraction of times an interval method really catches the true value. It should equal the promised level.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the math behind it</summary>
+    <p style="padding-top:10px">You don't need it to understand the idea:</p>
+    <div class="formula">10 trips:        sum 324.0   average = 32.4 L/100 km
+deviation:       s = 4.52   (the sample one, with n − 1)
+standard error:  s / √n = 4.52 / √10 = 1.43
+with 1.96:       32.4 ± 1.96 · 1.43 = 32.4 ± 2.80
+with t (9 d.f.): 32.4 ± 2.262 · 1.43 = 32.4 ± 3.23  → [29.2, 35.6]
+how much data:   n = (1.96 · 4.5 / 0.5)² = 311.2 → 312 for ±0.5
+percentage:      Wald   p ± 1.96 · √(p(1 − p)/n)
+                 1 of 40: 0.025 ± 0.048 → [−2.3%, 7.3%]
+                 Wilson   (p + z²/2n ± z·√(p(1 − p)/n + z²/4n²)) / (1 + z²/n)
+                 1 of 40 → [0.4%, 12.9%]
+bootstrap:       repeat 1,000 times: resample n data points with replacement
+                 and compute the number; interval = percentiles 2.5 and 97.5
+difference:      (South average − North average) ± t · √(s²_S/n_S + s²_N/n_N)</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in a minute and a half</h2>
+    <p>An animated recap: the number that wobbles from one sample to another, the margin from the formula, the hundred intervals with their misses, the fat-tailed t, the bootstrap resampling 12 trips, and the two depots with the difference against 0. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xACNAAEAAgMBAQEAAAAAAAAAAAAABQYHBAECAwgBAQEBAQAAAAAAAAAAAAAAAAABAwIQAAICAQMCBAMDBwcMAwEBAQACAwEEEgURIQYHQRMxIlEUYXEyFSO0UkJ1gXSRcrM2MzWCsiSxoRZ2NzRiCHNDkiVTxLURAQEBAQEBAAAAAAAAAAAAAAARARIhMf/AABEIAhwDwAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AMIgA0ZgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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NhxMGebOjkx9uxdFVj48UbandVZ7q3e/d2tmKQBSAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOgquA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AOA6AP/9k=" aria-label="Animation: confidence intervals and the bootstrap">
+      <source src="confidence-intervals-and-the-bootstrap-with-audio-en.mp4" type="video/mp4">
+      Your browser can't play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"tray":[30.9,31.1,37.0,40.7,30.5,30.6,25.2,37.2,30.4,30.4,33.5,38.1,39.6,40.4,25.2,35.4,23.9,31.2,30.3,29.4,27.3,34.4,38.7,32.2,29.1,27.9,29.6,21.4,33.4,34.5,25.6,32.4,30.5,25.2,35.0,31.8,33.8,32.2,31.3,40.5,38.7,34.0,38.0,35.9,32.2,37.0,34.8,36.1,25.2,27.1,34.0,27.7,37.2,32.7,29.8,31.2,32.8,31.3,29.8,36.5,29.3,33.3,30.7,32.0,33.7,36.5,35.0,29.3,29.4,35.2,34.3,35.4,34.1,25.1,32.9,38.1,28.3,34.8,26.6,35.2,36.7,39.4,33.3,36.5,33.8,29.9,25.6,31.2,22.0,38.1,35.1,33.4,27.7,36.0,34.4,34.9,34.1,33.5,29.6,24.0,28.7,36.7,33.3,34.5,28.0,31.5,20.8,37.4,31.3,24.8,18.4,25.2,27.9,37.3,29.4,28.7,35.3,27.5,35.9,25.7,30.8,22.2,38.4,38.5,22.4,42.9,30.7,37.4,38.5,27.6,21.7,33.6,25.8,38.6,34.9,34.3,23.7,30.6,31.5,29.5,30.9,22.9,31.1,28.8,32.4,28.3,26.8,29.0,35.1,26.5,30.2,27.8,37.4,37.3,28.9,39.4,37.0,40.7,37.7,28.3,32.9,34.9,24.4,35.8,37.1,23.2,30.9,27.1,32.1,28.9,35.8,28.7,24.1,28.9,30.0,32.0,27.3,32.5,30.8,35.8,34.0,32.4,28.5,30.0,30.1,35.0,33.2,29.1,29.9,31.3,38.2,38.3,30.1,28.6,30.4,31.1,36.4,34.1,31.5,22.9,30.0,29.4,29.9,37.7,32.7,28.1,26.4,39.9,31.5,34.6,35.2,32.3,31.7,39.2,29.8,38.6,35.1,35.2,30.7,34.0,35.7,37.5,36.8,30.2,34.5,38.6,29.5,29.5,37.7,30.4,27.2,27.3,29.8,35.8,36.3,34.6,35.0,34.4,32.7,29.1,34.4,27.8,28.1,35.2,35.3,30.5,33.6,26.9,31.8,25.6,28.1,29.5,28.5,26.0,31.4,32.7,33.8,32.4,29.6,35.8,32.1,29.6,23.5,36.9,32.8,35.7,27.8,37.2,31.2,31.7,34.5,44.5,33.7,41.5,29.6,34.7,29.5,38.5,26.1,34.9,27.7,33.6,34.3,34.5,40.6,24.9,35.8,28.0,34.4,28.5,32.8,28.5,25.5,29.7,24.0,24.6,28.2,30.9,32.1,25.5,34.0,27.8,25.4,28.4,28.2,34.4,38.1,24.5,29.1,22.0,31.2,33.6,25.8,32.4,33.3,34.3,35.5,38.1,34.0,36.6,33.9,34.1,38.2,38.6,31.6,27.9,33.3,36.1,29.5,25.1,26.7,38.7,21.0,32.0,39.1,33.7,30.1,30.2,37.3,35.1,27.8,34.3,35.3,31.9,35.2,31.8,32.3,32.0,35.2,32.3,39.8,40.0,29.3,27.0,31.3,37.5,31.9,34.9,28.8,27.8,27.6,25.0,36.0,33.7,34.3,36.1,30.8,34.7,31.8,28.6,29.0,29.0,36.4,37.1,31.0,36.8,35.9,39.2,35.9,35.0,35.8,40.5,29.6,34.0,26.3,28.0,32.7,34.4,34.8,27.3,31.6,31.5,34.8,25.3,32.1,33.2,35.7,44.0,30.3,41.2,33.6,33.5,30.1,31.0,28.7,36.5,42.1,27.3,28.1,23.9,33.2,29.2,28.4,33.6,25.5,29.4,32.2,35.0,34.0,19.2,28.8,37.5,26.0,30.4,29.7,38.2,31.7,32.5,33.9,29.5,35.1,33.5,36.1,29.2,36.2,23.0,34.0,33.8,27.1,27.9,33.7,27.6,31.6,33.7,28.2,28.8,21.1,32.9,42.8,28.6,34.8,31.3,33.0,31.7,28.0,24.8,32.1,33.8,31.6,30.9,30.5,31.8,30.3,31.9,28.4,30.4,35.5,26.0,31.7,25.2,35.5,33.8,30.7,32.8,32.9,41.7,32.9,35.5,30.0,34.7,28.8,31.6,38.3,25.7,31.7,27.7,37.5,36.4,39.3,32.3,37.0,33.8,32.0,31.4,23.2,30.0,33.7,32.7,38.3,34.4,27.4,34.3,32.0,29.6,32.4,34.7,34.6,33.5,38.0,38.3,30.8,29.0,40.4,25.3,38.6,34.9,25.6,39.8,38.3,28.6,30.9,32.7,28.9,30.5,25.0,29.8,28.0,27.2,35.6,35.7,26.6,26.4,30.7,31.4,35.9,32.2,39.0,31.0,31.8,24.7,27.1,31.2,30.9,35.0,31.0,37.3,26.3,30.9,29.7,33.4,37.6,35.0,38.9,26.4,34.2,30.1,29.6,30.2,29.1,33.1,32.5,27.4,32.1,37.0,26.3,29.3,37.4,36.6,33.9,32.5,18.8,21.9,30.4,33.4,32.3,26.9,30.9,33.3,29.3,32.3,34.7,40.3,31.1,25.5,37.8,23.9,27.8,30.2,33.8,37.6,31.2,24.4,35.1,33.9,32.6,32.1,34.2,30.2,33.9,27.0,26.4,34.9,35.6,35.0,32.7,27.0,36.2,31.4,40.2,28.2,31.6,33.4,27.8,28.9,26.8,32.4,28.7,27.0,39.8,22.4,33.7,28.8,29.0,31.9,34.0,30.2,29.9,26.7,28.5,24.6,28.8,38.2,36.1,31.9,31.9,31.4,31.0,31.5,32.1,34.3,35.7,20.0,35.1,25.1,33.9,34.4,25.0,33.5,38.8,42.4,29.6,42.1,36.7,32.7,38.2,26.1,29.0,40.4,39.9,30.7,35.0,32.4,25.7,32.4,36.3,25.1,33.7,29.0,33.7,43.2,33.2,42.5,23.3,35.3,42.5,27.0,38.2,33.8,32.0,35.6,26.3,30.2,34.7,32.7,30.2,32.4,25.2,28.0,26.5,34.3,41.0,35.3,26.8,29.4,28.8,26.4,33.9,26.6,30.4,29.9,40.8,27.1,30.4,29.0,33.5,23.5,32.7,31.3,23.9,36.0,27.0,28.8,33.8,39.3,33.4,28.9,22.4,30.8,35.8,32.4,34.8,36.0,32.3,37.8,32.7,37.8,34.0,26.2,31.4,32.1,26.6,32.8,33.3,32.7,21.4,25.0,31.6,25.1,38.1,29.7,29.9,31.9,30.6,35.9,36.6,29.7,30.0,35.0,30.6,25.4,33.7,34.2,32.1,25.6,26.3,28.6,31.1,42.1,29.4,30.3,24.9,36.4,32.5,28.2,23.1,32.6,31.5,32.6,29.0,38.4,32.1,28.2,44.8,39.6,35.0,29.5,35.7,27.6,20.6,29.7,26.6,27.1,26.5,25.7,29.6,29.9,31.5,30.0,40.9,34.5,36.4,36.5,31.4,22.7,30.8,35.6,35.1,39.3,32.3,37.0,24.7,33.0,23.4,38.0,30.3,29.5,39.6,30.8,33.3,36.0,34.9,30.4,32.6,23.5,35.8,33.0,37.9,33.1,32.7,38.1,32.2,31.6,32.5,37.9,25.8,25.1,30.5,38.0,33.1,27.8,32.8,24.6,25.4,34.6,36.8,37.0,25.7,36.8,26.9,31.1,31.7,27.4,41.3,37.7,35.4,21.1,43.0,28.2,30.6,24.9,34.0,32.3,34.6,30.5,30.2,24.9,21.2,31.6,30.1,36.7,36.8,37.2,28.9,26.2,24.5,24.3,33.3,34.5,32.1,34.8,30.7,31.1,28.0,25.1,36.7,31.3,37.0,34.1,28.0,26.8,31.9,30.6,41.0,30.4,29.6,35.2,26.1,34.4,36.6,31.7,33.4,27.5,38.9,36.4,38.5,34.8,30.5,27.1,36.9,36.4,34.5,36.9,39.8,24.6,22.3,37.2,27.2,29.6,34.6,32.7,39.0,26.5,38.1,26.2,36.5,36.3,29.0,37.3,41.1,30.3,27.7,36.3,33.0,30.3,30.6,30.4,31.2,31.0,44.6,36.0,20.2,27.4,32.4,30.3,29.6,35.7,33.3,32.3,25.4,26.3,36.7,30.6,37.9,34.5,28.2,29.3,31.4,31.8,30.1,30.1,26.5,31.8,27.3,32.2,32.7,31.4,36.1,36.4,33.2,33.8,33.4,29.3,34.5,31.6,35.7,29.6,34.4,33.2,26.6,29.9,29.7,37.3,33.4,34.4,32.6,32.1,29.8,36.2,36.0,35.5,26.4,32.6,27.9,25.7,34.0,32.4,27.7,31.7,32.0,32.2,24.7,27.9,32.6,39.6,36.0,31.8,32.4,34.5,32.5,36.8],"km12":[42.0,55.0,61.0,48.0,73.0,88.0,51.0,59.0,67.0,46.0,57.0,395.0],"eur12":[31.0,40.0,47.0,33.0,52.0,71.0,36.0,45.0,50.0,32.0,41.0,318.0],"cam":[[32.2,35.4,34.6,34.8,27.8,28.2,37.6,35.8,39.4,36.5,29.8,36.8,34.8,33.5,30.4,35.8,35.3,38.5,36.2,40.5,33.5,37.2,37.3,33.2,32.2,38.8,37.3,35.3,37.0,33.8,28.2,25.7,28.1,30.5,26.5,30.1,24.4,26.7,23.4,27.2,27.8,26.9,26.7,31.6,31.8,32.6,39.7,31.0,34.0,35.7,36.5,33.1,34.0,36.4,34.1,34.3,38.2,39.0,36.0,36.3,31.8,30.5,30.3,28.8,33.8,31.6,31.5,32.5,33.5,36.1,31.1,30.7,32.5,29.3,35.7,32.8,32.1,29.6,32.2,33.2,31.5,29.2,24.9,32.8,28.9,27.5,32.7,31.0,25.7,29.7,29.2,33.0,24.3,28.8,29.6,34.2,26.7,21.2,25.8,30.8,32.4,35.2,31.2,27.6,32.6,29.3,28.7,29.3,33.1,26.6,26.2,29.1,29.1,26.8,26.7,30.4,33.3,31.4,31.3,33.0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7]],"picos":[81.9,89.8,81.8,87.5,88.4,82.7,83.3,82.5,79.3,83.7,80.9,81.1,80.2,80.3,87.8,83.1,81.1,85.1,85.3,85.8],"cuatro":[30.9,31.1,37.0,40.7],"dep":[[25.0,33.0,26.9,32.0,30.5,20.9,38.4,30.5,34.7,32.9,34.0,30.6,31.8,31.7,33.8,35.9,38.7,38.3,26.9,36.8,29.5,38.0,33.5,28.2,39.7,32.9,30.4,35.6,37.7,31.4,31.2,36.1,27.7,24.4,26.8,24.9,29.5,30.1,31.2,29.9,26.9,34.3,36.3,36.4,29.0,24.8,38.2,30.6,31.2,21.7,38.1,29.8,28.3,35.6,31.7,27.4,34.1,36.6,28.9,31.9,29.7,27.1,30.1,34.4,29.4,23.5,24.7,29.1,27.9,32.4,32.1,28.9,32.9,28.7,33.2,36.2,35.7,25.1,24.3,31.8,27.3,33.7,31.7,30.9,28.4,32.1,32.9,26.1,27.9,36.4,27.1,34.5,31.2,29.2,35.9,29.4,26.3,18.9,32.1,34.5,30.1,31.3,31.0,37.0,41.6,25.2,24.3,40.5,30.9,31.6,34.3,32.9,29.4,28.2,29.5,27.1,34.3,41.4,29.0,31.1,25.9,26.7,28.1,27.5,33.1,37.4,32.4,31.4,38.3,26.6,30.2,36.4,27.5,27.1,36.9,37.6,27.4,29.2,25.8,32.7,33.6,28.9,34.0,35.3,36.0,38.0,23.2,36.1,28.2,26.4,29.5,37.3,24.4,26.9,32.7,26.4,31.1,29.5,28.9,37.8,36.1,36.9,34.0,36.3,35.7,28.2,26.9,31.9,37.1,31.1,23.3,27.0,35.5,31.2,24.6,33.7,30.4,22.8,32.1,34.2,33.3,37.9,37.0,32.2,40.0,41.2,34.6,29.1,35.0,31.8,27.9,23.7,39.0,31.8,33.0,35.9,28.0,32.4,32.2,32.1],[33.7,26.1,37.8,28.3,34.9,36.3,34.7,29.9,26.0,26.0,35.6,26.8,40.5,43.1,33.6,29.7,32.8,34.7,44.0,31.1,35.8,25.0,38.3,34.3,29.2,28.4,36.3,31.2,31.6,30.3,38.8,26.0,38.7,33.6,32.4,37.4,31.6,34.1,33.5,31.0,30.8,34.0,38.9,25.0,31.9,30.8,40.4,31.2,28.7,34.3,32.5,34.4,38.9,35.1,27.4,21.0,37.9,38.3,39.6,32.7,30.3,33.5,35.9,29.9,33.8,25.6,32.2,33.7,27.8,36.4,35.6,31.9,27.1,27.8,31.1,30.9,33.8,33.4,39.1,26.5,36.8,30.5,26.1,34.2,27.0,24.9,31.5,33.9,32.4,37.3,32.8,35.1,30.5,31.7,24.4,28.2,31.7,31.0,31.4,40.6,26.5,29.4,27.8,33.5,31.4,30.1,36.2,39.1,36.7,32.1,28.2,34.3,30.6,31.5,29.2,35.4,39.2,36.9,32.6,38.0,36.6,29.2,32.6,33.2,35.2,29.3,26.8,34.3,33.0,31.4,38.7,38.7,30.4,39.5,21.1,34.2,32.5,26.7,29.4,33.6,32.6,32.8,28.1,30.0,33.0,32.6,33.5,32.5,36.4,32.3,28.5,31.6,40.4,31.3,29.0,29.9,30.2,35.3,34.7,36.2,32.1,31.2,41.4,36.9,37.3,28.7,34.4,36.1,30.9,24.3,36.7,29.7,45.6,25.9,31.6,37.1,38.4,24.3,36.3,30.2,31.0,43.9,30.4,32.6,33.3,30.9,25.6,40.0,29.9,24.3,36.8,28.5,36.3,39.1,38.6,40.5,39.0,21.7,32.8,33.2]]};
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g,",");s=fr?i+"."+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const fs=(v,d)=>(v>0&&+v.toFixed(d??1)!==0?"+":"")+f1(v,d);
+const pc=(v,d)=>f1(100*v,d??1)+"%";
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+const redraws=[];window.addEventListener("resize",()=>redraws.forEach(g=>g()));
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+/* ---- statistics ---- */
+const mean=a=>a.reduce((s,v)=>s+v,0)/a.length;
+const sd=a=>{const m=mean(a);let s=0;for(const v of a)s+=(v-m)*(v-m);return Math.sqrt(s/(a.length-1));};
+function lgam(x){const c=[0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+  if(x<0.5)return Math.log(Math.PI/Math.sin(Math.PI*x))-lgam(1-x);x-=1;let a=c[0];const t=x+7.5;for(let i=1;i<9;i++)a+=c[i]/(x+i);return 0.5*Math.log(2*Math.PI)+(x+0.5)*Math.log(t)-t+Math.log(a);}
+function betacf(a,b,x){const qab=a+b,qap=a+1,qam=a-1;let c=1,d=1-qab*x/qap;d=1/(Math.abs(d)<1e-300?1e-300:d);let h=d;
+  for(let m=1;m<=300;m++){const m2=2*m;for(const aa of [m*(b-m)*x/((qam+m2)*(a+m2)),-(a+m)*(qab+m)*x/((a+m2)*(qap+m2))]){d=1+aa*d;d=1/(Math.abs(d)<1e-300?1e-300:d);c=1+aa/c;if(Math.abs(c)<1e-300)c=1e-300;h*=d*c;}if(Math.abs(d*c-1)<1e-14)break;}return h;}
+function ibeta(a,b,x){if(x<=0)return 0;if(x>=1)return 1;const lb=lgam(a+b)-lgam(a)-lgam(b)+a*Math.log(x)+b*Math.log(1-x);return x<(a+1)/(a+b+2)?Math.exp(lb)*betacf(a,b,x)/a:1-Math.exp(lb)*betacf(b,a,1-x)/b;}
+const tcdf=(t,df)=>{const p=0.5*ibeta(df/2,0.5,df/(df+t*t));return t>0?1-p:p;};
+const bis=(f,lo,hi)=>{for(let i=0;i<70;i++){const m=(lo+hi)/2;if(f(m)<0)lo=m;else hi=m;}return (lo+hi)/2;};
+const TQ={};const tq=(q,df)=>{const k=q+"|"+df;return TQ[k]??(TQ[k]=bis(t=>tcdf(t,df)-q,0,400));};
+const erf=x=>{const s=Math.sign(x);x=Math.abs(x);const t=1/(1+0.3275911*x);return s*(1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x));};
+const ncdf=x=>0.5*(1+erf(x/Math.SQRT2));
+const zq=q=>bis(z=>ncdf(z)-q,-10,10);
+const npdf=x=>Math.exp(-x*x/2)/Math.sqrt(2*Math.PI);
+const tpdf=(t,df)=>Math.exp(lgam((df+1)/2)-lgam(df/2)-0.5*Math.log(df*Math.PI)-(df+1)/2*Math.log(1+t*t/df));
+const tint=(xs,conf)=>{const n=xs.length,m=mean(xs),s=sd(xs),h=tq((1+conf)/2,n-1)*s/Math.sqrt(n);return {m,s,h,lo:m-h,hi:m+h};};
+const quant=(v,q)=>{const a=v.slice().sort((x,y)=>x-y),p=q*(a.length-1),i=Math.floor(p),f=p-i;return i+1>=a.length?a[i]:a[i]+f*(a[i+1]-a[i]);};
+const wald=(k,n)=>{const p=k/n,h=1.959964*Math.sqrt(p*(1-p)/n);return [p-h,p+h];};
+const wilson=(k,n)=>{const z=1.959964,p=k/n,z2=z*z,c=(p+z2/(2*n))/(1+z2/n),h=z/(1+z2/n)*Math.sqrt(p*(1-p)/n+z2/(4*n*n));return [Math.max(0,c-h),Math.min(1,c+h)];};
+const tk=(a,b,n)=>{const raw=(b-a)/n,p=10**Math.floor(Math.log10(raw)),m=raw/p,st=(m<1.5?1:m<3?2:m<7?5:10)*p,out=[];for(let v=Math.ceil(a/st-1e-9)*st;v<=b+1e-9;v+=st)out.push(+v.toFixed(10));return out;};
+/* panel with axes, in viewBox coordinates: o = {x,y,w,h,x0,x1,y0,y1,xt,yt,fx,fy,xl,yl,FS,padL,padR,padT,padB,grid} */
+function axes(svg,o){const FS=o.FS,L=o.x+(o.padL??FS*3.4),R=o.x+o.w-(o.padR??FS*0.9),T=o.y+(o.padT??FS*2.2),B=o.y+o.h-(o.padB??FS*2.6);
+  const sx=v=>L+(v-o.x0)/(o.x1-o.x0)*(R-L),sy=v=>B-(v-o.y0)/(o.y1-o.y0)*(B-T),g=el("g",null,svg);
+  for(const v of (o.yt||[])){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},g);txt(g,L-7,sy(v)+FS*0.3,(o.fy||(v=>f1(v,0)))(v),{"text-anchor":"end","font-size":FS*0.8});}
+  for(const v of (o.xt||[])){if(o.grid!==false)el("line",{x1:sx(v),x2:sx(v),y1:T,y2:B,class:"g-line","stroke-opacity":.55},g);
+    const s=(o.fx||(v=>f1(v,0)))(v),w=s.length*FS*0.8*0.62,X=sx(v);let a="middle",xx=X;if(X+w/2>o.x+o.w-3){a="end";xx=o.x+o.w-3;}else if(X-w/2<o.x+3){a="start";xx=o.x+3;}
+    txt(g,xx,B+FS*1.05,s,{"text-anchor":a,"font-size":FS*0.8});}
+  el("line",{x1:L,x2:R,y1:B,y2:B,class:"g-axis"},g);
+  if(o.xl)txt(g,R,o.y+o.h-FS*0.25,o.xl,{"text-anchor":"end","font-size":FS*0.85,class:"t-ink"});
+  if(o.yl)txt(g,L,T-FS*0.75,o.yl,{"font-size":FS*0.8});
+  return {L,R,T,B,sx,sy,FS};}
+const dot=(g,x,y,r,fill,extra)=>el("circle",Object.assign({cx:x,cy:y,r,fill,stroke:"var(--point-ring)","stroke-width":r>6?2:1.2},extra||{}),g);
+/* interval bar with whiskers */
+function ibar(g,A,lo,hi,y,col,w,m){const a=A.sx(Math.max(lo,-1e9)),b=A.sx(hi);el("line",{x1:a,x2:b,y1:y,y2:y,stroke:col,"stroke-width":w,"stroke-linecap":"round"},g);
+  [a,b].forEach(x=>el("line",{x1:x,x2:x,y1:y-w*1.4,y2:y+w*1.4,stroke:col,"stroke-width":Math.max(2,w*0.45),"stroke-linecap":"round"},g));
+  if(m!=null)el("circle",{cx:A.sx(m),cy:y,r:w*1.15,fill:"var(--surface)",stroke:col,"stroke-width":Math.max(2.5,w*0.5)},g);}
+const CL=[0.90,0.95,0.99];
+const jit=(()=>{const r=mulberry32(77),a=[];for(let i=0;i<1000;i++)a.push(r());return a;})();
+
+/* ---------- toy ---------- */
+(function(){const svg=$("toy"),NS=[10,30,100,1000];let ni=0,ci=1,rev=false,cur=D.tray.slice(0,10),hist=[],seed=1;
+  chips($("t-n"),NS.map(n=>f1(n,0)+" trips"),i=>{ni=i;cur=D.tray.slice(0,NS[i]);hist=[];draw();});
+  seg(["t-c0","t-c1","t-c2"],i=>{ci=i;draw();});
+  $("t-new").onclick=()=>{hist.unshift(cur);if(hist.length>6)hist.length=6;const r=mulberry32(1000+seed++),n=NS[ni],a=[];for(let i=0;i<n;i++)a.push(Math.round((32+4.5*gauss(r))*10)/10);cur=a;draw();};
+  const bR=$("t-rev");bR.onclick=()=>{rev=!rev;bR.setAttribute("aria-pressed",String(rev));bR.textContent=rev?"Hide the true value":"Reveal the true value";draw();};
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,n=cur.length,conf=CL[ci],I=tint(cur,conf);
+    const H=nw?560:400;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:18,x1:46,y0:0,y1:1,xt:[20,24,28,32,36,40,44],xl:"fuel use (L/100 km)",FS,padL:FS*0.9,padR:FS*0.9,padT:FS*0.6});
+    const bandT=A.T+FS*0.4,bandH=nw?200:140,r=n<=10?(nw?11:8):n<=30?(nw?9:6.5):n<=100?(nw?7:5):(nw?3.5:2.6);
+    txt(svg,A.L+4,bandT+FS*0.6,`the ${f1(n,0)} trips in the sample`,Object.assign({"font-size":FS*0.78},halo(5)));
+    cur.forEach((v,i)=>{const x=A.sx(Math.max(18.3,Math.min(45.7,v)));dot(svg,x,bandT+FS*1.6+jit[i%1000]*(bandH-FS*1.6-r),r,"var(--point)",n>100?{"fill-opacity":.45,"stroke-width":0}:{});});
+    const yI=bandT+bandH+FS*2.6;
+    txt(svg,A.sx(I.m),yI-FS*1.1,"average "+f1(I.m,1),Object.assign({"text-anchor":"middle","font-size":FS*0.85,"font-weight":700,class:"t-ink"},halo(5)));
+    ibar(svg,A,I.lo,I.hi,yI,"var(--mean)",nw?9:7,I.m);
+    txt(svg,A.sx(I.lo)-FS*0.4,yI+FS*0.35,f1(I.lo,1),Object.assign({"text-anchor":"end","font-size":FS*0.78,style:"fill:var(--mean)"},halo(5)));
+    txt(svg,A.sx(I.hi)+FS*0.4,yI+FS*0.35,f1(I.hi,1),Object.assign({"font-size":FS*0.78,style:"fill:var(--mean)"},halo(5)));
+    const yH=yI+FS*2.2,rowH=nw?24:17;let hits=(I.lo<=32&&32<=I.hi)?1:0;
+    txt(svg,A.L+4,yH,hist.length?"earlier samples":"earlier samples will stack up here",{"font-size":FS*0.72});
+    hist.forEach((h,k)=>{const J=tint(h,conf),ok=J.lo<=32&&32<=J.hi;if(ok)hits++;const y=yH+FS*0.7+k*rowH;ibar(svg,A,J.lo,J.hi,y,rev?(ok?"var(--mean)":"var(--warn)"):"var(--muted)",nw?4:3,J.m);});
+    if(rev){el("line",{x1:A.sx(32),x2:A.sx(32),y1:A.T,y2:A.B,stroke:"var(--ink)","stroke-width":2.5,"stroke-dasharray":"7 5"},svg);
+      txt(svg,A.sx(32)+6,yI-FS*2.4,"true value 32.0",Object.assign({"font-size":FS*0.8,"font-weight":700,class:"t-ink"},halo(5)));}
+    $("t-big").innerHTML=`<div><b>${f1(I.m,1)}</b><span>average fuel use of the ${f1(n,0)} trips (L/100 km)</span></div><div><b style="color:var(--mean)">± ${f1(I.h,I.h<1?2:1)}</b><span>margin at ${f1(100*conf,0)}% confidence</span></div><div><b>${f1(I.lo,1)} to ${f1(I.hi,1)}</b><span>the interval: where the true fuel use could be</span></div>`;
+    const tot=hist.length+1;let m;
+    if(rev)m=`The true fuel use is <b>32.0</b>. ${tot>1?`Of your ${tot} intervals, <b>${hits}</b> catch it${hits<tot?` and ${tot-hits} don't (in red): it happens, and there's no way to know which one missed without knowing the true value`:""}.`:`Your interval ${hits?"catches it":"doesn't catch it: you got one of the bad samples"}.`} At ${f1(100*conf,0)}%, out of every 100 intervals like these, about ${f1(100*conf,0)} catch it (idea 2).`;
+    else if(n===10&&hist.length===0)m=`With 10 trips the average is ${f1(I.m,1)}, but the margin is large: ±${f1(I.h,1)}. Any fuel use between ${f1(I.lo,1)} and ${f1(I.hi,1)} fits these data. Press “Draw another sample” to see another 10 trips by the same truck.`;
+    else if(hist.length&&n<=30)m=`Another sample, another average: now ${f1(I.m,1)} (before, ${f1(mean(hist[0]),1)}). The intervals wobble, but nearly all of them overlap in the same area. Try 1,000 trips.`;
+    else if(n>=1000)m=`With 1,000 trips the margin drops to ±${f1(I.h,2)}: the interval is ${f1(tint(D.tray.slice(0,10),conf).h/I.h,0)} times narrower than with 10 trips, even though there's 100 times more data. The margin shrinks with the <b>square root</b> of n (idea 1). Reveal the true value.`;
+    else m=`With ${n} trips: average ${f1(I.m,1)}, margin ±${f1(I.h,2)}. ${hist.length?"Look at how much the intervals move from one sample to another.":"Draw other samples to see how much they move."}`;
+    if(!rev&&ci!==1)m+=ci===2?" At 99% the interval is wider: more certainty, less precision.":" At 90% the interval is narrower, but it misses 1 time out of 10.";
+    $("t-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 1: the formula ---------- */
+(function(){const svg=$("ef"),inN=$("ef-n"),inC=$("ef-c"),NN=[5,10,25,50,100,250,400,1000],S=4.5,M=32.4;
+  function draw(){const n=NN[+inN.value],conf=+inC.value/100,z=zq((1+conf)/2),se=S/Math.sqrt(n),h=z*se;
+    const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?900:400;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const p1=nw?{x:0,y:0,w:W,h:470}:{x:0,y:0,w:W*0.56,h:H},p2=nw?{x:0,y:480,w:W,h:420}:{x:W*0.58,y:0,w:W*0.42,h:H};
+    const A=axes(svg,Object.assign({},p1,{x0:26,x1:39,y0:0,y1:1.25,xt:[26,28,30,32,34,36,38],xl:"fuel use (L/100 km)",yl:"where the average of "+f1(n,0)+" trips would land",FS,padL:FS*0.8,padR:FS*0.8}));
+    const yB=A.sy(0)-(nw?70:56),cur=x=>A.sy(0)-(nw?70:56)-(A.sy(0)-(nw?70:56)-A.sy(1.05))*Math.exp(-(((x-M)/se)**2)/2);
+    let d="",dsh="";for(let i=0;i<=300;i++){const x=26+13*i/300;d+=(i?"L":"M")+A.sx(x).toFixed(1)+" "+cur(x).toFixed(1);}
+    for(let i=0;i<=120;i++){const x=M-h+2*h*i/120;if(x<26||x>39)continue;dsh+=(dsh?"L":"M")+A.sx(x).toFixed(1)+" "+cur(x).toFixed(1);}
+    const lo=Math.max(26,M-h),hi=Math.min(39,M+h);
+    el("path",{d:dsh+`L${A.sx(hi).toFixed(1)} ${yB}L${A.sx(lo).toFixed(1)} ${yB}Z`,fill:"var(--mean)","fill-opacity":.18},svg);
+    el("path",{d,fill:"none",stroke:"var(--mean)","stroke-width":3},svg);el("line",{x1:A.L,x2:A.R,y1:yB,y2:yB,stroke:"var(--line)"},svg);
+    txt(svg,A.sx(M),cur(M)-FS*0.5,"central "+f1(100*conf,0)+"%",Object.assign({"text-anchor":"middle","font-size":FS*0.8,"font-weight":700,style:"fill:var(--mean)"},halo(5)));
+    const yI=A.sy(0)-(nw?30:24);ibar(svg,A,M-h,M+h,yI,"var(--mean)",nw?8:6,M);
+    if(M-h>26.3)txt(svg,A.sx(M-h)-FS*0.4,yI+FS*0.33,f1(M-h,1),Object.assign({"text-anchor":"end","font-size":FS*0.75,style:"fill:var(--mean)"},halo(5)));
+    if(M+h<38.7)txt(svg,A.sx(M+h)+FS*0.4,yI+FS*0.33,f1(M+h,1),Object.assign({"font-size":FS*0.75,style:"fill:var(--mean)"},halo(5)));
+    /* margin curve */
+    const lx=v=>Math.log(v),B2=axes(svg,Object.assign({},p2,{x0:lx(5),x1:lx(1000),y0:0,y1:5.5,xt:[5,25,100,400,1000].map(lx),fx:v=>f1(Math.exp(v),0),yt:[0,1,2,3,4,5],fy:v=>"±"+f1(v,0),xl:"trips (log scale)",yl:"margin (L/100 km)",FS,padL:FS*2.6}));
+    let dc="";for(let i=0;i<=200;i++){const v=lx(5)+(lx(1000)-lx(5))*i/200;dc+=(i?"L":"M")+B2.sx(v).toFixed(1)+" "+B2.sy(z*S/Math.sqrt(Math.exp(v))).toFixed(1);}
+    el("path",{d:dc,fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    const px=B2.sx(lx(n)),py=B2.sy(h);dot(svg,px,py,nw?11:8,"var(--point)");
+    txt(svg,px+(n>=400?-1:1)*FS*0.9,py-FS*0.7,"±"+f1(h,2),Object.assign({"text-anchor":n>=400?"end":"start","font-size":FS*0.85,"font-weight":700,class:"t-ink"},halo(5)));
+    $("ef-n-o").textContent=f1(n,0);$("ef-c-o").textContent=f1(100*conf,0)+"%";
+    $("ef-big").innerHTML=`<div><b>${f1(se,2)}</b><span>standard error = 4.5 / √${f1(n,0)}</span></div><div><b>${f1(z,2)}</b><span>multiplier for ${f1(100*conf,0)}% (from the normal bell)</span></div><div><b style="color:var(--mean)">± ${f1(h,2)}</b><span>margin = ${f1(z,2)} × ${f1(se,2)} (L/100 km)</span></div>`;
+    let m=`With ${f1(n,0)} trips, the average wobbles with a standard error of 4.5 / √${f1(n,0)} = ${f1(se,2)} L/100 km. For ${f1(100*conf,0)}%, you multiply by ${f1(z,2)}: margin ±${f1(h,2)}. `;
+    if(n<=10)m+="With so few trips, on top of that, the sample's deviation is unreliable and 1.96 falls short: idea 3 fixes that.";
+    else if(n===100)m+=`To cut the margin in half (±${f1(h/2,2)}) you need 400 trips, four times as many: move the slider to 400.`;
+    else if(n===400)m+=`Exactly: with 4 times as many trips as 100, the margin is half. The margin shrinks with the square root of n, which is why each extra tenth of precision costs more than the last.`;
+    else if(n>=1000)m+="With 1,000 trips the margin is under three tenths, more than enough to compare truck models.";
+    else m+="Try 100 and then 400 trips.";
+    if(conf>=0.99)m+=" At 99% the multiplier goes up to 2.58: the interval is a third wider than at 95%.";
+    else if(conf<=0.85)m+=` At ${f1(100*conf,0)}% the interval is narrower, but it misses ${f1(100-100*conf,0)} times out of 100.`;
+    $("ef-msg").innerHTML=m;}
+  [inN,inC].forEach(i=>i.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 2: a hundred intervals ---------- */
+(function(){const svg=$("cov"),NS=[10,30,100],CC=[0.8,0.9,0.95,0.99];let ni=0,ci=2,S=[],seed=1,rnd=mulberry32(4299);
+  const add=k=>{const n=NS[ni];for(let j=0;j<k;j++){let s=0,s2=0;for(let i=0;i<n;i++){const v=32+4.5*gauss(rnd);s+=v;s2+=v*v;}const m=s/n;S.push([m,Math.sqrt((s2-n*m*m)/(n-1))]);}};
+  const reset=()=>{rnd=mulberry32(4299+97*ni);S=[];add(100);};
+  chips($("cv-n"),NS.map(n=>n+" trips"),i=>{ni=i;reset();draw();});
+  seg(["cv-c0","cv-c1","cv-c2","cv-c3"],i=>{ci=i;draw();});
+  $("cv-20").onclick=()=>{add(20);draw();};$("cv-500").onclick=()=>{add(500);draw();};$("cv-re").onclick=()=>{reset();draw();};
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?820:540,n=NS[ni],conf=CC[ci],t=tq((1+conf)/2,n-1);svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:25,x1:39,y0:0,y1:1,xt:[26,28,30,32,34,36,38],xl:"fuel use (L/100 km)",FS,padL:FS*0.9,padR:FS*0.9,padT:FS*2});
+    let hit=0;S.forEach(([m,s])=>{const h=t*s/Math.sqrt(n);if(m-h<=32&&32<=m+h)hit++;});
+    const show=S.slice(-100),rh=(A.B-A.T-6)/100;
+    el("line",{x1:A.sx(32),x2:A.sx(32),y1:A.T-4,y2:A.B,stroke:"var(--ink)","stroke-width":2,"stroke-dasharray":"7 5"},svg);
+    txt(svg,A.sx(32),A.T-FS*0.6,"true value 32.0",{"text-anchor":"middle","font-size":FS*0.8,"font-weight":700,class:"t-ink"});
+    const cp=el("clipPath",{id:"cv-cl"},el("defs",null,svg));el("rect",{x:A.L,y:A.T-6,width:A.R-A.L,height:A.B-A.T+6},cp);const g=el("g",{"clip-path":"url(#cv-cl)"},svg);
+    show.forEach(([m,s],k)=>{const h=t*s/Math.sqrt(n),ok=m-h<=32&&32<=m+h,y=A.T+3+(k+0.5)*rh;
+      el("line",{x1:A.sx(m-h),x2:A.sx(m+h),y1:y,y2:y,stroke:ok?"var(--mean)":"var(--warn)","stroke-width":ok?Math.max(1.6,rh*0.45):Math.max(3,rh*0.8),"stroke-opacity":ok?.75:1,"stroke-linecap":"round"},g);
+      el("circle",{cx:A.sx(m),cy:y,r:Math.max(1.4,rh*0.32),fill:ok?"var(--mean)":"var(--warn)"},g);});
+    const N=S.length,miss=N-hit;
+    $("cv-big").innerHTML=`<div><b style="color:var(--mean)">${pc(hit/N,1)}</b><span>of the intervals catch the true value (${f1(hit,0)} of ${f1(N,0)})</span></div><div><b style="color:var(--warn)">${f1(miss,0)}</b><span>intervals miss</span></div><div><b>${f1(100*conf,0)}%</b><span>what the method promises</span></div>`;
+    let m=`Of ${f1(N,0)} intervals of ${n} trips at ${f1(100*conf,0)}%, <b>${f1(hit,0)}</b> catch the true fuel use, or ${pc(hit/N,1)}. `;
+    m+=N<300?`With few samples, the count wobbles around ${f1(100*conf,0)}%; press “+500 at once” and you'll see it get closer.`:`With this many samples, the count gets close to what was promised: the ${f1(100*conf,0)}% is a promise about the method in the long run.`;
+    if(ci===3)m+=" At 99% there's hardly any red, but the intervals are quite a bit wider.";else if(ci===0)m+=" At 80% the intervals are narrow, but 1 in 5 misses: a “sure” number that isn't.";
+    if(ni>0)m+=` With ${n} trips the intervals are shorter, and yet they miss in the same proportion: more data gives precision, not more hits.`;
+    $("cv-msg").innerHTML=m;}
+  reset();redraws.push(draw);draw();})();
+
+/* ---------- idea 3: the t ---------- */
+(function(){const svg=$("tt"),inN=$("tt-n"),NN=[3,4,5,6,8,10,15,20,30,100];
+  function draw(){const n=NN[+inN.value],df=n-1,tc=tq(0.975,df),acc=tcdf(1.96,df)-tcdf(-1.96,df);
+    const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?560:400;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:-5,x1:5,y0:0,y1:0.46,xt:[-4,-3,-2,-1,0,1,2,3,4],xl:nw?"distance, in standard errors":"distance to the true value, in estimated standard errors",FS,padL:FS*0.9,padR:FS*0.9,padT:FS*3.6});
+    const path=(f,a,b)=>{let d="";for(let i=0;i<=240;i++){const x=a+(b-a)*i/240;d+=(i?"L":"M")+A.sx(x).toFixed(1)+" "+A.sy(f(x)).toFixed(1);}return d;};
+    for(const [a,b] of [[-5,-1.96],[1.96,5]]){el("path",{d:path(x=>tpdf(x,df),a,b)+`L${A.sx(b)} ${A.B}L${A.sx(a)} ${A.B}Z`,fill:"var(--warn)","fill-opacity":.35},svg);}
+    el("path",{d:path(npdf,-5,5),fill:"none",stroke:"var(--muted)","stroke-width":2.5,"stroke-dasharray":"7 5"},svg);
+    el("path",{d:path(x=>tpdf(x,df),-5,5),fill:"none",stroke:"var(--mean)","stroke-width":3.5},svg);
+    [-1,1].forEach(s=>{el("line",{x1:A.sx(s*1.96),x2:A.sx(s*1.96),y1:A.T-FS*0.4,y2:A.B,stroke:"var(--muted)","stroke-width":2,"stroke-dasharray":"4 4"},svg);
+      if(tc<5)el("line",{x1:A.sx(s*tc),x2:A.sx(s*tc),y1:s>0?A.T-FS*1.9:A.T,y2:A.B,stroke:"var(--mean)","stroke-width":3},svg);});
+    txt(svg,A.sx(1.96)-FS*0.3,A.T-FS*0.6,"1.96",Object.assign({"text-anchor":"end","font-size":FS*0.8},halo(5)));
+    const tl=tc<5?A.sx(tc):A.R;txt(svg,Math.min(tl+FS*0.3,A.R-FS*4.5),A.T-FS*2.1,"t = "+f1(tc,2),Object.assign({"font-size":FS*0.85,"font-weight":700,style:"fill:var(--mean)"},halo(5)));
+    const lx=A.sx(-4.9),ly=A.T-FS*2.2;el("line",{x1:lx,x2:lx+FS*1.8,y1:ly-FS*0.3,y2:ly-FS*0.3,stroke:"var(--muted)","stroke-width":2.5,"stroke-dasharray":"5 4"},svg);el("line",{x1:lx,x2:lx+FS*1.8,y1:ly+FS*0.8,y2:ly+FS*0.8,stroke:"var(--mean)","stroke-width":3.5},svg);
+    txt(svg,lx+FS*2.3,ly,"normal",Object.assign({"font-size":FS*0.8},halo(5)));txt(svg,lx+FS*2.3,ly+FS*1.1,"t with "+df+" d.f.",Object.assign({"font-size":FS*0.8,style:"fill:var(--mean)"},halo(5)));
+    $("tt-n-o").textContent=n;
+    $("tt-big").innerHTML=`<div><b style="color:var(--mean)">${f1(tc,2)}</b><span>t multiplier with ${n} trips (instead of 1.96)</span></div><div><b style="color:${acc<0.93?"var(--warn)":"var(--ink)"}">${pc(acc,1)}</b><span>how often the “95%” interval really gets it right if you use 1.96</span></div><div><b>+${f1(100*(tc/1.96-1),0)}%</b><span>extra width the t adds</span></div>`;
+    let m;
+    if(n<=5)m=`With ${n} trips, using 1.96 gives intervals that are right only <b>${pc(acc,0)}</b> of the time, not 95%: the tails of the t (in red) are fat. The correct multiplier is ${f1(tc,2)}, ${f1(100*(tc/1.96-1),0)}% wider.`;
+    else if(n<=15)m=`With ${n} trips the difference still shows: 1.96 is right ${pc(acc,1)} of the time and the t asks for ${f1(tc,2)}. With the toy's 10 trips, 32.4 ± 2.26 × 1.43 = 32.4 ± 3.2 (instead of ±2.8).`;
+    else if(n<100)m=`With ${n} trips, the t (${f1(tc,2)}) and the normal (1.96) almost match: the 1.96 shortcut is right ${pc(acc,1)} of the time.`;
+    else m=`With 100 trips the two curves are almost the same: t = ${f1(tc,2)}. That's why, with lots of data, it doesn't matter which one you use.`;
+    $("tt-msg").innerHTML=m;}
+  inN.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 4: percentages ---------- */
+(function(){const svg=$("pr"),inN=$("pr-n"),inK=$("pr-k"),NN=[20,40,80,150,300,600];
+  const cover=(n,p,f)=>{let pk=Math.pow(1-p,n),c=0;for(let k=0;k<=n;k++){const [a,b]=f(k,n);if(a<=p&&p<=b)c+=pk;pk*=(n-k)/(k+1)*p/(1-p);}return c;};
+  function draw(){const n=NN[+inN.value];if(+inK.value>n)inK.value=n;const k=+inK.value,p=k/n,w=wald(k,n),s=wilson(k,n);
+    const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?470:330;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const top=Math.max(0.2,Math.ceil(Math.max(w[1],s[1])*20+0.6)/20),x0=-Math.max(0.06,Math.ceil(-Math.min(0,w[0])*50+0.3)/50);
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0,x1:top,y0:0,y1:1,xt:tk(x0,top,nw?5:8),fx:v=>f1(100*v,0)+"%",xl:"percentage of deliveries that arrive late",FS,padL:FS*0.9,padR:FS*0.9,padT:FS*1.2});
+    el("rect",{x:A.L,y:A.T,width:A.sx(0)-A.L,height:A.B-A.T,fill:"var(--warn)","fill-opacity":.12},svg);
+    txt(svg,(A.L+A.sx(0))/2,A.B-FS*0.5,"impossible",{"text-anchor":"middle","font-size":FS*0.7,style:"fill:var(--warn)"});
+    el("line",{x1:A.sx(0),x2:A.sx(0),y1:A.T,y2:A.B,stroke:"var(--muted)","stroke-width":2},svg);
+    const rows=[["observed: "+k+" of "+n+" = "+pc(p,1),null,"var(--point)"],["Wald: "+pc(w[0],1)+" to "+pc(w[1],1),w,"var(--sample)"],["Wilson: "+pc(s[0],1)+" to "+pc(s[1],1),s,"var(--mean)"]];
+    const rh=(A.B-A.T-FS*1.2)/3;
+    rows.forEach(([lab,iv,col],i)=>{const y=A.T+rh*(i+0.62);txt(svg,A.sx(0)+FS*0.4,y-FS*0.9,lab,Object.assign({"font-size":FS*0.8,"font-weight":700,style:"fill:"+col},halo(5)));
+      if(iv){if(iv[1]-iv[0]<1e-9){el("circle",{cx:A.sx(iv[0]),cy:y,r:nw?9:7,fill:"none",stroke:col,"stroke-width":3},svg);txt(svg,A.sx(iv[0])+FS*0.8,y+FS*0.3,"width 0",Object.assign({"font-size":FS*0.75,style:"fill:"+col},halo(5)));}else ibar(svg,A,iv[0],iv[1],y,col,nw?8:6,p);}
+      else dot(svg,A.sx(p),y,nw?11:8,"var(--point)");});
+    const cw=cover(n,0.02,wald),cs=cover(n,0.02,wilson);
+    $("pr-n-o").textContent=n;$("pr-k-o").textContent=k;
+    $("pr-big").innerHTML=`<div><b style="color:var(--sample)">${pc(w[0],1)} to ${pc(w[1],1)}</b><span>Wald (the usual formula)</span></div><div><b style="color:var(--mean)">${pc(s[0],1)} to ${pc(s[1],1)}</b><span>Wilson</span></div><div><b>${f1(100*cw,0)}% / ${f1(100*cs,0)}%</b><span>how often Wald / Wilson really get it right with ${n} deliveries if the true percentage is 2%</span></div>`;
+    let m;
+    if(k===0)m=`No delays in ${n} deliveries. Wald says “0%, margin 0”: absolute certainty from ${n} data points, which is absurd. Wilson says the true percentage could be as high as <b>${pc(s[1],1)}</b>. The rule of 3 gives something similar: 3 / ${n} = ${pc(3/n,1)}.`;
+    else if(w[0]<0)m=`${k} of ${n} = ${pc(p,1)}. Wald goes below 0 (down to ${pc(w[0],1)}) and is symmetric too, when it makes sense to have more room upward than downward. Wilson goes from ${pc(s[0],1)} to ${pc(s[1],1)}: lopsided and within what's possible.`;
+    else m=`${k} of ${n} = ${pc(p,1)}. With ${k>=10?"quite a few":"some"} delays and far from 0%, Wald (${pc(w[0],1)} to ${pc(w[1],1)}) and Wilson (${pc(s[0],1)} to ${pc(s[1],1)}) look alike by now.`;
+    m+=` And an acid test: if the true percentage were 2%, with ${n} deliveries the Wald interval would catch the true value only <b>${f1(100*cw,0)}%</b> of the time (it promised 95%); Wilson, ${f1(100*cs,0)}%.`;
+    $("pr-msg").innerHTML=m;}
+  [inN,inK].forEach(i=>i.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 5: bootstrap ---------- */
+(function(){const svg=$("bs"),E=D.eur12,K=D.km12,n=12;let st=0,R=[],rnd=mulberry32(12);
+  const ST=[{name:"Average cost per trip",f:ix=>mean(ix.map(i=>E[i])),x0:20,x1:180,fm:(v,d)=>"$"+f1(v,d),d:1,xl:"average cost per trip ($)"},
+    {name:"Median cost per trip",f:ix=>{const a=ix.map(i=>E[i]).sort((p,q)=>p-q);return (a[5]+a[6])/2;},x0:28,x1:76,fm:(v,d)=>"$"+f1(v,d),d:1,xl:"median cost per trip ($)"},
+    {name:"Dollars per km",f:ix=>ix.reduce((s,i)=>s+E[i],0)/ix.reduce((s,i)=>s+K[i],0),x0:0.68,x1:0.82,fm:(v,d)=>"$"+f1(v,d)+"/km",d:3,xl:"dollars per km (total $ / total km)"}];
+  chips($("bs-q"),ST.map(s=>s.name),i=>{st=i;draw();});
+  const add=k=>{for(let j=0;j<k;j++){const ix=[];for(let i=0;i<n;i++)ix.push(Math.floor(rnd()*n));R.push(ix);}};
+  $("bs-1").onclick=()=>{add(1);draw();};$("bs-100").onclick=()=>{add(100);draw();};$("bs-1k").onclick=()=>{add(1000);draw();};$("bs-re").onclick=()=>{R=[];rnd=mulberry32(12);draw();};
+  const all=[...Array(n).keys()];
+  function draw(){const S=ST[st],nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,cols=nw?6:12,tw=(W-8)/cols,th=nw?92:76,rowsT=nw?2:1,H=(nw?780:470);
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const last=R.length?R[R.length-1]:null,cnt=new Array(n).fill(0);if(last)last.forEach(i=>cnt[i]++);
+    for(let i=0;i<n;i++){const x=4+(i%cols)*tw,y=FS*0.4+Math.floor(i/cols)*(th+10),off=last&&cnt[i]===0;
+      el("rect",{x:x+3,y,width:tw-6,height:th,rx:10,fill:"var(--surface)",stroke:i===11?"var(--warn)":"var(--line)","stroke-width":i===11?2.5:1.5,opacity:off?.35:1},svg);
+      txt(svg,x+tw/2,y+th*0.42,"$"+f1(E[i],0),{"text-anchor":"middle","font-size":FS*0.85,"font-weight":700,class:"t-ink",opacity:off?.4:1});
+      txt(svg,x+tw/2,y+th*0.68,f1(K[i],0)+" km",{"text-anchor":"middle","font-size":FS*0.68,opacity:off?.4:1});
+      if(last)txt(svg,x+tw/2,y+th*0.93,"×"+cnt[i],{"text-anchor":"middle","font-size":FS*0.72,"font-weight":700,style:"fill:"+(cnt[i]?cnt[i]>1?"var(--point)":"var(--mean)":"var(--muted)")});}
+    const y0=FS*0.4+rowsT*(th+10)+FS*0.6,A=axes(svg,{x:0,y:y0,w:W,h:H-y0,x0:S.x0,x1:S.x1,y0:0,y1:1,xt:tk(S.x0,S.x1,nw?4:8),fx:v=>f1(v,S.d===3?2:0),xl:S.xl,FS,padL:FS*0.9,padR:FS*0.9,padT:FS*3.4});
+    txt(svg,A.L,A.T-FS*2.3,R.length?`histogram of ${f1(R.length,0)} resamples`:"no resamples yet",{"font-size":FS*0.8});
+    const th0=S.f(all),vals=R.map(S.f),nb=nw?36:56,h=new Array(nb).fill(0);vals.forEach(v=>{const b=Math.floor((v-S.x0)/(S.x1-S.x0)*nb);h[Math.max(0,Math.min(nb-1,b))]++;});const hm=Math.max(1,...h);
+    let iv=null;if(R.length>=200){iv=[quant(vals,0.025),quant(vals,0.975)];el("rect",{x:A.sx(iv[0]),y:A.T,width:A.sx(iv[1])-A.sx(iv[0]),height:A.B-A.T,fill:"var(--mean)","fill-opacity":.13},svg);
+      [iv[0],iv[1]].forEach(v=>el("line",{x1:A.sx(v),x2:A.sx(v),y1:A.T,y2:A.B,stroke:"var(--mean)","stroke-width":2.5},svg));}
+    h.forEach((c,k)=>{if(c){const x=A.sx(S.x0+(S.x1-S.x0)*k/nb);el("rect",{x:x+1,y:A.sy(0)-(A.sy(0)-A.T-FS*0.6)*c/hm,width:(A.R-A.L)/nb-2,height:(A.sy(0)-A.T-FS*0.6)*c/hm,fill:"var(--point)","fill-opacity":.7},svg);}});
+    el("line",{x1:A.sx(th0),x2:A.sx(th0),y1:A.T-FS*0.5,y2:A.B,stroke:"var(--ink)","stroke-width":3},svg);
+    const lab=`with the 12 trips: ${S.fm(th0,S.d===3?3:1)}`,right=A.sx(th0)<(A.L+A.R)/2;
+    txt(svg,A.sx(th0)+(right?FS*0.4:-FS*0.4),A.T-FS*0.7,lab,Object.assign({"text-anchor":right?"start":"end","font-size":FS*0.8,"font-weight":700,class:"t-ink"},halo(5)));
+    if(last){const v=S.f(last);dot(svg,A.sx(Math.max(S.x0,Math.min(S.x1,v))),A.B-FS*0.1,nw?9:7,"var(--warn)");}
+    const dd=S.d===3?3:1;
+    $("bs-big").innerHTML=`<div><b>${S.fm(th0,dd)}</b><span>${S.name.toLowerCase()} with the 12 real trips</span></div><div><b>${f1(R.length,0)}</b><span>resamples done${last?`; the last one gave ${S.fm(S.f(last),dd)}`:""}</span></div><div><b style="color:var(--mean)">${iv?S.fm(iv[0],dd)+" to "+S.fm(iv[1],dd):"—"}</b><span>${iv?"95% bootstrap interval":"interval: do at least 200 resamples"}</span></div>`;
+    let m;
+    if(!R.length)m="Press “1 resample”: 12 trips are drawn at random from the 12, repeats allowed. Look at which trips come out twice and which not at all.";
+    else if(R.length<20){const rep=cnt.filter(c=>c>1).length,zero=cnt.filter(c=>c===0).length;m=`In the last resample, ${rep} trips come out more than once and ${zero} don't come out. ${cnt[11]?`The long trip ($318) comes out ${cnt[11]===1?"once":cnt[11]+" times"}`:"The long trip ($318) doesn't come out"}, and that's why the number comes to ${S.fm(S.f(last),dd)} (the red dot). Press “+100” a few times.`;}
+    else if(!iv)m=`${R.length} resamples. The histogram already shows how much the number wobbles. From 200 on, the interval appears; press “+1,000”.`;
+    else if(st===0)m=`The central 95% of the resampled average costs goes from <b>$${f1(iv[0],0)} to $${f1(iv[1],0)}</b>: very lopsided. The histogram has several humps: depending on whether the long trip comes out 0, 1, 2 or 3 times. The t formula would give $15 to $117, symmetric around 66 and with an absurd end. With one trip so different, the average is a poor number: try the median.`;
+    else if(st===1)m=`The median barely notices the long trip: it goes from <b>$${f1(iv[0],1)} to $${f1(iv[1],1)}</b>. The histogram has few bars because the median of 12 trips can only be one of a few values. There's no simple formula for this interval; the bootstrap gives it without thinking.`;
+    else m=`Dollars per km is a ratio: total dollars over total km. Its interval, <b>$${f1(iv[0],3)} to $${f1(iv[1],3)}/km</b>, comes from resampling whole trips (each one with its dollars and its km together). With a formula you'd need the “delta method”; the bootstrap doesn't need to know it.`;
+    $("bs-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 6: when it fails ---------- */
+(function(){const svg=$("fa");let cs=0;
+  const [CX,CG]=D.cam,PK=D.picos,C4=D.cuatro;
+  const boot=(seed,B,f,n)=>{const r=mulberry32(seed),out=[];for(let b=0;b<B;b++)out.push(f(()=>Math.floor(r()*n)));return out;};
+  const tripsB=boot(2,2000,pick=>{let s=0;for(let i=0;i<CX.length;i++)s+=CX[pick()];return s/CX.length;},CX.length);
+  const tm=[...Array(8).keys()].map(k=>mean(CX.filter((_,i)=>CG[i]===k)));
+  const truckB=boot(3,2000,pick=>{let s=0;for(let i=0;i<8;i++)s+=tm[pick()];return s/8;},8);
+  const maxB=boot(4,2000,pick=>{let m=-1;for(let i=0;i<PK.length;i++)m=Math.max(m,PK[pick()]);return m;},PK.length);
+  const c4B=boot(5,2000,pick=>{let s=0;for(let i=0;i<4;i++)s+=C4[pick()];return s/4;},4);
+  const CASES=["Trips by the same truck","The maximum","Only 4 trips"];
+  chips($("fa-q"),CASES,i=>{cs=i;draw();});
+  function hist(svg,A,vals,x0,x1,nb,col){const h=new Array(nb).fill(0);vals.forEach(v=>{const b=Math.floor((v-x0)/(x1-x0)*nb);if(b>=0&&b<nb)h[b]++;});const hm=Math.max(...h);
+    h.forEach((c,k)=>{if(c)el("rect",{x:A.sx(x0+(x1-x0)*k/nb)+0.5,y:A.B-(A.B-A.T)*c/hm,width:(A.R-A.L)/nb-1,height:(A.B-A.T)*c/hm,fill:col,"fill-opacity":.65},svg);});}
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?860:560;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const H1=nw?430:270,p1={x:0,y:0,w:W,h:H1},p2={x:0,y:H1+8,w:W,h:H-H1-8};let how,big,m;
+    const real=(A,v,lab)=>{el("line",{x1:A.sx(v),x2:A.sx(v),y1:A.T-FS*0.4,y2:A.B,stroke:"var(--ink)","stroke-width":2.5,"stroke-dasharray":"7 5"},svg);const e=A.sx(v)+FS*0.3+lab.length*FS*0.78*0.62>W-4;txt(svg,A.sx(v)+(e?-1:1)*FS*0.3,A.T-FS*0.5,lab,Object.assign({"font-size":FS*0.78,"font-weight":700,class:"t-ink","text-anchor":e?"end":"start"},halo(5)));};
+    if(cs===0){const A=axes(svg,Object.assign({},p1,{x0:0.4,x1:8.6,y0:20,y1:44,xt:[1,2,3,4,5,6,7,8],fx:v=>"T"+f1(v,0),yt:[20,26,32,38,44],xl:"truck",yl:"fuel use of each trip (L/100 km)",FS,padL:FS*2.4,grid:false}));
+      CX.forEach((v,i)=>dot(svg,A.sx(CG[i]+1+(jit[i]-0.5)*0.5),A.sy(v),nw?6:4.5,"var(--point)",{"fill-opacity":.8}));
+      tm.forEach((v,k)=>el("line",{x1:A.sx(k+0.7),x2:A.sx(k+1.3),y1:A.sy(v),y2:A.sy(v),stroke:"var(--ink)","stroke-width":3.5},svg));
+      const B2=axes(svg,Object.assign({},p2,{x0:28,x1:36,y0:0,y1:1,xt:[28,29,30,31,32,33,34,35,36],xl:"average fuel use of the fleet (L/100 km)",FS,padL:FS*0.9,padT:FS*2.2}));
+      const ti=[quant(tripsB,0.025),quant(tripsB,0.975)],ki=[quant(truckB,0.025),quant(truckB,0.975)],mm=mean(CX);real(B2,32,"true 32.0");
+      [[ti,"var(--warn)","resampling single trips: "+f1(ti[0],1)+" to "+f1(ti[1],1)],[ki,"var(--mean)","resampling whole trucks: "+f1(ki[0],1)+" to "+f1(ki[1],1)]].forEach(([iv,col,lab],j)=>{const y=B2.T+(B2.B-B2.T)*(0.38+0.42*j);txt(svg,B2.L+4,y-FS*0.9,lab,Object.assign({"font-size":FS*0.78,"font-weight":700,style:"fill:"+col},halo(5)));ibar(svg,B2,iv[0],iv[1],y,col,nw?8:6,mm);});
+      how=`<b>How to read the chart.</b> At the top, 120 trips by 8 trucks (T1 to T8); the black line in each column is that truck's average. Each truck has its own way of burning fuel (its engine, its driver), so its trips resemble each other. At the bottom, the interval for the fleet's average fuel use with two different bootstraps.`;
+      big=`<div><b style="color:var(--warn)">52.6%</b><span>real hit rate resampling single trips (it promised 95%)</span></div><div><b style="color:var(--mean)">88.5%</b><span>resampling whole trucks</span></div><div><b>≈ 18</b><span>independent data points: what 120 trips by 8 trucks are really worth</span></div>`;
+      m=`Resampling single trips, the bootstrap thinks it has 120 independent data points and gives a narrow interval (${f1(ti[0],1)} to ${f1(ti[1],1)}). But trips by the same truck aren't independent: if the fleet were a different one, all 8 trucks would change. Simulating 1,000 fleets, that interval is right only <b>52.6%</b> of the time. Resampling whole trucks (with all their trips) the interval is almost three times wider and is right 88.5% of the time: less than 95 because 8 trucks are little data for the bootstrap (as in the “Only 4 trips” case).`;}
+    else if(cs===1){const A=axes(svg,Object.assign({},p1,{x0:77,x1:91,y0:0,y1:1,xt:[78,80,82,84,86,88,90],xl:"top speed of each trip (km/h)",FS,padL:FS*0.9,padT:FS*2.2}));
+      real(A,90,"limiter: 90");PK.forEach((v,i)=>dot(svg,A.sx(v),A.T+FS*1.5+jit[i]*(A.B-A.T-FS*2.5),nw?10:7.5,"var(--point)"));
+      const mx=Math.max(...PK),B2=axes(svg,Object.assign({},p2,{x0:84,x1:91,y0:0,y1:1,xt:[84,85,86,87,88,89,90,91],xl:"maximum of each resample (km/h)",FS,padL:FS*0.9,padT:FS*2.6}));
+      hist(svg,B2,maxB,84,91,nw?28:56,"var(--point)");const iv=[quant(maxB,0.025),quant(maxB,0.975)],fr=maxB.filter(v=>v===mx).length/maxB.length;
+      el("rect",{x:B2.sx(iv[0]),y:B2.T,width:B2.sx(iv[1])-B2.sx(iv[0]),height:B2.B-B2.T,fill:"var(--mean)","fill-opacity":.13},svg);real(B2,90,"true 90");
+      txt(svg,B2.sx(iv[0])-FS*0.4,B2.T+FS*1.2,"interval "+f1(iv[0],1)+" to "+f1(iv[1],1),Object.assign({"text-anchor":"end","font-size":FS*0.78,"font-weight":700,style:"fill:var(--mean)"},halo(5)));
+      how=`<b>How to read the chart.</b> At the top, the top speed of 20 trips; the limiter cuts off at 90 km/h, so the maximum speed this truck can reach is 90. At the bottom, the histogram of the maximum over 2,000 resamples, with the bootstrap interval in <b style="color:var(--mean)">blue</b>.`;
+      big=`<div><b>${f1(mx,1)}</b><span>the sample's maximum (km/h)</span></div><div><b style="color:var(--point)">${pc(fr,0)}</b><span>of the resamples repeat exactly that maximum</span></div><div><b style="color:var(--warn)">0%</b><span>hit rate: the interval never reaches 90</span></div>`;
+      m=`The maximum of a resample can only be one of the 20 values, and never more than ${f1(mx,1)}: there's no data point above it to resample. In ${pc(fr,0)} of the resamples the same maximum comes out (the exact count: 1 − (19/20)<sup>20</sup> = 64%). The interval stays stuck below the maximum seen and never catches the true 90. For maxima and minima the bootstrap doesn't work; you need extreme-value methods.`;}
+    else{const A=axes(svg,Object.assign({},p1,{x0:24,x1:44,y0:0,y1:1,xt:[24,28,32,36,40,44],xl:"fuel use (L/100 km)",FS,padL:FS*0.9,padT:FS*2.2}));
+      real(A,32,"true 32.0");C4.forEach((v,i)=>{dot(svg,A.sx(v),A.T+(A.B-A.T)*0.55,nw?13:10,"var(--point)");txt(svg,A.sx(v),A.T+(A.B-A.T)*0.55+(i%2?FS*2.1:-FS*1.2),f1(v,1),Object.assign({"text-anchor":"middle","font-size":FS*0.75},halo(5)));});
+      const B2=axes(svg,Object.assign({},p2,{x0:24,x1:44,y0:0,y1:1,xt:[24,28,32,36,40,44],xl:"average of each resample (L/100 km)",FS,padL:FS*0.9,padT:FS*2.2,padB:FS*2.6}));
+      const bt={x:B2.L,y:B2.T,w:B2.R-B2.L,h:(B2.B-B2.T)*0.6},HA={L:B2.L,R:B2.R,T:B2.T,B:B2.T+bt.h,sx:B2.sx};hist(svg,HA,c4B,24,44,nw?40:80,"var(--point)");
+      const bi=[quant(c4B,0.025),quant(c4B,0.975)],T4=tint(C4,0.95);real(B2,32,"true 32.0");
+      [[bi,"var(--warn)","bootstrap: "+f1(bi[0],1)+" to "+f1(bi[1],1)],[[T4.lo,T4.hi],"var(--mean)","t: "+f1(T4.lo,1)+" to "+f1(T4.hi,1)]].forEach(([iv,col,lab],j)=>{const y=HA.B+FS*2.6+j*FS*2.9;ibar(svg,B2,iv[0],iv[1],y,col,nw?7:5,T4.m);txt(svg,B2.L+4,y-FS*0.85,lab,Object.assign({"font-size":FS*0.75,"font-weight":700,style:"fill:"+col},halo(5)));});
+      how=`<b>How to read the chart.</b> At the top, only 4 trips. At the bottom, the histogram of the average over 2,000 resamples (with 4 data points there are only 35 different possible resamples, which is why you get separate bars) and two intervals: the bootstrap one and the Student's t one.`;
+      big=`<div><b style="color:var(--warn)">79.9%</b><span>real hit rate of the bootstrap with 4 trips (it promised 95%)</span></div><div><b style="color:var(--mean)">94.8%</b><span>hit rate of the t with 4 trips</span></div><div><b>35</b><span>different possible resamples with 4 data points</span></div>`;
+      m=`With 4 trips, the sample is a very poor picture of all possible trips: the bootstrap can't “imagine” values outside those 4, and its interval (${f1(bi[0],1)} to ${f1(bi[1],1)}) comes out narrower than the t one (${f1(T4.lo,1)} to ${f1(T4.hi,1)}). In simulation it's right <b>79.9%</b> of the time; with 10 trips, 89.8%; with 30, 93.0%. With little data, if there's a formula, the formula is better.`;}
+    $("fa-how").innerHTML=how;$("fa-big").innerHTML=big;$("fa-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 7: two depots ---------- */
+(function(){const svg=$("dp"),inN=$("dp-n"),[NO,SU]=D.dep;
+  function draw(){const n=+inN.value,a=NO.slice(0,n),b=SU.slice(0,n),Ia=tint(a,0.95),Ib=tint(b,0.95);
+    const va=Ia.s*Ia.s/n,vb=Ib.s*Ib.s/n,gl=(va+vb)**2/(va*va/(n-1)+vb*vb/(n-1)),d=Ib.m-Ia.m,h=tq(0.975,gl)*Math.sqrt(va+vb),lo=d-h,hi=d+h,ex=lo>0||hi<0;
+    const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?820:520;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const H1=nw?520:320,A=axes(svg,{x:0,y:0,w:W,h:H1,x0:18,x1:46,y0:0,y1:1,xt:[20,24,28,32,36,40,44],xl:"fuel use of each trip (L/100 km)",FS,padL:FS*0.9,padT:FS*0.6});
+    const rowH=(A.B-A.T)/2;
+    [[a,Ia,"North","var(--sample)",0],[b,Ib,"South","var(--point)",1]].forEach(([xs,I,lab,col,j])=>{const y0=A.T+rowH*j,dh=rowH*0.5;
+      txt(svg,A.L+4,y0+FS*1.1,lab+": average "+f1(I.m,2)+" ("+f1(I.lo,1)+" to "+f1(I.hi,1)+")",Object.assign({"font-size":FS*0.8,"font-weight":700,style:"fill:"+col},halo(5)));
+      xs.forEach((v,i)=>dot(svg,A.sx(Math.max(18.3,Math.min(45.7,v))),y0+FS*1.8+jit[(i+j*300)%1000]*dh,nw?(n>60?4:6):(n>60?3:4.5),col,{"fill-opacity":.55,"stroke-width":0}));
+      ibar(svg,A,I.lo,I.hi,y0+FS*2.4+dh,col,nw?7:5.5,I.m);});
+    const B2=axes(svg,{x:0,y:H1+10,w:W,h:H-H1-10,x0:-4,x1:6,y0:0,y1:1,xt:[-4,-2,0,2,4,6],fx:v=>(v>0?"+":"")+f1(v,0),xl:"difference South − North (L/100 km)",FS,padL:FS*0.9,padT:FS*2.4});
+    el("line",{x1:B2.sx(0),x2:B2.sx(0),y1:B2.T-FS*0.4,y2:B2.B,stroke:"var(--ink)","stroke-width":2.5},svg);txt(svg,B2.sx(0)-FS*0.3,B2.T-FS*0.6,"0: no difference",Object.assign({"text-anchor":"end","font-size":FS*0.78,class:"t-ink"},halo(5)));
+    const col=ex?"var(--good)":"var(--muted)",y=(B2.T+B2.B)/2+FS*0.4;ibar(svg,B2,lo,hi,y,col,nw?9:7,d);
+    txt(svg,B2.sx(d),y-FS*1.2,fs(d,2)+" ("+fs(lo,2)+" to "+fs(hi,2)+")",Object.assign({"text-anchor":"middle","font-size":FS*0.8,"font-weight":700,style:"fill:"+col},halo(5)));
+    $("dp-n-o").textContent=n;const ov=Ia.hi>=Ib.lo;
+    $("dp-big").innerHTML=`<div><b>${fs(d,2)}</b><span>L/100 km more that the South burns, in this sample</span></div><div><b style="color:${col}">${fs(lo,1)} to ${fs(hi,1)}</b><span>95% interval of the difference</span></div><div><b style="color:${col}">${ex?"doesn't include 0":"includes 0"}</b><span>${ex?"the South burns more, with 95% confidence":"the data aren't enough to say who burns more"}</span></div>`;
+    let m;
+    if(!ex&&n<=30)m=`With ${n} trips per depot, the difference is ${fs(d,2)} but its interval goes from ${fs(lo,1)} to ${fs(hi,1)}: it includes 0, and also differences of several liters in favor of either side. Nothing can be said yet. Raise the number of trips.`;
+    else if(!ex)m=`${n} trips: difference ${fs(d,2)}, interval from ${fs(lo,2)} to ${fs(hi,2)}. It still includes 0, though barely. Keep raising it.`;
+    else if(ov)m=`With ${n} trips, the interval of the difference (${fs(lo,2)} to ${fs(hi,2)}) no longer includes 0, and yet <b>the two depots' intervals overlap</b> (the North's reaches ${f1(Ia.hi,1)} and the South's starts at ${f1(Ib.lo,1)}). Checking whether they overlap is too strict: the margin of the difference, ${f1(h,2)}, is smaller than the sum of the two margins, ${f1(Ia.h+Ib.h,2)}.`;
+    else m=`With ${n} trips per depot, the two intervals don't even overlap any more and the difference, ${fs(d,2)} L/100 km (from ${fs(lo,2)} to ${fs(hi,2)}), is clearly above 0. Now the useful question is a different one: how much money is it? About $${f1(Math.round(d*1000*1.65/100)*100,0)} a year per truck that drives 100,000 km.`;
+    $("dp-msg").innerHTML=m;}
+  inN.addEventListener("input",draw);redraws.push(draw);draw();})();
+})();
+</script>
+</body>
+</html>
