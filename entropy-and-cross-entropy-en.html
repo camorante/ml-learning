@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Entropy and cross-entropy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content;max-width:100%}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec p b,.dec li b{color:var(--ink)}
+.dec ul{margin:0;padding-left:18px;font-size:.93rem;color:var(--muted);display:grid;gap:4px}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.rowb{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.sl4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px 24px}
+@media (max-width:620px){.seg{border-radius:14px}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#en" target="_self">← Main menu</a> · The math under ML · topic 15 · explained with drawings · <a href="entropy-and-cross-entropy-technical-en.html" target="_self">see the technical version</a> · <a href="math-under-ml-en.html" target="_self">all topics</a> · <a href="entropia-y-entropia-cruzada-es.html" target="_self">en español</a></p>
+  <h1>Entropy and cross-entropy</h1>
+  <p class="lede">An alert that almost never fires says a lot when it does; an "all good" that arrives every night says almost nothing. Entropy turns that intuition into a number: how many bits it takes, on average, to tell what happens. Its cousin, cross-entropy, is the loss that almost every classifier is trained with.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="situ col">
+    <p class="eyebrow">The setup</p>
+    <p>Every night, the telematics box of each truck sends a <strong>report</strong> with one of four answers: <em>no incidents</em>, <em>delay</em>, <em>breakdown</em> or <em>accident</em>. In the fleet, out of every 1,000 reports, about 900 say "no incidents", 60 "delay", 35 "breakdown" and 5 "accident".</p>
+    <p>How much information does a report carry? It depends on how surprising it is. A "no incidents" is what you expected; an "accident" is not. The <strong>surprise</strong> of an answer is measured in <strong>bits</strong>, which you can read as "how many yes-or-no questions it would take to guess it". <strong>Entropy</strong> is the average surprise over all reports: how much uncertainty there really is in what is about to arrive.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="One hundred daily reports, probability and surprise of each answer, and entropy as a sum of contributions"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, 100 sample reports with the proportions you choose: each square is a report, <b>gray</b> for "no incidents", <b style="color:var(--mean)">blue</b> for delay, <b style="color:var(--point)">orange</b> for breakdown and <b style="color:var(--sample)">purple</b> for accident. In the middle, one row per answer: the bar is how frequent it is and its surprise in bits is on the right. At the bottom, the <b>entropy</b>: each answer contributes "how frequent it is × its surprise", and the pieces add up to the average surprise of a report.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>What share of the reports say "no incidents"?</h3>
+      <p>The rest is split among the other three answers, with the fleet's proportions. At the far left, all four become equally likely.</p>
+      <div class="slider"><label for="t-p">"No incidents" reports <output id="t-p-o"></output></label><input type="range" id="t-p" min="25" max="99" step="1" value="90"><div class="ends"><span>25% (all equal)</span><span>99%</span></div></div>
+    </div>
+    <div class="dec">
+      <h3>Three numbers for the same report</h3>
+      <ul>
+        <li><b>Entropy</b>: the average surprise of a report, in bits.</li>
+        <li><b>Fitted code</b>: the bits per report spent by the best practical code, which gives short codes to frequent answers (idea 3).</li>
+        <li><b>Fixed code</b>: 2 bits per report, because 2 bits (00, 01, 10, 11) can write 4 answers.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="big3" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Try this, in order:</strong></p>
+    <ol class="try">
+      <li>At 90% (the real fleet), the entropy is only 0.59 bits per report: the same thing happens almost every time and almost nothing is surprising.</li>
+      <li>Go down to 25%: the four answers are equally likely and the entropy reaches its maximum, 2 bits. That is as unpredictable as four answers can be.</li>
+      <li>Go up to 99%: the entropy drops to 0.09 bits. But look at the accident: it is now so rare that its surprise is almost 11 bits.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">What you just saw</p>
+    <h2>Rare things surprise more; entropy is the average surprise</h2>
+    <p>Information theory (Claude Shannon, 1948) measures the information in an answer by how little you expected it:</p>
+    <ul>
+      <li><strong>Surprise.</strong> An answer that happens 1 time in 2 is worth <strong>1 bit</strong>; 1 in 4, 2 bits; 1 in 8, 3 bits. Every time something is half as likely, it is worth one more bit. An accident, 1 in 200, is worth 7.6 bits; a "no incidents", 0.15.</li>
+      <li><strong>Entropy.</strong> It is the average surprise, weighting each answer by how often it arrives. An accident is very surprising but rarely arrives; a "no incidents" arrives a lot but surprises nobody. In the real fleet, the average comes out to 0.59 bits.</li>
+      <li><strong>From 0 to the maximum.</strong> If the same thing always arrived, the entropy would be 0: there would be no need to send the report. It is highest when everything is equally likely: with 4 answers, 2 bits.</li>
+    </ul>
+    <p>The ideas below explain why we use bits and yes-or-no questions (1), the entropy of a single question (2), why entropy is the limit of how much you can compress (3), what happens when you use the wrong probabilities: <strong>cross-entropy</strong> and the <strong>KL divergence</strong> (4 and 5), and how all of this becomes the <strong>loss function</strong> of classifiers (6 to 8) and the criterion of decision trees (9).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 9</p>
+    <h2>Surprise is measured in yes-or-no questions</h2>
+    <p>One night, one of 16 trucks sends a sensor alert, and it could have been any of the 16. How many yes-or-no questions does it take to find out which one? With a good strategy, each question rules out half: "is it among the first 8?", "among the first 4 of those?"… 16 → 8 → 4 → 2 → 1: <strong>4 questions</strong>, because 16 = 2 × 2 × 2 × 2.</p>
+    <p>That is why an event that happens "1 time in 16" has a surprise of 4 bits. In general, the surprise of something with probability p is <strong>log₂(1/p)</strong>: the number of times you have to split in half to reach that probability. It also works when it doesn't come out exact: a breakdown, at 3.5%, is worth 4.84 bits.</p>
+  </div>
+  <figure class="fig"><svg id="q1" role="img" aria-label="Trucks split in half question by question and the curve of surprise versus probability"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> On the left (on top on a phone), the trucks; the <b style="color:var(--point)">orange</b> one sent the alert. The numbered <b style="color:var(--mean)">blue</b> lines are the questions: each one splits the remaining group in half, and the orange box is what is left at the end. On the right (below on a phone), the surprise in bits versus the probability (on a logarithmic scale: each mark is ten times less likely). The orange dot is "1 out of so many trucks"; the gray dots are the answers of the toy's report.</p>
+  <div class="controls col">
+    <div class="slider"><label for="q1-k">Equally likely trucks <output id="q1-k-o"></output></label><input type="range" id="q1-k" min="1" max="6" step="1" value="4"><div class="ends"><span>2</span><span>64</span></div></div>
+  </div>
+  <div class="big3 col" id="q1-big"></div>
+  <p class="qcard col" id="q1-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 9</p>
+    <h2>A single question: the fair coin and the loaded coin</h2>
+    <p>The simplest question has two answers: "will this delivery be late?". If it is late half the time, it is like tossing a fair coin: the answer is worth exactly <strong>1 bit</strong>, and there is no way to guess it better than at random.</p>
+    <p>If only 10% are late, it is a loaded coin. "Late" is very surprising (3.3 bits), but it almost never arrives; "on time" arrives almost always and surprises little (0.15 bits). The average is <strong>0.47 bits</strong>: less than half the uncertainty of the fair coin. The more loaded the coin, the lower the entropy, down to 0 if the answer is always the same.</p>
+  </div>
+  <figure class="fig"><svg id="q2" role="img" aria-label="Entropy of a yes-or-no question versus the probability of yes"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Horizontally, the percentage of deliveries that are late. The <b style="color:var(--mean)">blue</b> curve is the entropy of the question: the average surprise. The <b style="color:var(--point)">orange</b> dot is your percentage. The two bars on the right are the surprise of each answer: "late" in orange and "on time" in purple, with what each one contributes to the average.</p>
+  <div class="controls col">
+    <div class="slider"><label for="q2-p">Deliveries that are late <output id="q2-p-o"></output></label><input type="range" id="q2-p" min="0" max="100" step="0.5" value="10"><div class="ends"><span>0%</span><span>100%</span></div></div>
+  </div>
+  <div class="big3 col" id="q2-big"></div>
+  <p class="qcard col" id="q2-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 9</p>
+    <h2>Compressing: short codes for frequent things</h2>
+    <p>Besides the nightly report, the telematics box sends its <strong>status</strong> every 30 seconds: driving, stuck in traffic, unloading, refueling, at the shop or alert. With six statuses, a fixed code needs <strong>3 bits</strong> per message (000, 001, …). But "driving" arrives more than half the time: if you give it a 1-bit code and leave the long ones for the rare statuses, the average goes down.</p>
+    <p>The best code of this kind is built with <strong>Huffman's method</strong> (1952): merge the two least frequent statuses as if they were one, repeat until only one is left, and the path of merges gives the code of each status. Shannon proved that <strong>no code can spend fewer bits on average than the entropy</strong>: it is the limit of how much you can compress. Huffman always stays less than 1 bit away from that limit, and almost always much closer.</p>
+  </div>
+  <div class="chips col" id="q3-c" role="group" aria-label="Status frequencies"></div>
+  <figure class="fig"><svg id="q3" role="img" aria-label="Frequency of each status, its Huffman code and its fixed code"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> One row per status. The <b style="color:var(--mean)">blue</b> bar is how frequent it is. The <b style="color:var(--point)">orange</b> squares are its Huffman code, bit by bit (frequent ones, short); the gray ones, the 3-bit fixed code. On the right, the surprise of each status: the Huffman code has roughly the same length, rounded.</p>
+  <div class="big3 col" id="q3-big"></div>
+  <p class="qcard col" id="q3-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 9</p>
+    <h2>Cross-entropy: paying with the wrong code</h2>
+    <p>In winter the reports change: there are more delays, more breakdowns and more accidents (78% no incidents, 12% delays, 8% breakdowns, 2% accidents). The winter entropy is 1.05 bits per report. But if you keep using the codes, or the model, built with the whole year's frequencies, each answer is paid with <strong>its surprise according to the model</strong>, not according to reality: accidents, which the model believes are extremely rare, are expensive, and now they arrive four times as often.</p>
+    <p>The average of what you pay is the <strong>cross-entropy</strong> between the data (p) and the model (q): 1.15 bits per report. If the model gets the frequencies right, it equals the entropy; if not, it is <strong>always</strong> higher. That extra cost is what you lose by believing something that isn't true.</p>
+  </div>
+  <div class="chips col" id="q4-c" role="group" aria-label="Model probabilities"></div>
+  <figure class="fig"><svg id="q4" role="img" aria-label="Real winter frequencies, model probabilities and average cost per report"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> For each answer, the <b style="color:var(--point)">orange</b> bar is how frequent it is in winter (the data, p) and the <b style="color:var(--mean)">blue</b> one, the probability the model gives it (q). On the right, what it costs every time it arrives: its surprise according to the model. At the bottom, two bars: the winter entropy (the minimum possible) and the cross-entropy (what you pay with this model). The <b style="color:var(--warn)">red</b> piece is the extra cost.</p>
+  <div class="big3 col" id="q4-big"></div>
+  <p class="qcard col" id="q4-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 9</p>
+    <h2>The KL divergence: a distance that depends on who is looking</h2>
+    <p>The extra cost of idea 4 has a name: the <strong>Kullback-Leibler divergence</strong> (KL). It is cross-entropy minus entropy, it is never negative and it is 0 only when the model matches the data. It is used as a "distance" between two distributions, but it is <strong>not symmetric</strong>: measuring winter with the year's frequencies (0.094 bits) is not the same as measuring the year with winter's (0.074 bits).</p>
+    <p>Where it shows most is with rare things. If the model says an accident is almost impossible and then accidents happen, each one costs a huge number of bits: in that direction the KL shoots up. The other way around, a model that fears an accident that almost never comes pays little. It is the first hint of why cross-entropy punishes being confident and wrong so hard (idea 6).</p>
+  </div>
+  <figure class="fig"><svg id="q5" role="img" aria-label="KL divergence in both directions versus the probability the model gives to an accident"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Horizontally, the probability the model gives to an accident (logarithmic scale); the other answers are split as in winter. In winter, accidents are 2% (dashed line). The <b style="color:var(--mean)">blue</b> curve is the KL "data versus model", the one that matters when you use the model; the <b style="color:var(--sample)">purple</b> one, the opposite direction. The dots are your choice.</p>
+  <div class="controls col">
+    <div class="slider"><label for="q5-a">Probability of an accident according to the model <output id="q5-a-o"></output></label><input type="range" id="q5-a" min="-6" max="-1" step="0.05" value="-4"><div class="ends"><span>0.0001%</span><span>10%</span></div></div>
+  </div>
+  <div class="big3 col" id="q5-big"></div>
+  <p class="qcard col" id="q5-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 6 of 9</p>
+    <h2>The loss of classifiers: confident and wrong is very expensive</h2>
+    <p>A model gives each truck a probability of breaking down next week. The week goes by and you look at what happened. How much should the model be punished? <strong>Cross-entropy</strong> answers: whatever the surprise of what happened costs, according to its own probabilities. If it gave 90% to what happened, little; if it gave it 1%, a lot. That average over all trucks is the <strong>logarithmic loss</strong> (<em>log loss</em>) of <a href="logistic-regression-en.html" target="_self">logistic regression</a>, and the one minimized by almost every neural network that classifies.</p>
+    <p>Libraries compute it with the natural logarithm instead of base 2: the unit is called a <strong>nat</strong> (1 bit = 0.69 nats), but the idea is the same. And minimizing it is the same as the <a href="maximum-likelihood-en.html" target="_self">maximum likelihood of topic 14</a>: finding the model that gave the most probability to what really happened.</p>
+  </div>
+  <figure class="fig"><svg id="q6" role="img" aria-label="Penalty of the log loss and of the squared error versus the probability given to what happened"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Horizontally, the probability the model had given to what happened (100% = it got it right with total confidence). The <b style="color:var(--warn)">red</b> curve is the penalty of the log loss; the <b style="color:var(--sample)">purple</b> one, that of the squared error (the distance to 100%, squared), which never goes above 1. The dot is your choice.</p>
+  <div class="controls col">
+    <div class="slider"><label for="q6-q">Probability the model gave to what happened <output id="q6-q-o"></output></label><input type="range" id="q6-q" min="0" max="100" step="1" value="85"><div class="ends"><span>0.1%</span><span>100%</span></div></div>
+  </div>
+  <div class="big3 col" id="q6-big"></div>
+  <p class="qcard col" id="q6-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 7 of 9</p>
+    <h2>It rewards telling the truth: honest probabilities</h2>
+    <p>A truck truly has a 10% probability of breaking down this week. The model can say whatever it wants: 10%, 1% ("nothing will happen") or 50%. Since nobody knows what will happen, what counts is the <strong>average penalty</strong>: 10% of the time it is charged the surprise of "breakdown" and 90% of the time, that of "no breakdown".</p>
+    <p>That average penalty is lowest exactly when the model states the true probability, and then it equals the entropy. Any other answer also pays the KL divergence from idea 5. That is why a model trained with cross-entropy tends to give <strong>calibrated</strong> percentages: if it says 10%, about 10 out of 100 break down. Neither exaggerating nor downplaying pays off. (If you rebalance the data, this breaks: the topic on <a href="imbalanced-classes-en.html" target="_self">imbalanced classes</a> explains it.)</p>
+  </div>
+  <div class="chips col" id="q7-c" role="group" aria-label="Real probability of a breakdown"></div>
+  <figure class="fig"><svg id="q7" role="img" aria-label="Average penalty versus the probability the model states, with the minimum at the real probability"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Horizontally, the probability of a breakdown that the model states. The <b style="color:var(--mean)">blue</b> curve is the average penalty (in nats) it would get in the long run with trucks like this one. The vertical dashed line is the real probability and the horizontal one, the entropy: the minimum possible. The <b style="color:var(--point)">orange</b> dot is what the model says; the <b style="color:var(--warn)">red</b> segment, what it pays on top.</p>
+  <div class="controls col">
+    <div class="slider"><label for="q7-q">What the model says <output id="q7-q-o"></output></label><input type="range" id="q7-q" min="0.5" max="80" step="0.5" value="40"><div class="ends"><span>0.5%</span><span>80%</span></div></div>
+  </div>
+  <div class="big3 col" id="q7-big"></div>
+  <p class="qcard col" id="q7-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 8 of 9</p>
+    <h2>Several classes: from scores to percentages with softmax</h2>
+    <p>When a truck breaks down, another model tries to guess <strong>what kind</strong> of breakdown: engine, brakes, tires or electrical. Neural networks don't output percentages directly: they output a <strong>score</strong> per class, which can be any number. The <strong>softmax</strong> function turns them into percentages that add up to 100%: it raises the number e to each score and splits proportionally. Adding 1 to a score multiplies its weight by 2.7.</p>
+    <p>The loss is the same as in idea 6: the surprise of the true class, <strong>−log(probability it was given)</strong>. And during training, each score is pushed in a very simple way: the true class's score goes up in proportion to what it was missing to reach 100%, and the others go down in proportion to the probability they took. Why it comes out like that is explained in the topic on <a href="derivatives-gradient-and-the-chain-rule-en.html" target="_self">derivatives and the chain rule</a>.</p>
+  </div>
+  <div class="decs">
+    <div class="dec"><h3>The model's scores</h3><p>Move the scores and watch how the percentages change. Only the differences matter: adding the same amount to all four changes nothing.</p><div class="sl4" id="q8-s"></div></div>
+    <div class="dec"><h3>What breakdown was it really?</h3><p>What the shop said after inspecting the truck.</p><div class="chips" id="q8-c" role="group" aria-label="True class"></div><div class="rowb"><button type="button" id="q8-re">↺ Example scores</button></div></div>
+  </div>
+  <figure class="fig"><svg id="q8" role="img" aria-label="Scores, softmax percentages and training push for each type of breakdown"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> One column per type of breakdown. At the top, the score (gray, up or down from 0). In the middle, the percentage softmax gives it; the true class is in <b style="color:var(--point)">orange</b>. At the bottom, the arrows are the training push: up for the true class, down for the others, longer the more wrong the model is.</p>
+  <div class="big3 col" id="q8-big"></div>
+  <p class="qcard col" id="q8-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 9 of 9</p>
+    <h2>Trees: the question that clarifies the most</h2>
+    <p>Out of 1,000 trucks, 251 broke down last year. Before knowing anything else, "did it break down?" has an entropy of 0.81 bits. A <a href="decision-trees-en.html" target="_self">decision tree</a> looks for the question that, when it splits the trucks into two groups, leaves each group as "tidy" as possible: with the lowest entropy. How much the entropy drops on average is called the <strong>information gain</strong>, and the tree keeps the question that gains the most.</p>
+    <p>That gain, measured over a whole feature, is the <strong>mutual information</strong>: how much one thing becomes clearer when you know the other. It is 0 only if the two are <a href="conditional-probability-and-independence-en.html" target="_self">independent</a>, and unlike the <a href="covariance-and-correlation-en.html" target="_self">correlation of topic 10</a>, it detects relationships that aren't a straight line.</p>
+  </div>
+  <div class="chips col" id="q9-c" role="group" aria-label="Tree question"></div>
+  <figure class="fig"><svg id="q9" role="img" aria-label="Trucks before and after the question, with the entropy of each group"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, the 1,000 trucks: in <b style="color:var(--point)">orange</b> those that broke down and in gray, those that didn't. Below, the two groups the question leaves, with their width proportional to the number of trucks. Under each group, its entropy: the closer to 0, the clearer it is whether it breaks down or not.</p>
+  <div class="big3 col" id="q9-big"></div>
+  <p class="qcard col" id="q9-msg"></p>
+  <figure class="fig"><svg id="q9b" role="img" aria-label="Percentage of breakdowns versus engine temperature, U-shaped"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The trucks grouped by average engine temperature (in steps of 4 degrees). Each circle is a group: its height is the percentage that broke down and its size, how many trucks there are. The <b style="color:var(--sample)">purple</b> line is the best-fitting straight line, the one correlation looks at. The <b style="color:var(--good)">green</b> band is the normal range, from 80 to 100 °C.</p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The complete recipe</h2>
+    <ol class="steps">
+      <li><div><strong>Surprise of an answer</strong>: log₂(1/p) bits. Rare things are worth a lot; sure things, nothing.</div></li>
+      <li><div><strong>Entropy</strong>: the average surprise. 0 if the same thing always happens; highest if everything is equally likely.</div></li>
+      <li><div><strong>Compression</strong>: no code goes below the entropy; Huffman stays less than one bit away.</div></li>
+      <li><div><strong>Cross-entropy</strong>: what you pay describing the data with a model's probabilities. Always greater than or equal to the entropy.</div></li>
+      <li><div><strong>KL divergence</strong>: the difference between the two. It is not symmetric and it shoots up if the model gives almost 0 to something that happens.</div></li>
+      <li><div><strong>Classification loss</strong>: the average cross-entropy between what happened and what the model said. Minimizing it is maximum likelihood, and it rewards honest probabilities.</div></li>
+      <li><div><strong>Several classes</strong>: softmax turns scores into percentages; training pushes each score by "percentage given − what it should have been".</div></li>
+      <li><div><strong>Trees and mutual information</strong>: pick the question that lowers the entropy the most, and measure relationships of any shape.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where it shows up in fleet telemetry</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 28c4-10 20-10 24 0"/><path d="M12 22c3-5 13-5 16 0"/><circle cx="20" cy="30" r="2"/></svg><h3>Sending less data</h3><p>2,000 trucks sending their status every 30 seconds make 172.8 million messages a month: 64.8 MB with a fixed code and 40.8 MB with Huffman. Over satellite, at about $5 per MB, that is about $120 a month of difference on the statuses alone.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6L34 32H6Z"/><path d="M20 16v8M20 28v1"/></svg><h3>Surprising days</h3><p>Adding up the surprise of everything a truck sends in a day gives a rarity score: a day with an accident and three harsh-braking alerts adds up to dozens of bits. It is a simple way to rank what to look at first.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 30h24M12 30V18M20 30V10M28 30V22"/></svg><h3>Breakdown models</h3><p>They are trained and compared with the log loss. A model that gives 1% to trucks that then break down is exposed, even if it is right almost every time; and since its percentages are honest, they can be turned into dollars of shop costs.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13"/><path d="M20 12v8l6 4"/></svg><h3>Alerting when the fleet changes</h3><p>The KL divergence between this month's reports and the year's tells how much what arrives has changed. If it goes up (winter, a new route), it is time to review the models before they fail.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Connections</p>
+    <h2>With the models of the ML series and the other topics</h2>
+    <p><a href="logistic-regression-en.html" target="_self">Logistic regression</a> is trained by minimizing cross-entropy, and that is why its percentages are probabilities. <a href="decision-trees-en.html" target="_self">Decision trees</a> choose their questions by information gain (or with Gini impurity, a close cousin), and <a href="random-forest-and-boosting-en.html" target="_self">random forests</a> inherit that criterion. <a href="xgboost-en.html" target="_self">XGBoost</a> classifies by minimizing the same log loss, step by step. In <a href="bayes-en.html" target="_self">Bayes</a>, the surprise of a data point is minus the logarithm of its likelihood, and mutual information is used to compare two <a href="k-means-en.html" target="_self">k-means</a> clusterings.</p>
+    <p>In this collection, cross-entropy is the log-likelihood of <a href="maximum-likelihood-en.html" target="_self">topic 14</a> with its sign flipped; mutual information generalizes the independence of <a href="conditional-probability-and-independence-en.html" target="_self">topic 9</a> and sees what the correlation of <a href="covariance-and-correlation-en.html" target="_self">topic 10</a> misses; the normal distribution of <a href="distributions-en.html" target="_self">topic 8</a> is the one with the most entropy for a given spread, and the softmax push comes from the <a href="derivatives-gradient-and-the-chain-rule-en.html" target="_self">derivatives of topic 16</a>. With rare classes, the log loss and rebalancing meet in the topic on <a href="imbalanced-classes-en.html" target="_self">imbalanced classes</a>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>What helps and where it misleads</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>What helps</h3><ul class="pc">
+      <li>A single idea for three things: how much uncertainty there is, how much you can compress and how wrong a model is.</li>
+      <li>As a loss, it rewards honest percentages and punishes false confidence.</li>
+      <li>Mutual information finds relationships of any shape, not just straight lines.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Where it misleads</h3><ul class="pc">
+      <li>Giving 0% to something that happens costs infinity: libraries clip the probabilities, and a single wrong label can dominate the average.</li>
+      <li>KL is not a true distance: it depends on the direction.</li>
+      <li>With little data, entropy is underestimated and mutual information is overestimated; with continuous features, it depends on how they are binned.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Bit</dt><dd>The information in a yes-or-no question whose two answers are equally likely.</dd>
+      <dt>Surprise (information)</dt><dd>log₂(1/p): what an answer that had probability p is worth. The rarer, the more bits.</dd>
+      <dt>Entropy</dt><dd>The average surprise: how much uncertainty there is before you know the answer.</dd>
+      <dt>Huffman code</dt><dd>A code that gives short words to frequent things and long ones to rare things; the best possible, symbol by symbol.</dd>
+      <dt>Cross-entropy</dt><dd>The average surprise when the data come from one distribution and are measured with the probabilities of another (a model).</dd>
+      <dt>KL divergence</dt><dd>Cross-entropy minus entropy: what you pay on top for using the wrong model.</dd>
+      <dt>Logarithmic loss (log loss)</dt><dd>The average cross-entropy between what happened and what a classifier said.</dd>
+      <dt>Nat</dt><dd>The same unit as the bit, but with the natural logarithm: 1 bit = 0.69 nats.</dd>
+      <dt>Softmax</dt><dd>The computation that turns scores into percentages that add up to 100%.</dd>
+      <dt>Calibration</dt><dd>That a 10% means it happens 10 times out of 100.</dd>
+      <dt>Information gain</dt><dd>How much the entropy drops when you split the data with a question.</dd>
+      <dt>Mutual information</dt><dd>How much the entropy of one thing drops when you know another. 0 if they are independent.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the math behind it</summary>
+    <p style="padding-top:10px">You don't need them to understand the idea:</p>
+    <div class="formula">surprise of an answer with probability p:   log₂(1/p) bits
+entropy:   H = Σ p · log₂(1/p)
+   fleet: 0.9 · 0.152 + 0.06 · 4.059 + 0.035 · 4.837
+          + 0.005 · 7.644 = 0.588 bits per report
+
+cross-entropy:   H(p, q) = Σ p · log₂(1/q)
+   winter with the year's code: 1.145 bits
+KL divergence:   H(p, q) − H(p) = 1.145 − 1.051 = 0.094 bits
+
+log loss (nats):
+   average of −ln(probability given to what happened)
+   giving 1% to what happens: −ln 0.01 = 4.6
+   (squared error: (1 − 0.01)² = 0.98)
+
+softmax:  percentage of class k = e^(score k) / Σ e^(score)
+training push on score k:
+          percentage given − (1 if it's the true one, 0 if not)
+
+information gain:
+   H(before) − Σ (share of the trucks) · H(group)
+   engine outside 80–100 °C: 0.813 − 0.202 · 0.738
+                             − 0.798 · 0.512 = 0.255 bits</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in one minute</h2>
+    <p>An animated recap: the 16 trucks split in half, the fair coin and the loaded one, the Huffman codes of the statuses, winter measured with the year's code, the penalty for being confident and wrong, and the question that clarifies the most in a tree. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xACYAAEAAwEBAQEBAAAAAAAAAAAAAQYHBQQIAwIBAQEBAQAAAAAAAAAAAAAAAAABAgMQAAICAQMCAwQFBgcNBwUBAQABAgMEBRIRIQYHMRNRIhRBYYEVMnG0UpE2QiMkcrFidTOCFxahs5TBCDV0NNNzVbLEN1MlY4WVw8VDGGV2EQEBAQEBAQEAAAAAAAAAAAAAEQESYTEh/8AAEQgCHAPAAwEiAAIRAAMRAP/aAAwDAQACEQMRAD8AxEAHRzAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABIKqASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIAgEgCASAIBIA//Z" aria-label="Animation: entropy and cross-entropy">
+      <source src="entropy-and-cross-entropy-with-audio-en.mp4" type="video/mp4">
+      Your browser can't play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"arbol": [{"k": "km", "q": "More than 400,000 km?", "si": [539, 184], "no": [461, 67]}, {"k": "urbana", "q": "Does it run a city route?", "si": [376, 112], "no": [624, 139]}, {"k": "par", "q": "Even license plate?", "si": [477, 125], "no": [523, 126]}, {"k": "t95", "q": "Engine above 95 \u00b0C?", "si": [282, 112], "no": [718, 139]}, {"k": "fuera", "q": "Engine outside 80\u2013100 \u00b0C?", "si": [202, 160], "no": [798, 91]}], "temp": [[68.0, 6, 6], [72.0, 13, 13], [76.0, 53, 43], [80.0, 83, 35], [84.0, 159, 16], [88.0, 188, 13], [92.0, 185, 8], [96.0, 152, 17], [100.0, 97, 41], [104.0, 47, 42], [108.0, 11, 11], [112.0, 4, 4]]};
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g,",");s=fr?i+"."+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const pc=(v,d)=>f1(100*v,d??1)+"%";
+const pcs=v=>v>=0.1?pc(v,0):v>=0.01?pc(v,1):v>=0.001?pc(v,2):v>=0.0001?pc(v,3):pc(v,4);
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+const redraws=[];window.addEventListener("resize",()=>redraws.forEach(g=>g()));
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+const tk=(a,b,n)=>{const raw=(b-a)/n,p=10**Math.floor(Math.log10(raw)),m=raw/p,st=(m<1.5?1:m<3?2:m<7?5:10)*p,out=[];for(let v=Math.ceil(a/st-1e-9)*st;v<=b+1e-9;v+=st)out.push(+v.toFixed(10));return out;};
+function axes(svg,o){const FS=o.FS,L=o.x+(o.padL??FS*3.4),R=o.x+o.w-(o.padR??FS*0.9),T=o.y+(o.padT??FS*2.2),B=o.y+o.h-(o.padB??FS*2.6);
+  const sx=v=>L+(v-o.x0)/(o.x1-o.x0)*(R-L),sy=v=>B-(v-o.y0)/(o.y1-o.y0)*(B-T),g=el("g",null,svg);
+  for(const v of (o.yt||[])){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},g);txt(g,L-7,sy(v)+FS*0.3,(o.fy||(v=>f1(v,0)))(v),{"text-anchor":"end","font-size":FS*0.8});}
+  for(const v of (o.xt||[])){if(o.grid!==false)el("line",{x1:sx(v),x2:sx(v),y1:T,y2:B,class:"g-line","stroke-opacity":.55},g);
+    const s=(o.fx||(v=>f1(v,0)))(v),w=s.length*FS*0.8*0.62,X=sx(v);let a="middle",xx=X;if(X+w/2>o.x+o.w-3){a="end";xx=o.x+o.w-3;}else if(X-w/2<o.x+3){a="start";xx=o.x+3;}else if((o.yt||[]).length&&X-w/2<L-4){a="start";xx=L-2;}
+    txt(g,xx,B+FS*1.05,s,{"text-anchor":a,"font-size":FS*0.8});}
+  el("line",{x1:L,x2:R,y1:B,y2:B,class:"g-axis"},g);
+  if(o.xl)txt(g,R,o.y+o.h-FS*0.25,o.xl,{"text-anchor":"end","font-size":FS*0.85,class:"t-ink"});
+  if(o.yl)txt(g,L,T-FS*0.75,o.yl,{"font-size":FS*0.8});
+  return {L,R,T,B,sx,sy,FS};}
+const dot=(g,x,y,r,fill,extra)=>el("circle",Object.assign({cx:x,cy:y,r,fill,stroke:"var(--point-ring)","stroke-width":r>6?2:1.2},extra||{}),g);
+const pathOf=(pts)=>pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join("");
+const lab=(g,x,y,s,FS,A,extra)=>{extra=extra||{};const fz=extra["font-size"]||FS*0.8,w=s.length*fz*0.6,an=extra["text-anchor"]||"middle",left=an==="middle"?x-w/2:an==="end"?x-w:x;let dx=0;if(left<A.L+2)dx=A.L+2-left;else if(left+w>A.R-2)dx=A.R-2-(left+w);return txt(g,x+dx,y,s,Object.assign({"font-size":fz},halo(5),extra,{"text-anchor":an}));};
+const L2=Math.log2;
+const H=p=>{const s=p.reduce((a,b)=>a+b,0);return -p.reduce((a,v)=>a+(v>0?v/s*L2(v/s):0),0);};
+const HX=(p,q)=>-p.reduce((a,v,i)=>a+(v>0?v*L2(q[i]):0),0);
+const KL=(p,q)=>HX(p,q)-H(p);
+function huff(p){if(p.length===1)return ["0"];let n=p.length;const code=p.map(()=>"");let q=p.map((v,i)=>({p:v,c:i,s:[i]}));
+  while(q.length>1){q.sort((a,b)=>a.p-b.p||a.c-b.c);const A=q.shift(),B=q.shift();A.s.forEach(i=>code[i]="0"+code[i]);B.s.forEach(i=>code[i]="1"+code[i]);q.push({p:A.p+B.p,c:n++,s:A.s.concat(B.s)});}return code;}
+const avgLen=(p,c)=>p.reduce((a,v,i)=>a+v*c[i].length,0);
+const TIPOS=["no incidents","delay","breakdown","accident"],TCOL=["var(--muted)","var(--mean)","var(--point)","var(--sample)"];
+const P_ANUAL=[0.90,0.06,0.035,0.005],P_INV=[0.78,0.12,0.08,0.02];
+const bits=v=>f1(v,v<10?2:1)+" bits";
+
+/* ---------- toy: the daily report ---------- */
+(function(){const svg=$("toy"),inP=$("t-p");
+  const dist=p0=>{const t=Math.min(1,(p0-0.25)/0.65),w=[1,1,1].map((v,i)=>(1-t)*v+t*[6,3.5,0.5][i]),s=w.reduce((a,b)=>a+b,0);return [p0,...w.map(v=>(1-p0)*v/s)];};
+  inP.addEventListener("input",draw);
+  function draw(){const p0=+inP.value/100,p=dist(p0),h=H(p),c=huff(p),Lh=avgLen(p,c),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14;
+    const cols=nw?20:50,rows=100/cols,cs=(W-8)/cols,sH=rows*cs+FS*(nw?2.6:1.6),rowH=nw?FS*3.4:FS*2.6,hb=sH+FS*0.6,eY=hb+4*rowH+FS*1.2,HH=eY+FS*5.2;
+    svg.setAttribute("viewBox",`0 0 ${W} ${HH}`);svg.textContent="";
+    /* 100 reports: stratified sampling (always the same positions) */
+    const cum=p.reduce((a,v)=>{a.push((a.length?a[a.length-1]:0)+v);return a;},[]);
+    const seq=[];for(let i=0;i<100;i++){const u=((i*0.6180339887+0.31)%1);seq.push(cum.findIndex(c=>u<c+1e-12));}
+    seq.forEach((k,i)=>el("rect",{x:4+(i%cols)*cs+1.5,y:Math.floor(i/cols)*cs+1.5,width:cs-3,height:cs-3,rx:3,fill:TCOL[k],"fill-opacity":k?0.9:0.28},svg));
+    const cnt=[0,1,2,3].map(k=>seq.filter(v=>v===k).length);
+    const cs2=cnt.map((v,k)=>v+" "+(k===0?"no inc.":k===1?"delay":k===2?"brkdn.":"acc.")).join(" · ");
+    if(nw){txt(svg,W/2,rows*cs+FS*1.1,"100 sample reports:",{"text-anchor":"middle","font-size":FS*0.72});txt(svg,W/2,rows*cs+FS*2.1,cs2,{"text-anchor":"middle","font-size":FS*0.72});}
+    else txt(svg,W/2,rows*cs+FS*1.1,"100 sample reports: "+cs2,{"text-anchor":"middle","font-size":FS*0.72});
+    /* one row per answer */
+    const x0=nw?8:190,x1=nw?W-8:W-250,bw=x1-x0;
+    p.forEach((v,k)=>{const y=hb+k*rowH,s=-L2(v),yb=nw?y+FS*1.45:y+FS*0.35;
+      txt(svg,nw?8:180,nw?y+FS*0.9:y+FS*1.15,TIPOS[k],{"text-anchor":nw?"start":"end","font-size":FS*0.9,class:"t-ink","font-weight":700});
+      el("rect",{x:x0,y:yb,width:bw,height:FS*1.1,rx:4,fill:"var(--line)","fill-opacity":.45},svg);
+      el("rect",{x:x0,y:yb,width:Math.max(1.5,bw*v),height:FS*1.1,rx:4,fill:TCOL[k],"fill-opacity":k?0.9:0.55},svg);
+      txt(svg,x0+Math.max(1.5,bw*v)+6,yb+FS*0.85,pcs(v),Object.assign({"font-size":FS*0.78,class:"t-ink"},halo(4),{"text-anchor":(bw*v>bw-FS*5)?"end":"start"},(bw*v>bw-FS*5)?{x:x0+bw*v-6}:{}));
+      txt(svg,W-8,nw?y+FS*0.9:y+FS*1.15,"surprise "+bits(s),{"text-anchor":"end","font-size":FS*0.85,style:`fill:${k?TCOL[k]:"var(--ink)"}`,"font-weight":700});});
+    /* entropy as a sum of pieces, axis from 0 to 2 bits */
+    const ex0=nw?8:190,ex1=W-16,sc=v=>ex0+(ex1-ex0)*v/2;
+    txt(svg,nw?8:180,nw?eY-FS*0.3:eY+FS*0.9,nw?"entropy = "+bits(h):"entropy",{"text-anchor":nw?"start":"end","font-size":FS*0.9,class:"t-ink","font-weight":700});
+    const ey=nw?eY+FS*0.2:eY;let acc=0;
+    p.forEach((v,k)=>{const a=v*(-L2(v));if(a<=0)return;el("rect",{x:sc(acc),y:ey,width:Math.max(0.8,sc(acc+a)-sc(acc)),height:FS*1.3,fill:TCOL[k],"fill-opacity":k?0.9:0.55,stroke:"var(--surface)","stroke-width":1},svg);acc+=a;});
+    [0,0.5,1,1.5,2].forEach(v=>{el("line",{x1:sc(v),x2:sc(v),y1:ey+FS*1.4,y2:ey+FS*1.8,stroke:"var(--muted)"},svg);txt(svg,sc(v),ey+FS*2.8,f1(v,1)+(v===2?" bits":""),{"text-anchor":v===2?"end":v===0?"start":"middle","font-size":FS*0.75});});
+    el("line",{x1:sc(h),x2:sc(h),y1:ey-FS*0.5,y2:ey+FS*1.6,stroke:"var(--ink)","stroke-width":2.5},svg);
+    if(!nw)lab(svg,sc(h)+FS*0.4,ey-FS*0.6,"= "+bits(h),FS,{L:ex0,R:ex1},{"text-anchor":"start",class:"t-ink","font-weight":700});
+    $("t-p-o").textContent=pc(p0,0);
+    $("t-big").innerHTML=`<div><b style="color:var(--mean)">${bits(h)}</b><span>entropy: average surprise of a report</span></div><div><b>${f1(Lh,2)} bits</b><span>fitted code (Huffman): ${c.map((s,k)=>s).join(" · ")}</span></div><div><b>2 bits</b><span>fixed code: 00, 01, 10, 11</span></div>`;
+    let m;const sa=-L2(p[3]);
+    if(p0<=0.26)m=`<b>Everything equally likely</b>: each answer has 25% and a surprise of 2 bits, and the average is also <b>2 bits</b>, the maximum with four answers. No code can do better than the fixed one: there is nothing frequent to give a short code to.`;
+    else if(p0<0.7)m=`With ${pc(p0,0)} "no incidents", the entropy is ${bits(h)}: there is still quite a lot of uncertainty. The fitted code spends ${f1(Lh,2)} bits per report, above the entropy and below the fixed code's 2. Move the slider up.`;
+    else if(p0<0.96)m=`With ${pc(p0,0)} "no incidents", a report carries <b>${bits(h)}</b> on average. The accident is the most surprising answer (${bits(sa)}), but since it almost never arrives it adds little to the average. ${Math.abs(p0-0.9)<0.005?"This is the real fleet. ":""}The fitted code spends ${f1(Lh,2)} bits: it can't go below 1 bit per report, because each report needs at least a 0 or a 1.`;
+    else m=`With ${pc(p0,0)} "no incidents", the entropy is only <b>${bits(h)}</b>: the report almost never says anything new. But an accident, when it arrives, is worth <b>${bits(sa)}</b>. The symbol-by-symbol code stays at ${f1(Lh,2)} bits because it can't spend less than 1 per report; to get close to the entropy you would have to encode the reports in blocks (the technical version covers it).`;
+    $("t-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 1: yes-or-no questions ---------- */
+(function(){const svg=$("q1"),inK=$("q1-k");
+  inK.addEventListener("input",draw);
+  function draw(){const k=+inK.value,N=2**k,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H1=nw?420:380,HH=nw?H1+400:H1;
+    svg.setAttribute("viewBox",`0 0 ${W} ${HH}`);svg.textContent="";
+    const gx=nw?20:20,gw=nw?W-40:W*0.44,gy=FS*2.2,gh=H1-gy-FS*1.2;
+    const C=2**Math.ceil(k/2),R=2**Math.floor(k/2),cw=gw/C,ch=gh/R,tgt=Math.floor(N*0.69);
+    txt(svg,gx,FS*1.2,`${N} trucks, one of them sent the alert`,{"font-size":FS*0.85,class:"t-ink","font-weight":700});
+    for(let i=0;i<N;i++){const c=i%C,r=Math.floor(i/C),x=gx+c*cw,y=gy+r*ch,s=Math.min(cw,ch)*0.62;
+      const tx=x+cw/2,ty=y+ch/2;el("rect",{x:tx-s/2,y:ty-s*0.35,width:s,height:s*0.62,rx:s*0.08,fill:i===tgt?"var(--point)":"var(--line)"},svg);
+      el("circle",{cx:tx-s*0.25,cy:ty+s*0.32,r:s*0.09,fill:i===tgt?"var(--point)":"var(--muted)"},svg);el("circle",{cx:tx+s*0.25,cy:ty+s*0.32,r:s*0.09,fill:i===tgt?"var(--point)":"var(--muted)"},svg);}
+    /* question boxes: bisection alternating columns and rows */
+    let c0=0,c1=C,r0=0,r1=R;const tc=tgt%C,tr=Math.floor(tgt/C);
+    const segs=[];
+    for(let q=1;q<=k;q++){let ln;if((c1-c0)>=(r1-r0)){const m=(c0+c1)/2;ln=[gx+m*cw,gy+r0*ch,gx+m*cw,gy+r1*ch];if(tc<m)c1=m;else c0=m;}else{const m=(r0+r1)/2;ln=[gx+c0*cw,gy+m*ch,gx+c1*cw,gy+m*ch];if(tr<m)r1=m;else r0=m;}segs.push(ln);}
+    el("rect",{x:gx+c0*cw+2,y:gy+r0*ch+2,width:(c1-c0)*cw-4,height:(r1-r0)*ch-4,rx:6,fill:"none",stroke:"var(--point)","stroke-width":2.5},svg);
+    segs.forEach(([a,b,c,d],i)=>{el("line",{x1:a,y1:b,x2:c,y2:d,stroke:"var(--mean)","stroke-width":3,"stroke-dasharray":"8 5"},svg);
+      const r=FS*0.75,t=Math.hypot(c-a,d-b)>8*r?0.3:0.5,mx=a+(c-a)*t,my=b+(d-b)*t;el("circle",{cx:mx,cy:my,r,fill:"var(--mean)",stroke:"var(--surface)","stroke-width":2},svg);txt(svg,mx,my+FS*0.32,String(i+1),{"text-anchor":"middle","font-size":FS*0.85,style:"fill:var(--surface)","font-weight":700});});
+    /* surprise curve */
+    const P=nw?{x:0,y:H1+10,w:W,h:390}:{x:W*0.5,y:0,w:W*0.5,h:H1};
+    const A=axes(svg,Object.assign({},P,{x0:-3,x1:0,y0:0,y1:11,xt:[-3,-2,-1,0],fx:v=>pcs(10**v),yt:[0,2,4,6,8,10],xl:"probability (log scale)",yl:"surprise (bits)",FS,padL:FS*2.4,padT:FS*2.2}));
+    const pts=[];for(let i=0;i<=200;i++){const l=-3+3*i/200;pts.push([A.sx(l),A.sy(-l*Math.log2(10))]);}
+    el("path",{d:pathOf(pts),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    P_ANUAL.forEach(v=>dot(svg,A.sx(Math.log10(v)),A.sy(-L2(v)),nw?7:5,"var(--muted)"));
+    const lx=Math.log10(1/N);el("line",{x1:A.sx(lx),x2:A.sx(lx),y1:A.sy(k),y2:A.B,stroke:"var(--point)","stroke-width":1.5,"stroke-dasharray":"5 4"},svg);
+    el("line",{x1:A.L,x2:A.sx(lx),y1:A.sy(k),y2:A.sy(k),stroke:"var(--point)","stroke-width":1.5,"stroke-dasharray":"5 4"},svg);
+    dot(svg,A.sx(lx),A.sy(k),nw?11:8,"var(--point)");
+    lab(svg,A.sx(lx)+FS*0.5,A.sy(k)-FS*0.6,`1 in ${N} → ${k} ${k===1?"bit":"bits"}`,FS,A,{"text-anchor":"start",style:"fill:var(--point)","font-weight":700});
+    $("q1-k-o").textContent=N;
+    $("q1-big").innerHTML=`<div><b>${N}</b><span>equally likely trucks</span></div><div><b style="color:var(--point)">${k}</b><span>yes-or-no questions: ${Array.from({length:k+1},(_,i)=>2**(k-i)).join(" → ")}</span></div><div><b style="color:var(--mean)">${k} ${k===1?"bit":"bits"}</b><span>surprise of something with probability 1/${N} = ${pcs(1/N)}</span></div>`;
+    $("q1-msg").innerHTML=k===1?`With 2 trucks one question is enough: "is it the first one?". Something that happens half the time is worth <b>1 bit</b>, the unit.`
+      :`With ${N} trucks you need <b>${k} questions</b>, because ${N} is 2 multiplied by itself ${k} times. ${k>=4?`Doubling the trucks only adds one more question: that is why surprise grows slowly, with the logarithm. `:""}The gray dots on the curve are the toy's report: "no incidents" (90%) is worth 0.15 bits; delay, 4.06; breakdown, 4.84; accident (0.5%), 7.64, like one truck out of about 200.`;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 2: entropy of one question ---------- */
+(function(){const svg=$("q2"),inP=$("q2-p");
+  inP.addEventListener("input",draw);
+  function draw(){const p=+inP.value/100,h=H([p,1-p]),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H1=nw?420:340,HH=nw?H1+300:H1;
+    svg.setAttribute("viewBox",`0 0 ${W} ${HH}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:nw?W:W*0.64,h:H1,x0:0,x1:1,y0:0,y1:1.12,xt:[0,0.25,0.5,0.75,1],fx:v=>pc(v,0),yt:[0,0.25,0.5,0.75,1],fy:v=>f1(v,2),xl:"deliveries that are late",yl:"entropy (bits)",FS,padL:FS*3,padT:FS*2.2});
+    const pts=[];for(let i=0;i<=300;i++){const q=i/300;pts.push([A.sx(q),A.sy(H([q,1-q]))]);}
+    el("path",{d:pathOf(pts)+`L${A.sx(1)} ${A.sy(0)}L${A.sx(0)} ${A.sy(0)}Z`,fill:"var(--mean)","fill-opacity":.1},svg);
+    el("path",{d:pathOf(pts),fill:"none",stroke:"var(--mean)","stroke-width":3},svg);
+    lab(svg,A.sx(0.5),A.sy(1)-FS*0.6,"fair coin: 1 bit",FS,A,{class:"t-ink","font-weight":700});
+    el("line",{x1:A.sx(p),x2:A.sx(p),y1:A.sy(h),y2:A.B,stroke:"var(--point)","stroke-width":1.5,"stroke-dasharray":"5 4"},svg);
+    dot(svg,A.sx(p),A.sy(h),nw?11:8,"var(--point)");
+    /* surprise bars */
+    const P2=nw?{x:0,y:H1+10,w:W,h:290}:{x:W*0.67,y:0,w:W*0.33,h:H1};
+    const sT=p>0?-L2(p):Infinity,sA=p<1?-L2(1-p):Infinity,cap=8;
+    const B=axes(svg,Object.assign({},P2,{x0:0,x1:2,y0:0,y1:cap,xt:[],yt:[0,2,4,6,8],xl:"",yl:"surprise (bits)",FS,padL:FS*2.2,padT:FS*2.2,padB:FS*2.8}));
+    [[sT,p,"late","var(--point)"],[sA,1-p,"on time","var(--sample)"]].forEach(([s,w,nm,col],j)=>{const cx=B.sx(0.5+j),bw=(B.R-B.L)*0.3,hh=Math.min(cap,s);
+      el("rect",{x:cx-bw/2,y:B.sy(hh),width:bw,height:B.B-B.sy(hh),fill:col,"fill-opacity":.3,stroke:col,"stroke-width":2},svg);
+      const ca=w>0?w*s:0;el("rect",{x:cx-bw/2,y:B.sy(Math.min(cap,ca)),width:bw,height:B.B-B.sy(Math.min(cap,ca)),fill:col,"fill-opacity":.9},svg);
+      txt(svg,cx,B.B+FS*1.1,nm,{"text-anchor":"middle","font-size":FS*0.8,style:`fill:${col}`,"font-weight":700});
+      txt(svg,cx,Math.max(B.T+FS*0.2,B.sy(hh)-FS*0.4),isFinite(s)?f1(s,2):"∞",Object.assign({"text-anchor":"middle","font-size":FS*0.8,class:"t-ink","font-weight":700},halo(4)));});
+    $("q2-p-o").textContent=pc(p,1);
+    $("q2-big").innerHTML=`<div><b style="color:var(--mean)">${bits(h)}</b><span>entropy: average surprise of the answer</span></div><div><b style="color:var(--point)">${isFinite(sT)?bits(sT):"—"}</b><span>surprise of "late" (the dark part: what it adds to the average)</span></div><div><b style="color:var(--sample)">${isFinite(sA)?bits(sA):"—"}</b><span>surprise of "on time"</span></div>`;
+    let m;if(p===0||p===1)m=`If ${p===0?"none is late":"all are late"}, the answer is known in advance: entropy <b>0</b>. There is no need to ask.`;
+    else if(Math.abs(p-0.5)<0.001)m=`<b>The fair coin</b>: both answers are worth 1 bit and the average is 1 bit, the maximum for a yes-or-no question. There is no way to guess better than at random.`;
+    else m=`With ${pc(p,1)} of deliveries late, "${p<0.5?"late":"on time"}" is the surprise (${bits(p<0.5?sT:sA)}), but it rarely arrives; "${p<0.5?"on time":"late"}" arrives almost always and is worth ${bits(p<0.5?sA:sT)}. The average is <b>${bits(h)}</b>${h<0.5?", less than half a question: you can almost guess without asking":""}. The curve is a dome: ${pc(p,1)} gives the same as ${pc(1-p,1)}, because all that matters is how uneven the coin is.`;
+    $("q2-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 3: Huffman ---------- */
+(function(){const svg=$("q3"),EST=["driving","stuck in traffic","unloading","refueling","at the shop","alert"];
+  const SETS=[[0.55,0.20,0.12,0.07,0.04,0.02],[1/6,1/6,1/6,1/6,1/6,1/6],[0.9,0.04,0.03,0.015,0.01,0.005]];let si=0;
+  chips($("q3-c"),["Normal day","All equally frequent","Almost always driving"],i=>{si=i;draw();});
+  const fixed=["000","001","010","011","100","101"],MSG=172.8e6;
+  function draw(){const p=SETS[si],c=huff(p),Lh=avgLen(p,c),h=H(p),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,rowH=nw?FS*3.6:FS*2.4,HH=FS*2+6*rowH+FS*0.5;
+    svg.setAttribute("viewBox",`0 0 ${W} ${HH}`);svg.textContent="";
+    const nameX=nw?6:6,barX=nw?6:170,barW=nw?150:150,hufX=nw?190:350,bs=nw?FS*1.15:FS*1.2,fixX=nw?W-6-3*bs*1.08-FS*5.4:640;
+    txt(svg,barX,FS*1.1,"frequency",{"font-size":FS*0.75});txt(svg,hufX,FS*1.1,"Huffman code",{"font-size":FS*0.75,style:"fill:var(--point)"});
+    txt(svg,fixX,FS*1.1,"fixed",{"font-size":FS*0.75});txt(svg,W-6,FS*1.1,"surprise",{"text-anchor":"end","font-size":FS*0.75});
+    p.forEach((v,k)=>{const y=FS*2+k*rowH,yb=nw?y+FS*1.3:y+FS*0.15;
+      txt(svg,nameX,nw?y+FS*0.85:y+FS*1.05,EST[k],nw?{"font-size":FS*0.85,class:"t-ink","font-weight":700}:{"font-size":FS*0.9,class:"t-ink","font-weight":700});
+      if(!nw||true){el("rect",{x:barX+(nw?0:0),y:nw?yb:yb,width:barW,height:bs,rx:3,fill:"var(--line)","fill-opacity":.45},svg);
+        el("rect",{x:barX,y:yb,width:barW*v,height:bs,rx:3,fill:"var(--mean)","fill-opacity":.85},svg);
+        txt(svg,barX+barW*v+5,yb+bs*0.78,pc(v,v<0.1?1:0),Object.assign({"font-size":FS*0.72,class:"t-ink"},halo(3),barW*v>barW-FS*3?{"text-anchor":"end",x:barX+barW*v-5}:{}));}
+      [...c[k]].forEach((b,j)=>{const x=hufX+j*bs*1.08;el("rect",{x,y:yb,width:bs,height:bs,rx:3,fill:"var(--point)","fill-opacity":.85},svg);txt(svg,x+bs/2,yb+bs*0.78,b,{"text-anchor":"middle","font-size":FS*0.75,style:"fill:var(--surface)","font-weight":700});});
+      [...fixed[k]].forEach((b,j)=>{const x=fixX+j*bs*1.08;el("rect",{x,y:yb,width:bs,height:bs,rx:3,fill:"var(--muted)","fill-opacity":.35},svg);txt(svg,x+bs/2,yb+bs*0.78,b,{"text-anchor":"middle","font-size":FS*0.75,class:"t-ink"});});
+      txt(svg,W-6,yb+bs*0.8,f1(-L2(v),2),{"text-anchor":"end","font-size":FS*0.8,class:"t-ink"});});
+    const mb=b=>f1(MSG*b/8e6,1)+" MB";
+    $("q3-big").innerHTML=`<div><b style="color:var(--mean)">${f1(h,3)} bits</b><span>entropy: the minimum possible per message</span></div><div><b style="color:var(--point)">${f1(Lh,3)} bits</b><span>average with Huffman (${mb(Lh)} a month for the fleet)</span></div><div><b>3 bits</b><span>fixed code (${mb(3)} a month)</span></div>`;
+    $("q3-msg").innerHTML=[`On a normal day, Huffman gives 1 bit to "driving", 2 to "stuck in traffic" and up to 5 to "alert". The average is <b>${f1(Lh,2)} bits</b>, only ${f1(Lh-h,3)} above the entropy (${f1(h,3)}): almost perfect. With 2,000 trucks and one message every 30 seconds (172.8 million a month) that is ${mb(Lh)} instead of ${mb(3)}, ${f1(100*(1-Lh/3),0)}% less.`,
+      `With the six statuses equally frequent, the entropy is ${f1(h,3)} bits and Huffman spends ${f1(Lh,3)}: it gives 2 bits to two statuses and 3 to the other four. Compression only works when some things are more frequent than others.`,
+      `If the truck is almost always driving, the entropy falls to ${f1(h,3)} bits, but Huffman stays at ${f1(Lh,3)}: it can't spend less than 1 bit per message. That is the "less than 1 bit" gap the theory allows. To get closer, you encode messages two at a time or ten at a time (the technical version does it).`][si];}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 4: cross-entropy ---------- */
+(function(){const svg=$("q4"),Q=[P_INV,P_ANUAL,[0.25,0.25,0.25,0.25],[0.99,0.006,0.003,0.001]];let si=1;
+  chips($("q4-c"),["Winter model (q = p)","Whole-year model","Everything equally likely","\"Nothing ever happens\""],i=>{si=i;draw();},1);
+  function draw(){const q=Q[si],p=P_INV,hp=H(p),hx=HX(p,q),kl=hx-hp,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,rowH=nw?FS*4.2:FS*3.2,top=FS*0.6,yb=top+4*rowH+FS*1.2,HH=yb+(nw?FS*7.4:FS*5.2);
+    svg.setAttribute("viewBox",`0 0 ${W} ${HH}`);svg.textContent="";
+    const x0=nw?8:180,x1=nw?W-FS*8:W-200,bw=x1-x0;
+    p.forEach((v,k)=>{const y=top+k*rowH,yy=nw?y+FS*1.3:y;
+      txt(svg,nw?8:170,nw?y+FS*0.9:y+FS*1.5,TIPOS[k],{"text-anchor":nw?"start":"end","font-size":FS*0.9,class:"t-ink","font-weight":700});
+      [[v,"var(--point)","data"],[q[k],"var(--mean)","model"]].forEach(([w,col,nm],j)=>{const by=yy+j*FS*1.2;el("rect",{x:x0,y:by,width:bw,height:FS*1.0,rx:3,fill:"var(--line)","fill-opacity":.4},svg);
+        el("rect",{x:x0,y:by,width:Math.max(1.5,bw*w),height:FS*1.0,rx:3,fill:col,"fill-opacity":.85},svg);
+        const t=pcs(w);txt(svg,bw*w>bw-FS*4?x0+bw*w-5:x0+Math.max(1.5,bw*w)+5,by+FS*0.8,t,Object.assign({"font-size":FS*0.72,class:"t-ink"},halo(3),{"text-anchor":bw*w>bw-FS*4?"end":"start"}));});
+      const s=-L2(q[k]);txt(svg,W-8,yy+FS*1.25,`${f1(s,2)} bits`,{"text-anchor":"end","font-size":FS*0.85,style:s>6?"fill:var(--warn)":"fill:var(--ink)","font-weight":700});
+      if(!nw||k===0)txt(svg,W-8,yy+FS*2.35,"cost each time",{"text-anchor":"end","font-size":FS*0.66});});
+    /* two bars: entropy and cross-entropy */
+    const mx=2.1,sx0=nw?8:180,sx1=W-12,sc=v=>sx0+(sx1-sx0)*v/mx;
+    const bar=(y,lbl,a,b)=>{txt(svg,nw?8:170,nw?y-FS*0.35:y+FS*0.9,lbl,{"text-anchor":nw?"start":"end","font-size":FS*0.82,class:"t-ink","font-weight":700});
+      const by=nw?y:y;el("rect",{x:sc(0),y:by,width:sc(a)-sc(0),height:FS*1.25,rx:3,fill:"var(--point)","fill-opacity":.75},svg);
+      if(b>0.0005)el("rect",{x:sc(a),y:by,width:Math.max(1.5,sc(a+b)-sc(a)),height:FS*1.25,rx:3,fill:"var(--warn)","fill-opacity":.95},svg);
+      const bl=bits(a+b);if(sc(a+b)+6+bl.length*FS*0.8*0.6<sx1-2)lab(svg,sc(a+b)+6,by+FS*0.95,bl,FS,{L:sx0,R:sx1},{"text-anchor":"start",class:"t-ink","font-weight":700});else txt(svg,sx1,by-FS*0.35,bl,{"text-anchor":"end","font-size":FS*0.8,class:"t-ink","font-weight":700});};
+    bar(yb+(nw?FS*0.8:0),"winter entropy",hp,0);bar(yb+(nw?FS*3.8:FS*2),"cross-entropy",hp,kl);
+    [0,0.5,1,1.5,2].forEach(v=>txt(svg,sc(v),HH-FS*0.4,f1(v,1),{"text-anchor":v===0?"start":"middle","font-size":FS*0.72}));
+    $("q4-big").innerHTML=`<div><b style="color:var(--point)">${bits(hp)}</b><span>winter entropy: the minimum per report</span></div><div><b style="color:var(--mean)">${bits(hx)}</b><span>cross-entropy: what you pay with this model</span></div><div><b style="color:var(--warn)">+${f1(kl,3)}</b><span>extra bits per report (KL divergence, idea 5)</span></div>`;
+    $("q4-msg").innerHTML=[`If the model knows the winter frequencies, the cross-entropy equals the entropy: <b>${bits(hx)}</b>, with no extra cost. That is the best you can do.`,
+      `With the whole-year model you pay <b>${bits(hx)}</b> per report, ${f1(kl,3)} more than necessary (${f1(100*kl/hp,0)}%). The "no incidents" come out cheaper (0.15 bits instead of 0.36), but accidents cost 7.6 bits and in winter they arrive 2% of the time. Try the "nothing ever happens" model.`,
+      `A model that knows nothing and gives 25% to everything always pays 2 bits per report: <b>${f1(kl,2)} extra bits</b>. It isn't badly wrong about anything, but it doesn't take advantage of "no incidents" being the norm either.`,
+      `The model that gives 99% to "no incidents" pays almost nothing for them (0.01 bits), but each accident costs it <b>almost 10 bits</b> and each breakdown more than 8. The average comes out to <b>${bits(hx)}</b>, ${f1(kl,2)} extra bits: false confidence is expensive. It is the idea that makes cross-entropy a good loss (idea 6).`][si];}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 5: KL in both directions ---------- */
+(function(){const svg=$("q5"),inA=$("q5-a"),p=P_INV;
+  const qOf=a=>{const s=p[0]+p[1]+p[2];return [p[0]*(1-a)/s,p[1]*(1-a)/s,p[2]*(1-a)/s,a];};
+  inA.addEventListener("input",draw);
+  function draw(){const la=+inA.value,a=10**la,q=qOf(a),k1=KL(p,q),k2=KL(q,p),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,HH=nw?480:360;
+    svg.setAttribute("viewBox",`0 0 ${W} ${HH}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:HH,x0:-6,x1:-1,y0:0,y1:0.32,xt:nw?[-6,-4,-2,-1]:[-6,-5,-4,-3,-2,-1],fx:v=>pcs(10**v),yt:[0,0.1,0.2,0.3],fy:v=>f1(v,1),xl:"probability of an accident according to the model",yl:"KL divergence (bits)",FS,padL:FS*2.6,padT:FS*2.2});
+    const c1=[],c2=[];for(let i=0;i<=300;i++){const l=-6+5*i/300,qq=qOf(10**l);c1.push([A.sx(l),A.sy(Math.min(0.33,KL(p,qq)))]);c2.push([A.sx(l),A.sy(Math.min(0.33,KL(qq,p)))]);}
+    el("line",{x1:A.sx(Math.log10(0.02)),x2:A.sx(Math.log10(0.02)),y1:A.T,y2:A.B,stroke:"var(--muted)","stroke-width":1.5,"stroke-dasharray":"6 4"},svg);
+    lab(svg,A.sx(Math.log10(0.02))-FS*0.4,A.T+FS*0.9,"real: 2%",FS,A,{"text-anchor":"end"});
+    el("path",{d:pathOf(c2),fill:"none",stroke:"var(--sample)","stroke-width":3},svg);
+    el("path",{d:pathOf(c1),fill:"none",stroke:"var(--mean)","stroke-width":3.5},svg);
+    lab(svg,A.sx(-5.6),A.sy(KL(p,qOf(10**-5.6)))-FS*0.7,"data versus model",FS,A,{"text-anchor":"start",style:"fill:var(--mean)","font-weight":700});
+    lab(svg,A.sx(-5.6),A.sy(KL(qOf(10**-5.6),p))-FS*0.7,"model versus data",FS,A,{"text-anchor":"start",style:"fill:var(--sample)","font-weight":700});
+    dot(svg,A.sx(la),A.sy(Math.min(0.33,k1)),nw?11:8,"var(--mean)");dot(svg,A.sx(la),A.sy(Math.min(0.33,k2)),nw?10:7,"var(--sample)");
+    $("q5-a-o").textContent=pcs(a);
+    $("q5-big").innerHTML=`<div><b style="color:var(--mean)">${f1(k1,3)}</b><span>extra bits when using the model on the winter data</span></div><div><b style="color:var(--sample)">${f1(k2,3)}</b><span>the opposite direction</span></div><div><b>${k1<0.0005&&k2<0.0005?"equal":k1>k2?"× "+f1(k1/k2,1):"× "+f1(k2/k1,1)}</b><span>${k1<0.0005&&k2<0.0005?"the model is right: both are 0":"times bigger in one direction than the other"}</span></div>`;
+    let m;if(Math.abs(la-Math.log10(0.02))<0.03)m=`The model gives accidents their real probability, 2%: both divergences are <b>0</b>. It is the only point where that happens.`;
+    else if(a<0.02)m=`The model gives an accident ${pcs(a)}, when they happen 2% of the time. Each accident costs it ${f1(-L2(a),1)} bits, and that is why the "data versus model" divergence is <b>${f1(k1,3)}</b>, ${f1(k1/Math.max(k2,1e-9),1)} times the other direction. ${la<-4.5?"If the model said exactly 0%, it would be infinite: a single accident would disqualify the model.":"Move the slider further down: it keeps rising without limit."}`;
+    else m=`Now the model exaggerates: it gives an accident ${pcs(a)}. It overpays for everything else, but there are no terrible surprises: ${f1(k1,3)} bits in one direction and ${f1(k2,3)} in the other. Being wrong out of caution is much cheaper than being wrong out of overconfidence.`;
+    $("q5-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 6: log loss versus squared error ---------- */
+(function(){const svg=$("q6"),inQ=$("q6-q");
+  const qOf=v=>10**(-3+3*v/100);
+  inQ.addEventListener("input",draw);
+  function draw(){const q=qOf(+inQ.value),ll=-Math.log(q),se=(1-q)**2,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,HH=nw?480:360;
+    svg.setAttribute("viewBox",`0 0 ${W} ${HH}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:HH,x0:0,x1:1,y0:0,y1:7.4,xt:[0,0.2,0.4,0.6,0.8,1],fx:v=>pc(v,0),yt:[0,1,2,3,4,5,6,7],xl:"probability given to what happened",yl:"penalty",FS,padL:FS*2.2,padT:FS*2.2});
+    const c1=[],c2=[];for(let i=0;i<=400;i++){const x=Math.max(0.0006,i/400);c1.push([A.sx(x),A.sy(Math.min(7.6,-Math.log(x)))]);c2.push([A.sx(i/400),A.sy((1-i/400)**2)]);}
+    el("path",{d:pathOf(c2),fill:"none",stroke:"var(--sample)","stroke-width":3},svg);
+    el("path",{d:pathOf(c1),fill:"none",stroke:"var(--warn)","stroke-width":3.5},svg);
+    lab(svg,A.sx(0.12),A.sy(-Math.log(0.12))-FS*0.5,"log loss: −ln p",FS,A,{"text-anchor":"start",style:"fill:var(--warn)","font-weight":700});
+    lab(svg,A.sx(0.04),A.sy(1)-FS*0.6,"squared error: (1 − p)²",FS,A,{"text-anchor":"start",style:"fill:var(--sample)","font-weight":700});
+    dot(svg,A.sx(q),A.sy(Math.min(7.4,ll)),nw?11:8,"var(--warn)");dot(svg,A.sx(q),A.sy(se),nw?10:7,"var(--sample)");
+    $("q6-q-o").textContent=pcs(q);
+    $("q6-big").innerHTML=`<div><b style="color:var(--warn)">${f1(ll,2)}</b><span>log loss (nats; in bits, ${f1(ll/Math.LN2,2)})</span></div><div><b style="color:var(--sample)">${f1(se,3)}</b><span>squared error</span></div><div><b>× ${f1(ll/Math.LN2/1,1)}</b><span>times what a 50% costs with the log loss (0.69 nats)</span></div>`;
+    let m;if(q>0.95)m=`The model gave ${pcs(q)} to what happened: almost no penalty with either one (${f1(ll,3)} and ${f1(se,4)}). Being right with confidence is ideal.`;
+    else if(q>=0.3)m=`With ${pcs(q)} for what happened, the log loss is ${f1(ll,2)} and the squared error, ${f1(se,2)}. Here the two are similar. Move the slider to the left: that is where the difference is.`;
+    else m=`The model gave only ${pcs(q)} to what happened: it was sure of the opposite and it was wrong. The squared error doesn't go above ${f1(se,2)}, as if being wrong at 30% were the same as at 0.1%. The log loss charges <b>${f1(ll,2)}</b>${q<0.02?`: a single truck like this weighs on the average as much as ${f1(ll/0.105,0)} trucks predicted right at 90%`:""}. ${q<0.005?"At exactly 0% it would be infinite: that is why libraries never let a probability reach 0.":"That is the difference: it punishes false confidence without mercy."}`;
+    $("q6-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 7: honest probabilities ---------- */
+(function(){const svg=$("q7"),inQ=$("q7-q"),PS=[0.02,0.10,0.40];let pi=1;
+  chips($("q7-c"),["Real risk 2%","Real risk 10%","Real risk 40%"],i=>{pi=i;draw();},1);
+  const E=(p,q)=>-(p*Math.log(q)+(1-p)*Math.log(1-q));
+  inQ.addEventListener("input",draw);
+  function draw(){const p=PS[pi],q=+inQ.value/100,e=E(p,q),h=E(p,p),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,HH=nw?480:360;
+    svg.setAttribute("viewBox",`0 0 ${W} ${HH}`);svg.textContent="";
+    const ymax=Math.max(1.2,E(p,0.8)*1.05,E(p,0.005)*1.05);
+    const A=axes(svg,{x:0,y:0,w:W,h:HH,x0:0,x1:0.8,y0:0,y1:ymax,xt:[0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8],fx:v=>pc(v,0),yt:tk(0,ymax,4),fy:v=>f1(v,1),xl:"breakdown probability the model states",yl:"average penalty (nats)",FS,padL:FS*2.6,padT:FS*2.2});
+    const pts=[];for(let i=1;i<=400;i++){const x=0.8*i/400;pts.push([A.sx(x),A.sy(Math.min(ymax,E(p,x)))]);}
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(h),y2:A.sy(h),stroke:"var(--muted)","stroke-width":1.5,"stroke-dasharray":"6 4"},svg);
+    el("line",{x1:A.sx(p),x2:A.sx(p),y1:A.T,y2:A.B,stroke:"var(--ink)","stroke-width":1.5,"stroke-dasharray":"5 4"},svg);
+    el("path",{d:pathOf(pts),fill:"none",stroke:"var(--mean)","stroke-width":3.5},svg);
+    lab(svg,A.R-4,A.sy(h)+FS*1.2>A.B-FS*0.4?A.sy(h)-FS*0.5:A.sy(h)+FS*1.2,"entropy: "+f1(h,3),FS,A,{"text-anchor":"end"});
+    lab(svg,A.sx(p)+FS*0.4,A.T+FS*0.8,"real: "+pc(p,0),FS,A,{"text-anchor":"start",class:"t-ink","font-weight":700});
+    if(e-h>0.004)el("line",{x1:A.sx(q),x2:A.sx(q),y1:A.sy(h),y2:A.sy(Math.min(ymax,e)),stroke:"var(--warn)","stroke-width":4},svg);
+    dot(svg,A.sx(q),A.sy(Math.min(ymax,e)),nw?11:8,"var(--point)");
+    $("q7-q-o").textContent=pc(q,1);
+    $("q7-big").innerHTML=`<div><b style="color:var(--mean)">${f1(e,3)}</b><span>average penalty saying ${pc(q,1)}</span></div><div><b>${f1(h,3)}</b><span>average penalty telling the truth (${pc(p,0)}): the entropy</span></div><div><b style="color:var(--warn)">+${f1(e-h,3)}</b><span>extra: the KL divergence between the truth and what it says</span></div>`;
+    let m;if(Math.abs(q-p)<0.003)m=`<b>Telling the truth</b> (${pc(p,0)}), the average penalty is the minimum possible, ${f1(h,3)} nats: the entropy of the question. No other answer beats it, neither the cautious one nor the exaggerated one.`;
+    else if(q<p)m=`The model downplays it: it says ${pc(q,1)} when the risk is ${pc(p,0)}. Weeks without a breakdown come out a bit cheaper, but each breakdown costs it ${f1(-Math.log(q),2)}. In the long run it pays <b>${f1(e-h,3)} extra</b> per week. ${q<=0.01?"Saying \"nothing will happen here\" is the worst strategy: the curve rises very fast to the left.":""}`;
+    else m=`The model exaggerates: it says ${pc(q,1)} when the risk is ${pc(p,0)}. Now it is the quiet weeks that pay (each one costs ${f1(-Math.log(1-q),2)} instead of ${f1(-Math.log(1-p),3)}). In the long run, <b>${f1(e-h,3)} extra</b>. Neither alarming nor reassuring: only stating the real probability pays off.`;
+    $("q7-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 8: softmax ---------- */
+(function(){const svg=$("q8"),NM=["engine","brakes","tires","electrical"],Z0=[2.0,0.5,-0.5,0.0];let tr=1;const box=$("q8-s"),ins=[];
+  NM.forEach((n,i)=>{const d=document.createElement("div");d.className="slider";d.innerHTML=`<label for="q8-z${i}">${n} <output id="q8-z${i}-o"></output></label><input type="range" id="q8-z${i}" min="-3" max="3" step="0.1" value="${Z0[i]}">`;box.appendChild(d);const inp=d.querySelector("input");inp.addEventListener("input",draw);ins.push(inp);});
+  chips($("q8-c"),NM.map(n=>n.charAt(0).toUpperCase()+n.slice(1)),i=>{tr=i;draw();},1);
+  $("q8-re").onclick=()=>{ins.forEach((x,i)=>x.value=Z0[i]);draw();};
+  function draw(){const z=ins.map(x=>+x.value),m=Math.max(...z),e=z.map(v=>Math.exp(v-m)),s=e.reduce((a,b)=>a+b,0),p=e.map(v=>v/s),loss=-Math.log(p[tr]);
+    const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,HH=nw?660:470;svg.setAttribute("viewBox",`0 0 ${W} ${HH}`);svg.textContent="";
+    const cw=W/4,zH=nw?150:110,zY=FS*1.6+zH/2,pY0=zY+zH/2+FS*2.4,pH=nw?200:150,gY=pY0+pH+FS*3.2,gH=nw?120:90;
+    txt(svg,4,FS*1,"score",{"font-size":FS*0.75});txt(svg,4,pY0-FS*0.9,"percentage (softmax)",{"font-size":FS*0.75});txt(svg,4,gY-FS*0.6,"training push",{"font-size":FS*0.75});
+    el("line",{x1:4,x2:W-4,y1:zY,y2:zY,stroke:"var(--line)"},svg);el("line",{x1:4,x2:W-4,y1:pY0+pH,y2:pY0+pH,stroke:"var(--line)"},svg);el("line",{x1:4,x2:W-4,y1:gY+gH/2,y2:gY+gH/2,stroke:"var(--line)"},svg);
+    z.forEach((v,k)=>{const cx=cw*(k+0.5),bw=cw*0.42,col=k===tr?"var(--point)":"var(--mean)";
+      const hz=v/3*zH/2;el("rect",{x:cx-bw/2,y:Math.min(zY,zY-hz),width:bw,height:Math.max(1.5,Math.abs(hz)),rx:3,fill:"var(--muted)","fill-opacity":.5},svg);
+      txt(svg,cx,v>=0?zY-hz-FS*0.35:zY-hz+FS*1.0,f1(v,1),{"text-anchor":"middle","font-size":FS*0.8,class:"t-ink"});
+      const hp=p[k]*pH;el("rect",{x:cx-bw/2,y:pY0+pH-hp,width:bw,height:Math.max(1.5,hp),rx:3,fill:col,"fill-opacity":.85},svg);
+      txt(svg,cx,pY0+pH-hp-FS*0.35,pc(p[k],1),{"text-anchor":"middle","font-size":FS*0.85,class:"t-ink","font-weight":700});
+      txt(svg,cx,pY0+pH+FS*1.15,NM[k],{"text-anchor":"middle","font-size":FS*0.85,style:k===tr?"fill:var(--point)":"fill:var(--ink)","font-weight":k===tr?700:400});
+      const g=p[k]-(k===tr?1:0),L=-g*gH/2*0.95,y0=gY+gH/2;
+      if(Math.abs(L)>2){el("line",{x1:cx,x2:cx,y1:y0,y2:y0-L+(L>0?8:-8),stroke:col,"stroke-width":4},svg);el("path",{d:`M${cx-8} ${y0-L+(L>0?10:-10)}L${cx+8} ${y0-L+(L>0?10:-10)}L${cx} ${y0-L}Z`,fill:col},svg);}
+      txt(svg,cx-12,Math.abs(L)>2?y0-L/2+FS*0.3:y0-FS*0.4,(g>0?"−":"+")+f1(Math.abs(g),2),{"text-anchor":"end","font-size":FS*0.75,style:`fill:${col}`});});
+    ins.forEach((x,i)=>$(`q8-z${i}-o`).textContent=f1(+x.value,1));
+    $("q8-big").innerHTML=`<div><b style="color:var(--point)">${pc(p[tr],1)}</b><span>probability it gives to the real breakdown (${NM[tr]})</span></div><div><b style="color:var(--warn)">${f1(loss,3)}</b><span>loss: −ln ${f1(p[tr],3)} (nats)</span></div><div><b>${pc(p.reduce((a,b)=>a+b,0),0)}</b><span>sum of the four percentages, always</span></div>`;
+    const top=p.indexOf(Math.max(...p));
+    $("q8-msg").innerHTML=top===tr&&p[tr]>0.9?`The model gives ${pc(p[tr],1)} to ${NM[tr]}, which is what it was: loss <b>${f1(loss,3)}</b>, almost nothing, and the arrows have almost disappeared. Training has little left to correct with this truck.`
+      :top===tr?`The model gets the most likely one right (${NM[tr]}, ${pc(p[tr],1)}), but it isn't very sure: loss ${f1(loss,3)}. Training would push its score up by ${f1(1-p[tr],2)} and the others down, each by what it took.`
+      :`It was ${NM[tr]}, but the model bet on ${NM[top]} (${pc(p[top],1)}) and gave ${NM[tr]} only ${pc(p[tr],1)}: loss <b>${f1(loss,3)}</b>. The orange arrow pushes its score up with strength ${f1(1-p[tr],2)}; the one for ${NM[top]}, down with ${f1(p[top],2)}. Try raising the score of ${NM[tr]} until the loss drops below 0.1.`;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 9: information gain ---------- */
+(function(){const svg=$("q9"),Q=D.arbol;let qi=0;
+  chips($("q9-c"),Q.map(o=>o.q),i=>{qi=i;draw();});
+  const Hb=(n,a)=>H([a,n-a]);
+  function draw(){const o=Q[qi],N=o.si[0]+o.no[0],A=o.si[1]+o.no[1],h0=Hb(N,A),hs=Hb(o.si[0],o.si[1]),hn=Hb(o.no[0],o.no[1]),g=h0-o.si[0]/N*hs-o.no[0]/N*hn;
+    const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,HH=nw?380:200;svg.setAttribute("viewBox",`0 0 ${W} ${HH}`);svg.textContent="";
+    const bh=nw?FS*2.2:FS*2,x0=8,x1=W-8,w=x1-x0;
+    const box=(x,y,ww,n,a,lbl,h,dy,right)=>{dy=dy||0;const tx=right?x+ww-4:x+4,an=right?"end":"start";const fa=a/n;el("rect",{x,y,width:ww*fa,height:bh,fill:"var(--point)","fill-opacity":.85},svg);el("rect",{x:x+ww*fa,y,width:ww*(1-fa),height:bh,fill:"var(--muted)","fill-opacity":.35},svg);
+      el("rect",{x,y,width:ww,height:bh,fill:"none",stroke:"var(--ink)","stroke-opacity":.4,rx:2},svg);
+      txt(svg,tx,y-FS*0.45,lbl,{"font-size":FS*0.8,class:"t-ink","font-weight":700,"text-anchor":an});
+      txt(svg,tx,y+bh+FS*1.1+dy,`${f1(n,0)} trucks · ${f1(a,0)} breakdowns (${pc(fa,0)})`,{"font-size":FS*0.72,"text-anchor":an});
+      txt(svg,tx,y+bh+FS*2.3+dy,"entropy "+bits(h),{"font-size":FS*0.8,style:"fill:var(--mean)","font-weight":700,"text-anchor":an});};
+    box(x0,FS*1.6,w,N,A,"all",h0);
+    const y2=FS*1.6+bh+FS*5.4,gap=FS*0.8,ws=(w-gap)*o.si[0]/N,wn=(w-gap)*o.no[0]/N;
+    const yA=FS*1.6+bh+FS*2.9,yB=y2-FS*1.5;el("path",{d:`M${W/2} ${yA}L${x0+ws/2} ${yB}M${W/2} ${yA}L${x0+ws+gap+wn/2} ${yB}`,stroke:"var(--muted)","stroke-width":1.5,fill:"none"},svg);
+    box(x0,y2,ws,o.si[0],o.si[1],"yes",hs,0,false);box(x0+ws+gap,y2,wn,o.no[0],o.no[1],"no",hn,nw?FS*2.5:0,true);
+    const after=o.si[0]/N*hs+o.no[0]/N*hn;
+    $("q9-big").innerHTML=`<div><b>${bits(h0)}</b><span>entropy before asking</span></div><div><b>${bits(after)}</b><span>average entropy of the two groups (weighted by size)</span></div><div><b style="color:var(--good)">${f1(g,3)} bits</b><span>information gain of the question</span></div>`;
+    const msg={km:`Those with more than 400,000 km break down ${pc(o.si[1]/o.si[0],0)} of the time, the others ${pc(o.no[1]/o.no[0],0)}. The question clarifies something: it gains ${f1(g,3)} bits. Try the others.`,
+      urbana:`The city route barely changes the percentage (${pc(o.si[1]/o.si[0],0)} versus ${pc(o.no[1]/o.no[0],0)}): it gains only ${f1(g,3)} bits. It matters, but only a little.`,
+      par:`An even license plate has nothing to do with breakdowns: the two groups stay as mixed as at the start and the gain is ${f1(g,4)} bits, practically 0. A tree would never choose it.`,
+      t95:`"Above 95 °C?" separates somewhat (${pc(o.si[1]/o.si[0],0)} versus ${pc(o.no[1]/o.no[0],0)}), ${f1(g,3)} bits. But it leaves out the <em>cold</em> engines, which also break down. Try the last question.`,
+      fuera:`<b>The best question</b>: of the engines outside the normal range, ${pc(o.si[1]/o.si[0],0)} break down; of those inside, only ${pc(o.no[1]/o.no[0],0)}. It gains <b>${f1(g,3)} bits</b>, six times more than the mileage. Temperature matters, but in a U shape: look at the chart below.`}[o.k];
+    $("q9-msg").innerHTML=msg;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 9b: the temperature U ---------- */
+(function(){const svg=$("q9b"),T=D.temp;
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,HH=nw?460:340;svg.setAttribute("viewBox",`0 0 ${W} ${HH}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:HH,x0:64,x1:116,y0:0,y1:1.08,xt:[70,80,90,100,110],fx:v=>v+" °C",yt:[0,0.25,0.5,0.75,1],fy:v=>pc(v,0),xl:"average engine temperature",yl:"trucks that broke down",FS,padL:FS*3,padT:FS*2.2});
+    el("rect",{x:A.sx(80),y:A.T,width:A.sx(100)-A.sx(80),height:A.B-A.T,fill:"var(--good)","fill-opacity":.1},svg);
+    let n=0,sx=0,sy=0,sxx=0,sxy=0;T.forEach(([t,c,a])=>{n+=c;sx+=c*t;sy+=a;sxx+=c*t*t;sxy+=a*t;});
+    const b=(sxy-sx*sy/n)/(sxx-sx*sx/n),a0=sy/n-b*sx/n;
+    el("line",{x1:A.sx(64),x2:A.sx(116),y1:A.sy(a0+b*64),y2:A.sy(a0+b*116),stroke:"var(--sample)","stroke-width":3,"stroke-dasharray":"8 5"},svg);
+    T.forEach(([t,c,a])=>dot(svg,A.sx(t),A.sy(a/c),Math.max(4,Math.sqrt(c)*(nw?1.6:1.25)),"var(--point)",{"fill-opacity":.85}));
+    lab(svg,A.sx(90),A.sy(0.25)-FS*0.7,"straight line: almost flat (correlation 0.007)",FS,A,{style:"fill:var(--sample)","font-weight":700});
+    lab(svg,A.sx(90),A.sy(0.62),"mutual information: 0.31 bits",FS,A,{style:"fill:var(--good)","font-weight":700});}
+  redraws.push(draw);draw();})();
+})();
+</script>
+</body>
+</html>

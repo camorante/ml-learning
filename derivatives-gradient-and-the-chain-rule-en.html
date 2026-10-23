@@ -1,0 +1,804 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Derivatives, gradient and the chain rule</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content;max-width:100%}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec p b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.rowb{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.hit{cursor:crosshair}
+@media (max-width:620px){.seg{border-radius:14px}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#en" target="_self">← Main menu</a> · The math under ML · topic 16 · explained with drawings · <a href="derivatives-gradient-and-the-chain-rule-technical-en.html" target="_self">see the technical version</a> · <a href="math-under-ml-en.html" target="_self">all topics</a> · <a href="derivadas-gradiente-y-regla-de-la-cadena-es.html" target="_self">en español</a></p>
+  <h1>Derivatives, gradient and the chain rule</h1>
+  <p class="lede">A model learns by making small adjustments to its numbers and keeping the ones that lower the error. The derivative tells you which way to adjust before you try it, the gradient tells you that for all the numbers at once, and the chain rule lets you compute it even when the model has millions of pieces chained together.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="situ col">
+    <p class="eyebrow">The setup</p>
+    <p>A truck's GPS records at every moment <strong>how many kilometers it has covered</strong>. In half an hour it leaves the city, gets on the highway at 90 km/h, runs into a traffic jam and speeds up again. The curve below is that position, minute by minute.</p>
+    <p>The question: <strong>how fast is it going at one exact instant?</strong> With two GPS readings you can compute the average speed between them: kilometers covered divided by minutes elapsed. But that is an average; if the truck slows down between the two readings, the average does not tell you what the speedometer shows. The idea of the <strong>derivative</strong> is to bring the two readings as close together as possible and see which number the calculation approaches.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="Truck position over half an hour, line between two readings, zoomed view and speed"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Top left, the <b style="color:var(--mean)">blue curve</b> is the kilometers covered at each minute. The two <b style="color:var(--point)">orange dots</b> are two GPS readings separated by the interval you choose, and the <b style="color:var(--sample)">purple</b> line joining them has the slope of the average speed between them. The dashed black line is the <b>tangent</b>: the line that just touches the curve at the first reading. Top right (or in the middle on a phone), the same thing under a magnifying glass. At the bottom, the speed at each minute: the orange dot is what the speedometer shows and the purple segment is the average speed between the two readings.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>Which minute are you looking at?</h3>
+      <p>The moment of the first reading.</p>
+      <div class="slider"><label for="t-t">Minute <output id="t-t-o"></output></label><input type="range" id="t-t" min="0" max="20" step="0.5" value="15"><div class="ends"><span>0 min</span><span>20 min</span></div></div>
+    </div>
+    <div class="dec">
+      <h3>How far apart are the readings?</h3>
+      <p>To the right, the two readings get closer and the zoom increases.</p>
+      <div class="slider"><label for="t-h">Interval between readings <output id="t-h-o"></output></label><input type="range" id="t-h" min="0" max="300" step="1" value="0"><div class="ends"><span>10 min</span><span>0.6 s</span></div></div>
+    </div>
+  </div>
+  <div class="big3" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Try this, in order:</strong></p>
+    <ol class="try">
+      <li>Minute 15 with 10 minutes between readings: the average speed comes out at 62 km/h, but the truck is doing 90. The traffic jam falls inside those 10 minutes.</li>
+      <li>Bring the readings to 1 minute apart: the average is now 90.0, the same as the speedometer. The purple line hugs the tangent.</li>
+      <li>Go to minute 19.5, in the middle of the braking. With 1 minute between readings you get 35.6 km/h; the speedometer shows 60. Bring the readings to 0.6 s: 59.6.</li>
+      <li>Watch the zoom as you bring them closer: the curve turns into a straight line. Its slope is the derivative.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">What you just saw</p>
+    <h2>The derivative: the slope of the curve at a point</h2>
+    <p>The average speed between two readings is <strong>how much the position changes divided by how much time passes</strong>: the slope of the line joining the two points. The closer the readings, the less time the truck has to change speed between them, and the calculation approaches a fixed number: the speed at that instant. That number it approaches is the <strong>derivative</strong> of the position. It is what the speedometer shows.</p>
+    <ul>
+      <li><strong>A curve seen up close looks like a straight line.</strong> The derivative is the slope of that line: the <strong>tangent</strong>.</li>
+      <li><strong>It is a rate of change.</strong> "For every extra minute, so many extra kilometers." It works for any pair of quantities: dollars per km/h, liters per tonne, error per change in one of the model's numbers.</li>
+      <li><strong>Its sign tells you which way the curve goes.</strong> Positive derivative: it goes up; negative: it goes down; zero: it is flat (at a peak or in a valley).</li>
+    </ul>
+    <p>That last point is what machine learning uses. A model has adjustable numbers and an error that depends on them. The derivative of the error with respect to each number tells you whether raising that number makes things worse or better, and by how much. The ideas that follow go from speed to acceleration (1), the rules for computing derivatives without taking limits (2), the minimum where the derivative is zero (3), the gradient with several numbers at once (4), the chain rule (5), how a neuron learns backwards (6) and what happens when the chain is very long (7).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 7</p>
+    <h2>The derivative of speed: harsh braking</h2>
+    <p>If the derivative of position is speed, the derivative of speed is <strong>acceleration</strong>: how many km/h the truck gains or loses each second. When it is very negative it is <strong>harsh braking</strong>, and telematics counts it as an alert (here, below −3 m/s²: losing about 11 km/h in one second).</p>
+    <p>The GPS gives the speed once per second, so acceleration is computed as in the toy: <strong>the difference in speed between two readings, divided by the time between them</strong>. How far apart should they be? Readings far apart average out the braking and hide it. Readings very close together react to every jitter of the GPS.</p>
+  </div>
+  <figure class="fig"><svg id="acc" role="img" aria-label="GPS speed second by second and acceleration computed with different spacings"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, the speed the GPS gives every second for one minute (<b style="color:var(--mean)">blue</b> dots). At the bottom, the acceleration computed at each second with the spacing you choose: the dashed <b style="color:var(--warn)">red</b> line is the harsh-braking limit and the <b style="color:var(--warn)">red</b> dots are the seconds that trigger an alert. At the top, the two <b style="color:var(--point)">orange</b> dots are the readings that give the most negative acceleration.</p>
+  <div class="controls col">
+    <div class="slider"><label for="a-d">Spacing between the two readings <output id="a-d-o"></output></label><input type="range" id="a-d" min="1" max="10" step="1" value="1"><div class="ends"><span>1 s</span><span>10 s</span></div></div>
+  </div>
+  <div class="big3 col" id="a-big"></div>
+  <p class="qcard col" id="a-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 7</p>
+    <h2>Rules so you don't take the limit every time</h2>
+    <p>Bringing two points together until they almost touch always works, but for curves written as a formula there are shortcuts that give the exact derivative. With a few rules you can differentiate almost everything a model uses:</p>
+    <ul>
+      <li><strong>Powers</strong>: the derivative of x² is 2x; of x³, 3x². In general, the exponent comes down in front and you subtract one from it.</li>
+      <li><strong>Sums and fixed numbers</strong>: the derivative of a sum is the sum of the derivatives; a number that multiplies stays; a number that is added disappears (it changes nothing).</li>
+      <li><strong>The exponential</strong> eˣ is its own derivative: it grows at a rate equal to its height. The <strong>logarithm</strong> has derivative 1/x: it grows more and more slowly.</li>
+      <li><strong>The sigmoid</strong>, the S-shaped curve that turns any number into a percentage (the one in <a href="logistic-regression-en.html" target="_self">logistic regression</a>), has a very handy derivative: <strong>p × (1 − p)</strong>, where p is its height. It never goes above 0.25.</li>
+    </ul>
+  </div>
+  <div class="chips col" id="r-c" role="group" aria-label="Function"></div>
+  <figure class="fig"><svg id="rul" role="img" aria-label="A function with its tangent and its derivative below"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, the chosen function (<b style="color:var(--mean)">blue</b>) and its tangent at the <b style="color:var(--point)">orange</b> point. At the bottom, the <b style="color:var(--sample)">derivative</b>: for each x, the slope of the upper curve at that x. The lower dot sits at the height of the slope of the tangent above.</p>
+  <div class="controls col">
+    <div class="slider"><label for="r-x">Where you look: x <output id="r-x-o"></output></label><input type="range" id="r-x" min="0" max="100" step="1" value="70"><div class="ends"><span>left</span><span>right</span></div></div>
+  </div>
+  <p class="qcard col" id="r-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 7</p>
+    <h2>The minimum is where the derivative is zero</h2>
+    <p>What speed is best on the highway? Faster burns more diesel (air drag grows with the square of the speed). Slower costs more driver and truck time. Per 100 km, in this example:</p>
+    <p class="note"><strong>cost = diesel ($1.60/L × (20 + 0.0016 × speed²) liters) + time (cost per hour × 100 / speed)</strong></p>
+    <p>To the left of the minimum, going faster makes it cheaper (negative derivative); to the right, more expensive (positive derivative). Right at the bottom of the valley, the tangent is flat: <strong>zero derivative</strong>. That is why, to find the minimum of something, you look for where its derivative is zero.</p>
+  </div>
+  <figure class="fig"><svg id="cst" role="img" aria-label="Cost per hundred kilometers by speed, with its tangent"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The <b style="color:var(--mean)">blue</b> curve is the total cost per 100 km; the dashed ones are its two parts: <b style="color:var(--point)">diesel</b> (rises with speed) and <b style="color:var(--sample)">time</b> (falls). The black line is the tangent at the speed you choose: its slope is the derivative. The <b style="color:var(--good)">green</b> line marks the cheapest speed.</p>
+  <div class="controls col">
+    <div class="slider"><label for="c-v">Speed <output id="c-v-o"></output></label><input type="range" id="c-v" min="50" max="110" step="1" value="60"><div class="ends"><span>50 km/h</span><span>110 km/h</span></div></div>
+    <div class="slider"><label for="c-h">Truck cost per hour <output id="c-h-o"></output></label><input type="range" id="c-h" min="15" max="60" step="1" value="30"><div class="ends"><span>$15</span><span>$60</span></div></div>
+  </div>
+  <div class="big3 col" id="c-big"></div>
+  <p class="qcard col" id="c-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 7</p>
+    <h2>With two numbers: the gradient, the uphill arrow</h2>
+    <p>A model almost never has just one number. The line from <a href="least-squares-as-a-projection-en.html" target="_self">topic 4</a>, which gives fuel use from the load over 10 trips, has two: the <strong>height</strong> (fuel use when empty) and the <strong>slope</strong> (extra liters per 10 tonnes). Its error, the sum of squared errors, depends on both: it is a terrain with a valley.</p>
+    <p>You can differentiate by looking at one number at a time and holding the other still: "if I raise the height a little, how much does the error change?". Those are the <strong>partial derivatives</strong>. Together they form an arrow, the <strong>gradient</strong>, which points where the error <strong>rises fastest</strong>. To go down, you walk the opposite way: that is the <a href="gradient-descent-en.html" target="_self">gradient descent</a> of the ML series. Here, what matters is where the arrow comes from.</p>
+  </div>
+  <figure class="fig"><svg id="grd" class="hit" role="img" aria-label="Map of the error by height and slope, with the gradient arrow, and the line over the data"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> On the left (on top on a phone), a map: each point is a possible line (height across, slope up) and the curves are <b>contour lines</b> of the error, as on a mountain map; the more <b style="color:var(--mean)">blue</b>, the lower the error. The star is the best line. <b>Tap the map</b> to choose a line: the <b style="color:var(--warn)">red</b> arrow is the gradient (uphill) and the <b style="color:var(--good)">green</b> one, the opposite direction (downhill), both drawn shortened. On the right (below), that line over the 10 trips.</p>
+  <div class="decs">
+    <div class="dec"><h3>Step size</h3><p>How far it moves downhill each time, in proportion to how steep it is.</p><div class="seg" role="group" aria-label="Step size"><button type="button" id="g-s0" aria-pressed="false">Small</button><button type="button" id="g-s1" aria-pressed="true">Good</button><button type="button" id="g-s2" aria-pressed="false">Too big</button></div></div>
+    <div class="dec"><h3>Walk</h3><p>Take steps in the direction of the green arrow.</p><div class="rowb"><button type="button" id="g-1" class="primary">1 step</button><button type="button" id="g-10">+10 steps</button><button type="button" id="g-re">↺ Back to start</button></div></div>
+  </div>
+  <div class="big3" id="g-big"></div>
+  <p class="qcard col" id="g-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 7</p>
+    <h2>The chain rule: rates multiply</h2>
+    <p>Speed changes the diesel burned per hour, and diesel changes the spending in dollars. If each extra km/h burns 0.51 more liters per hour, and each liter costs $1.60, each extra km/h costs 0.51 × 1.60 = $0.81 more per hour. <strong>When one thing depends on another, which depends on another, the rates of change multiply.</strong> That is the <strong>chain rule</strong>.</p>
+    <p>It sounds obvious, and it is the key piece of deep learning: a neural network is a chain of simple calculations, and the derivative of the error with respect to any number inside it comes from multiplying the rates of each link.</p>
+  </div>
+  <figure class="fig"><svg id="cad" role="img" aria-label="Chain from speed to liters per hour to dollars per hour with the rate of each link"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Three chained boxes: the speed, the liters of diesel per hour burned at that speed and the dollars per hour. Above each arrow, the <b style="color:var(--point)">rate</b> of that link (its derivative). Below, a small nudge to the speed travels through the chain: in <b style="color:var(--point)">orange</b>, what the chain rule predicts; in <b style="color:var(--mean)">blue</b>, what actually changes.</p>
+  <div class="controls col">
+    <div class="slider"><label for="k-v">Speed <output id="k-v-o"></output></label><input type="range" id="k-v" min="50" max="100" step="1" value="80"><div class="ends"><span>50 km/h</span><span>100 km/h</span></div></div>
+    <div class="slider"><label for="k-p">Diesel price <output id="k-p-o"></output></label><input type="range" id="k-p" min="1.2" max="2.2" step="0.05" value="1.6"><div class="ends"><span>$1.20/L</span><span>$2.20/L</span></div></div>
+  </div>
+  <div class="dec col"><h3>Size of the nudge</h3><div class="seg" role="group" aria-label="Nudge"><button type="button" id="k-n0" aria-pressed="true">+1 km/h</button><button type="button" id="k-n1" aria-pressed="false">+5 km/h</button><button type="button" id="k-n2" aria-pressed="false">+20 km/h</button></div></div>
+  <p class="qcard col" id="k-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 6 of 7</p>
+    <h2>How a neuron learns: the chain, backwards</h2>
+    <p>A toy neuron predicts whether a delivery will arrive late from the number of <strong>traffic jams</strong> the truck has hit in the first half of the route. It has two adjustable numbers, a <strong>weight</strong> w and a <strong>bias</strong> b, and does four calculations in a row: it multiplies jams by weight, adds the bias, passes the result through the sigmoid (out comes a probability p) and computes the penalty: <strong>minus the logarithm of the probability it gave to what happened</strong>, the log loss from <a href="maximum-likelihood-en.html" target="_self">topic 14</a> and <a href="entropy-and-cross-entropy-en.html" target="_self">topic 15</a>.</p>
+    <p><strong>Forward</strong>, the values are computed from left to right. <strong>Backward</strong>, the derivatives of the penalty are computed from right to left: each box multiplies the derivative that reaches it by its own rate and passes it to the previous one. That is <strong>backpropagation</strong>: the chain rule applied from the end. With it you know, in a single pass, how much to adjust each number.</p>
+  </div>
+  <figure class="fig"><svg id="bp" role="img" aria-label="Computation graph of a neuron with the forward values and the backward derivatives"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each box is a calculation. The big <b style="color:var(--mean)">blue</b> number is its value (forward). The <b style="color:var(--point)">orange</b> line below it is the derivative of the penalty with respect to that value (backward): how much the penalty would change if that value went up a little. Above each arrow, in orange, the rate of that link, which is what gets multiplied on the way back.</p>
+  <div class="decs">
+    <div class="dec"><h3>The neuron's numbers</h3>
+      <div class="slider"><label for="b-w">Weight w <output id="b-w-o"></output></label><input type="range" id="b-w" min="-3" max="3" step="0.05" value="0.5"><div class="ends"><span>−3</span><span>3</span></div></div>
+      <div class="slider"><label for="b-b">Bias b <output id="b-b-o"></output></label><input type="range" id="b-b" min="-3" max="3" step="0.05" value="-1.5"><div class="ends"><span>−3</span><span>3</span></div></div>
+    </div>
+    <div class="dec"><h3>The delivery</h3>
+      <div class="slider"><label for="b-x">Traffic jams hit x <output id="b-x-o"></output></label><input type="range" id="b-x" min="0" max="4" step="1" value="2"><div class="ends"><span>0</span><span>4</span></div></div>
+      <div class="seg" role="group" aria-label="What happened"><button type="button" id="b-y1" aria-pressed="true">Arrived late</button><button type="button" id="b-y0" aria-pressed="false">Arrived on time</button></div>
+    </div>
+    <div class="dec"><h3>Learn</h3><p>One step: subtract from each number its derivative × 0.5.</p><div class="rowb"><button type="button" id="b-st" class="primary">1 learning step</button><button type="button" id="b-re">↺ Back to start</button></div></div>
+  </div>
+  <div class="big3" id="b-big"></div>
+  <p class="qcard col" id="b-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 7 of 7</p>
+    <h2>Very long chains: gradients that vanish or explode</h2>
+    <p>A deep network chains many layers, and on the way back the derivative is multiplied by a rate at each one. If the rates are below 1, the product shrinks at full speed: with the sigmoid, whose rate never goes above 0.25, ten multiplications take it below one millionth. The first layers barely get any signal and do not learn: the <strong>gradient vanishes</strong>. If the rates are above 1, the product grows out of control and the learning steps become huge: the <strong>gradient explodes</strong>.</p>
+    <p>That is why modern networks use pieces with a rate close to 1 (like the ReLU, which is 1 when it is active), connections that skip layers and gradient clipping.</p>
+  </div>
+  <figure class="fig"><svg id="van" role="img" aria-label="Size of the derivative that reaches each layer of a deep network"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each bar is a layer, from the last (on the right, where the error is computed) to the first (on the left). Its height is the size of the derivative that reaches it, on a logarithmic scale: each horizontal line is 10,000 times the one below. The <b style="color:var(--good)">green</b> band is the zone where learning works well.</p>
+  <div class="decs">
+    <div class="dec"><h3>Rate of each layer</h3><div class="seg" role="group" aria-label="Rate of each layer"><button type="button" id="v-f0" aria-pressed="true">0.25 (sigmoid)</button><button type="button" id="v-f1" aria-pressed="false">0.9</button><button type="button" id="v-f2" aria-pressed="false">1</button><button type="button" id="v-f3" aria-pressed="false">1.5</button></div></div>
+    <div class="dec"><div class="slider"><label for="v-n">Number of layers <output id="v-n-o"></output></label><input type="range" id="v-n" min="2" max="30" step="1" value="10"><div class="ends"><span>2</span><span>30</span></div></div></div>
+  </div>
+  <p class="qcard col" id="v-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The full recipe</h2>
+    <ol class="steps">
+      <li><div><strong>Derivative = rate of change</strong>: how much one thing changes when the other changes a tiny bit. It is the slope of the curve seen up close.</div></li>
+      <li><div><strong>With separate data points</strong> (GPS readings), it is computed with differences between nearby readings; not so far apart that they hide what happens, not so close that they amplify the noise.</div></li>
+      <li><div><strong>With formulas</strong>, you use the rules: powers, sums, exponential, logarithm, sigmoid.</div></li>
+      <li><div><strong>Minimums and maximums</strong>: where the derivative is zero.</div></li>
+      <li><div><strong>With many numbers</strong>, one derivative per number: the gradient points uphill; the model takes steps the opposite way, neither too short nor too long.</div></li>
+      <li><div><strong>Chained calculations</strong>: the rates multiply (chain rule).</div></li>
+      <li><div><strong>Backpropagation</strong>: forward, the values are computed; backward, by multiplying rates, the derivative of the error with respect to every number, all in one pass.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where it shows up in fleet telematics</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6L34 32H6Z"/><path d="M20 16v8M20 28v1"/></svg><h3>Harsh braking and acceleration</h3><p>Harsh-driving alerts are derivatives: acceleration from the GPS speed or from the accelerometer. The spacing between readings and the noise filtering decide how many alerts come out.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13"/><path d="M20 12v8l6 4"/></svg><h3>Economical cruising speed</h3><p>With the cost of diesel and of time as a curve, the cheapest cruising speed is the one where the derivative is zero. If diesel goes up or the customer pays to arrive sooner, the optimum moves.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="10" width="28" height="22" rx="2"/><path d="M6 16h28M13 6v8M27 6v8"/></svg><h3>Arrival-time models</h3><p>The networks that estimate arrival time from traffic, route and driver learn by backpropagation: thousands of weights adjusted with the gradient of their error.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 30h24M12 30V18M20 30V10M28 30V22"/></svg><h3>Cost sensitivity</h3><p>"How much does monthly spending go up if diesel goes up 10 cents?" is a chained derivative: liters per km × km per month × $0.10. It is used for budgets and rates.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Connections</p>
+    <h2>With the models of the ML series and the other topics</h2>
+    <p><a href="gradient-descent-en.html" target="_self">Gradient descent</a> walks against the arrow of idea 4; <a href="linear-and-polynomial-regression-en.html" target="_self">linear regression</a> and <a href="logistic-regression-en.html" target="_self">logistic regression</a> are trained with that gradient (logistic regression has no closed formula, so it needs it no matter what). <a href="xgboost-en.html" target="_self">XGBoost</a> uses the derivative of the error and also the derivative of the derivative (the curvature) to decide each tree. The <a href="kalman-filter-en.html" target="_self">Kalman filter</a>, when the motion is not a straight line, uses derivatives to approximate it by straight lines at each step, just like the toy's zoom.</p>
+    <p>In this collection, the line and the valley of idea 4 are the ones from <a href="least-squares-as-a-projection-en.html" target="_self">topic 4</a>; the curvature of the valley is measured with the eigenvalues of <a href="eigenvectors-and-eigenvalues-en.html" target="_self">topic 5</a>; the peak of the likelihood in <a href="maximum-likelihood-en.html" target="_self">topic 14</a> is found with a zero derivative, and the neuron's penalty is the cross-entropy of <a href="entropy-and-cross-entropy-en.html" target="_self">topic 15</a>, whose derivative comes out as simple as "probability minus what happened".</p>
+    <p>This is the last topic of "The math under ML". With vectors, probability, statistics, information and now derivatives, you have all the pieces the models in the series use. You can go back to the <a href="math-under-ml-en.html" target="_self">index of all topics</a> to review any of them.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>What helps and where it misleads</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>What helps</h3><ul class="pc">
+      <li>A single idea, the rate of change, works for speeds, costs and models with millions of numbers.</li>
+      <li>The gradient tells you which way to improve without blindly trying every combination.</li>
+      <li>Backpropagation computes all the derivatives of a network in one backward pass, at a cost similar to computing the prediction.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Where it misleads</h3><ul class="pc">
+      <li>The derivative is local: it tells you what happens with small changes. With big nudges (+20 km/h) the chain falls short.</li>
+      <li>A zero derivative is not always the best point: it can be a local minimum, a maximum or a plateau.</li>
+      <li>With noisy data, differentiating amplifies the noise; with readings far apart, it hides what happened.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Derivative</dt><dd>The rate of change of one quantity with respect to another at a point: the slope of the curve seen up close.</dd>
+      <dt>Tangent</dt><dd>The line that touches the curve at a point with the same slope.</dd>
+      <dt>Limit</dt><dd>The number a calculation approaches when something (here, the spacing between readings) gets smaller and smaller.</dd>
+      <dt>Acceleration</dt><dd>The derivative of speed: km/h gained or lost per second (or m/s²).</dd>
+      <dt>Partial derivative</dt><dd>The derivative with respect to a single number, with the others held still.</dd>
+      <dt>Gradient</dt><dd>All the partial derivatives together: an arrow pointing where the function rises fastest.</dd>
+      <dt>Step size</dt><dd>How far you move against the gradient in each learning step. Too small: slow; too big: it overshoots.</dd>
+      <dt>Chain rule</dt><dd>If one thing depends on another that depends on another, their rates of change multiply.</dd>
+      <dt>Backpropagation</dt><dd>Computing the derivatives of a network from back to front, applying the chain rule at each calculation.</dd>
+      <dt>Vanishing gradient</dt><dd>A derivative that becomes tiny after multiplying many rates below 1: the first layers stop learning.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the math behind it</summary>
+    <p style="padding-top:10px">You don't need them to understand the idea:</p>
+    <div class="formula">derivative = limit of [f(x + h) − f(x)] / h as h → 0
+average speed (min 15 to 25) = (25.58 − 15.25) km / 10 min × 60 = 62 km/h
+acceleration (m/s²) = (v₂ − v₁) [km/h] / Δt [s] / 3.6
+
+rules:  (xⁿ)' = n·xⁿ⁻¹    (eˣ)' = eˣ    (log x)' = 1/x
+        σ(x) = 1 / (1 + e⁻ˣ)    σ'(x) = σ(x)·(1 − σ(x)) ≤ 0.25
+
+cost(v) = 1.6·(20 + 0.0016·v²) + 30·100/v      [$ / 100 km]
+cost'(v) = 0.00512·v − 3000/v² = 0     →  v = (3000 / 0.00512)^(1/3) ≈ 83.7 km/h
+
+gradient of the line's error  (r = fuel use − height − slope·load/10):
+   ∂/∂height = −2·Σ r        ∂/∂slope = −2·Σ r·load/10
+step:  new = current − step size × gradient
+
+chain:  d($/h)/dv = d($/h)/d(L/h) · d(L/h)/dv = 1.60 · (0.2 + 0.000048·v²)
+        at 80 km/h:  1.60 · 0.5072 = $0.81/h per km/h
+
+neuron:  z = w·x + b    p = σ(z)    penalty = −log p (late)  or  −log(1 − p) (on time)
+   ∂penalty/∂z = p − y   (y = 1 if it arrived late, 0 if not)
+   ∂penalty/∂w = (p − y)·x    ∂penalty/∂b = p − y
+   with x = 2, w = 0.5, b = −1.5, late:  z = −0.5   p = 0.378   penalty = 0.974
+   ∂/∂w = −1.245    ∂/∂b = −0.622</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in a minute and a half</h2>
+    <p>An animated recap: two GPS readings that get closer until they give the speed, the tangent that flattens at the cheapest speed, the gradient arrow on the error map, the rates that multiply from km/h to dollars and the neuron that learns backwards. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgGBgcGBwgICAgICAkJCQoKCgkJCQkKCgoKCgoMDAwKCgoKCgoKDAwMDA0ODQ0NDA0ODg8PDxISEREVFRUZGR//xACRAAEAAwEBAQEBAAAAAAAAAAAAAQYHBQQDAggBAQEBAAAAAAAAAAAAAAAAAAABAxAAAQQBAwIEAgYFCQMLBQEAAAMCBAERBhIFEyEHQTEUIlEyQhVxI2GzdYEkkXS0UrE3MzUWNnM0spKFCKFERXJTwUNiJxdkk8QlEQEBAQEBAQAAAAAAAAAAAAAAEQESIWH/wAARCAIcA8ADASIAAhEAAxEA/9oADAMBAAIRAxEAPwDEQAaMwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJBVQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAEAkAQCQBAJAH/2Q==" aria-label="Animation: derivatives, gradient and the chain rule">
+      <source src="derivatives-gradient-and-the-chain-rule-with-audio-en.mp4" type="video/mp4">
+      Your browser cannot play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"v1": [71.7, 72.3, 72.5, 72.5, 72.9, 71.8, 72.3, 71.8, 71.3, 71.6, 72.1, 71.5, 71.9, 72.6, 72.3, 72.3, 72.2, 71.9, 71.1, 72.5, 71.2, 72.1, 71.9, 72.1, 72.1, 71.8, 72.5, 71.4, 72.4, 71.2, 72.6, 63.9, 47.2, 30.6, 20.9, 21.8, 22.3, 22.4, 22.7, 22.3, 22.3, 22.3, 23.0, 23.9, 25.7, 26.7, 28.7, 30.9, 32.5, 33.5, 35.3, 37.2, 37.8, 38.2, 39.3, 40.3, 39.9, 39.8, 40.4, 39.5, 41.1], "x": [2.0, 4.5, 6.0, 8.5, 10.0, 12.5, 15.0, 17.5, 20.0, 23.5], "y": [26.0, 29.2, 29.7, 28.5, 29.6, 30.5, 33.3, 33.7, 36.0, 34.2], "beta": [26.195981765996954, 4.0786763464460565]};
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g,",");s=fr?i+"."+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const sg=(v,d)=>(v>0&&+v.toFixed(d??1)!==0?"+":"")+f1(v,d);
+const sgm=(v,d)=>{const s=sg(v,d);return (s[0]==="+"||s[0]==="−")?s[0]+"\u2060$"+s.slice(1):"$"+s;};
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+const redraws=[];window.addEventListener("resize",()=>redraws.forEach(g=>g()));
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+const tk=(a,b,n)=>{const raw=(b-a)/n,p=10**Math.floor(Math.log10(raw)),m=raw/p,st=(m<1.5?1:m<3?2:m<7?5:10)*p,out=[];for(let v=Math.ceil(a/st-1e-9)*st;v<=b+1e-9;v+=st)out.push(+v.toFixed(10));return out;};
+function axes(svg,o){const FS=o.FS,L=o.x+(o.padL??FS*3.4),R=o.x+o.w-(o.padR??FS*0.9),T=o.y+(o.padT??FS*2.2),B=o.y+o.h-(o.padB??FS*2.6);
+  const sx=v=>L+(v-o.x0)/(o.x1-o.x0)*(R-L),sy=v=>B-(v-o.y0)/(o.y1-o.y0)*(B-T),g=el("g",null,svg);
+  for(const v of (o.yt||[])){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},g);txt(g,L-7,sy(v)+FS*0.3,(o.fy||(v=>f1(v,0)))(v),{"text-anchor":"end","font-size":FS*0.8});}
+  for(const v of (o.xt||[])){if(o.grid!==false)el("line",{x1:sx(v),x2:sx(v),y1:T,y2:B,class:"g-line","stroke-opacity":.55},g);
+    const s=(o.fx||(v=>f1(v,0)))(v),w=s.length*FS*0.8*0.62,X=sx(v);let a="middle",xx=X;if(X+w/2>o.x+o.w-3){a="end";xx=o.x+o.w-3;}else if(X-w/2<o.x+3){a="start";xx=o.x+3;}
+    txt(g,xx,B+FS*1.05,s,{"text-anchor":a,"font-size":FS*0.8});}
+  el("line",{x1:L,x2:R,y1:B,y2:B,class:"g-axis"},g);
+  if(o.xl)txt(g,R,o.y+o.h-FS*0.25,o.xl,{"text-anchor":"end","font-size":FS*0.85,class:"t-ink"});
+  if(o.yl)txt(g,L,T-FS*0.75,o.yl,{"font-size":FS*0.8});
+  return {L,R,T,B,sx,sy,FS};}
+const dot=(g,x,y,r,fill,extra)=>el("circle",Object.assign({cx:x,cy:y,r,fill,stroke:"var(--point-ring)","stroke-width":r>6?2:1.2},extra||{}),g);
+const pathOf=P=>P.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join("");
+const lab=(g,x,y,s,FS,A,extra)=>{extra=extra||{};const fz=extra["font-size"]||FS*0.8,w=s.length*fz*0.6,an=extra["text-anchor"]||"middle",left=an==="middle"?x-w/2:an==="end"?x-w:x;let dx=0;if(left<A.L+2)dx=A.L+2-left;else if(left+w>A.R-2)dx=A.R-2-(left+w);return txt(g,x+dx,y,s,Object.assign({"font-size":fz},halo(5),extra,{"text-anchor":an}));};
+const clipRect=(svg,A)=>{const id="c"+Math.random().toString(36).slice(2,8);el("rect",{x:A.L,y:A.T-2,width:A.R-A.L,height:A.B-A.T+2},el("clipPath",{id},el("defs",null,svg)));return el("g",{"clip-path":`url(#${id})`},svg);};
+const arrow=(g,x1,y1,x2,y2,col,w,head)=>{const a=Math.atan2(y2-y1,x2-x1),h=head||12;el("line",{x1,y1,x2:x2-Math.cos(a)*h*0.6,y2:y2-Math.sin(a)*h*0.6,stroke:col,"stroke-width":w||3,"stroke-linecap":"round"},g);
+  el("path",{d:`M${x2} ${y2}L${x2-h*Math.cos(a-0.42)} ${y2-h*Math.sin(a-0.42)}L${x2-h*Math.cos(a+0.42)} ${y2-h*Math.sin(a+0.42)}Z`,fill:col},g);};
+const sig=z=>1/(1+Math.exp(-z));
+
+/* ---------- toy: GPS position, secant and tangent ---------- */
+const STEPS=[[0,3,50],[8,2,40],[19,1,-60],[23,2,50]];
+const Ss=u=>u<=0?0:u>=1?1:3*u*u-2*u*u*u,Is=u=>u<=0?0:u>=1?u-0.5:u**3-u**4/2;
+const vel=t=>STEPS.reduce((s,[t0,d,A])=>s+A*Ss((t-t0)/d),0);
+const pos=t=>STEPS.reduce((s,[t0,d,A])=>s+A*d*Is((t-t0)/d),0)/60;
+const hOf=k=>10**(1-3*k/300);
+const fmtH=h=>h>=1?f1(h,h<10&&Math.abs(h-Math.round(h))>0.04?1:0)+" min":h*60>=10?f1(h*60,0)+" s":f1(h*60,1)+" s";
+(function(){const svg=$("toy"),inT=$("t-t"),inH=$("t-h");
+  function draw(){const t=+inT.value,h=hOf(+inH.value),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14;
+    const p1=nw?{x:0,y:0,w:W,h:400}:{x:0,y:0,w:560,h:360},p2=nw?{x:0,y:410,w:W,h:380}:{x:580,y:0,w:320,h:360},p3=nw?{x:0,y:800,w:W,h:320}:{x:0,y:372,w:W,h:230};
+    const H=p3.y+p3.h;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const x1=pos(t),x2=pos(t+h),vs=(x2-x1)/h*60,vt=vel(t);
+    /* main panel */
+    const A=axes(svg,Object.assign({},p1,{x0:0,x1:30,y0:0,y1:34,xt:[0,5,10,15,20,25,30],yt:[0,10,20,30],xl:"minutes",yl:"km covered",FS,padL:FS*2.4,padT:FS*2}));
+    const g=clipRect(svg,A);
+    el("rect",{x:A.sx(t),y:A.T,width:Math.max(1,A.sx(t+h)-A.sx(t)),height:A.B-A.T,fill:"var(--point)","fill-opacity":.08},g);
+    const P=[];for(let i=0;i<=300;i++){const tt=30*i/300;P.push([A.sx(tt),A.sy(pos(tt))]);}
+    el("path",{d:pathOf(P),fill:"none",stroke:"var(--mean)","stroke-width":3.2},g);
+    const ln=(sl,col,w,dash)=>el("line",{x1:A.sx(-1),y1:A.sy(x1+sl*(-1-t)/60),x2:A.sx(31),y2:A.sy(x1+sl*(31-t)/60),stroke:col,"stroke-width":w,"stroke-dasharray":dash||"none"},g);
+    ln(vt,"var(--ink)",1.6,"6 5");ln(vs,"var(--sample)",2.6);
+    dot(svg,A.sx(t),A.sy(x1),nw?10:7,"var(--point)");dot(svg,A.sx(t+h),A.sy(x2),nw?10:7,"var(--point)");
+    /* zoom */
+    const a=t-0.7*h,b=t+1.7*h;let mn=Infinity,mx=-Infinity;const Z=[];for(let i=0;i<=200;i++){const tt=a+(b-a)*i/200,v=pos(tt);Z.push([tt,v]);mn=Math.min(mn,v);mx=Math.max(mx,v);}
+    const pad=(mx-mn)*0.12+1e-9;const Bz=axes(svg,Object.assign({},p2,{x0:a,x1:b,y0:mn-pad,y1:mx+pad,xt:[],yt:[],FS,padL:FS*0.8,padT:FS*2,padB:FS*1.6}));
+    el("rect",{x:Bz.L,y:Bz.T,width:Bz.R-Bz.L,height:Bz.B-Bz.T,fill:"none",stroke:"var(--line)"},svg);
+    const gz=clipRect(svg,Bz);
+    el("path",{d:pathOf(Z.map(([u,v])=>[Bz.sx(u),Bz.sy(v)])),fill:"none",stroke:"var(--mean)","stroke-width":4},gz);
+    const lz=(sl,col,w,dash)=>el("line",{x1:Bz.sx(a),y1:Bz.sy(x1+sl*(a-t)/60),x2:Bz.sx(b),y2:Bz.sy(x1+sl*(b-t)/60),stroke:col,"stroke-width":w,"stroke-dasharray":dash||"none"},gz);
+    lz(vt,"var(--ink)",1.8,"6 5");lz(vs,"var(--sample)",2.8);
+    dot(svg,Bz.sx(t),Bz.sy(x1),nw?11:8,"var(--point)");dot(svg,Bz.sx(t+h),Bz.sy(x2),nw?11:8,"var(--point)");
+    const zoom=30/(b-a);
+    txt(svg,Bz.L+4,Bz.T-FS*0.7,"zoom × "+(zoom<10?f1(zoom,1):f1(zoom,0)),{"font-size":FS*0.85,"font-weight":700,class:"t-ink"});
+    const dd=h>=1?1:h>=0.1?2:3;txt(svg,Bz.R,Bz.B+FS*1.15,"from "+f1(a,dd)+" to "+f1(b,dd)+" min",{"text-anchor":"end","font-size":FS*0.72});
+    /* speed */
+    const C=axes(svg,Object.assign({},p3,{x0:0,x1:30,y0:0,y1:100,xt:[0,5,10,15,20,25,30],yt:[0,30,60,90],xl:"minutes",yl:"km/h",FS,padL:FS*2.4,padT:FS*1.8}));
+    const V=[];for(let i=0;i<=300;i++){const tt=30*i/300;V.push([C.sx(tt),C.sy(vel(tt))]);}
+    el("path",{d:pathOf(V),fill:"none",stroke:"var(--mean)","stroke-width":2.6,"stroke-opacity":.75},svg);
+    el("rect",{x:C.sx(t),y:C.sy(Math.max(0,vs)),width:Math.max(2,C.sx(t+h)-C.sx(t)),height:C.B-C.sy(Math.max(0,vs)),fill:"var(--sample)","fill-opacity":.18},svg);
+    el("line",{x1:C.sx(t),x2:Math.max(C.sx(t)+3,C.sx(t+h)),y1:C.sy(vs),y2:C.sy(vs),stroke:"var(--sample)","stroke-width":4,"stroke-linecap":"round"},svg);
+    dot(svg,C.sx(t),C.sy(vt),nw?10:7,"var(--point)");
+    $("t-t-o").textContent=f1(t,t%1?1:0);$("t-h-o").textContent=fmtH(h);
+    $("t-big").innerHTML=`<div><b style="color:var(--sample)">${f1(vs,1)} km/h</b><span>average speed between the two readings: ${f1(x2-x1,h<0.1?4:2)} km in ${fmtH(h)}</span></div><div><b style="color:var(--point)">${f1(vt,1)} km/h</b><span>what the speedometer shows at minute ${f1(t,t%1?1:0)}: the derivative</span></div><div><b>${f1(Math.abs(vs-vt),1)} km/h</b><span>difference between the two</span></div>`;
+    let m;const d=Math.abs(vs-vt);
+    if(d<0.05)m=`With the readings ${fmtH(h)} apart, the average (${f1(vs,1)} km/h) now matches the speedometer. In the zoom the curve is almost a straight line, and the purple one blends into the tangent. That is the derivative: the slope the line between two readings approaches as they come together.`;
+    else if(d<3)m=`With ${fmtH(h)} between readings, the average (${f1(vs,1)} km/h) is already very close to the ${f1(vt,1)} km/h on the speedometer, but not equal yet: in that span the speed changes a little. Bring the readings closer.`;
+    else m=`With ${fmtH(h)} between readings, the average speed is ${f1(vs,1)} km/h, but at minute ${f1(t,t%1?1:0)} the truck is doing <b>${f1(vt,1)} km/h</b>. ${vs<vt?"In that interval it slows down or stops, and the average mixes it all together.":"In that interval it speeds up, and the average mixes it all together."} The zoom shows the curve bending between the two points. Bring the readings closer.`;
+    $("t-msg").innerHTML=m;}
+  [inT,inH].forEach(i=>i.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 1: acceleration and harsh braking ---------- */
+(function(){const svg=$("acc"),inD=$("a-d"),v=D.v1,n=v.length,TH=-3;
+  function draw(){const dt=+inD.value,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14;
+    const p1={x:0,y:0,w:W,h:nw?320:240},p2={x:0,y:p1.h+8,w:W,h:nw?340:250},H=p2.y+p2.h;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const a=v.map((_,i)=>i>=dt?(v[i]-v[i-dt])/dt/3.6:NaN);
+    let imin=dt;for(let i=dt;i<n;i++)if(a[i]<a[imin])imin=i;
+    const A=axes(svg,Object.assign({},p1,{x0:0,x1:60,y0:10,y1:80,xt:[0,10,20,30,40,50,60],yt:[20,40,60,80],xl:"seconds",yl:"GPS speed (km/h)",FS,padL:FS*2.4,padT:FS*2}));
+    el("path",{d:pathOf(v.map((s,i)=>[A.sx(i),A.sy(s)])),fill:"none",stroke:"var(--mean)","stroke-width":1.6,"stroke-opacity":.5},svg);
+    v.forEach((s,i)=>dot(svg,A.sx(i),A.sy(s),nw?5:3.6,"var(--mean)"));
+    el("line",{x1:A.sx(imin-dt),y1:A.sy(v[imin-dt]),x2:A.sx(imin),y2:A.sy(v[imin]),stroke:"var(--point)","stroke-width":2.6},svg);
+    dot(svg,A.sx(imin-dt),A.sy(v[imin-dt]),nw?10:7,"var(--point)");dot(svg,A.sx(imin),A.sy(v[imin]),nw?10:7,"var(--point)");
+    const B=axes(svg,Object.assign({},p2,{x0:0,x1:60,y0:-6,y1:2,xt:[0,10,20,30,40,50,60],yt:[-6,-4,-2,0,2],fy:v=>f1(v,0),xl:"seconds",yl:"acceleration (m/s²)",FS,padL:FS*2.4,padT:FS*2}));
+    el("line",{x1:B.L,x2:B.R,y1:B.sy(TH),y2:B.sy(TH),stroke:"var(--warn)","stroke-width":2,"stroke-dasharray":"7 5"},svg);
+    txt(svg,B.L+6,B.sy(TH)+FS*1.1,"harsh braking: −3 m/s²",Object.assign({"text-anchor":"start","font-size":FS*0.75,style:"fill:var(--warn)"},halo(4)));
+    const P=[];a.forEach((s,i)=>{if(!isNaN(s))P.push([B.sx(i),B.sy(Math.max(-6,s))]);});
+    el("path",{d:pathOf(P),fill:"none",stroke:"var(--ink)","stroke-width":2,"stroke-opacity":.7},svg);
+    let nal=0;a.forEach((s,i)=>{if(isNaN(s))return;const al=s<TH;if(al)nal++;dot(svg,B.sx(i),B.sy(Math.max(-6,s)),al?(nw?8:6):(nw?4.5:3.2),al?"var(--warn)":"var(--muted)");});
+    $("a-d-o").textContent=dt+" s";
+    $("a-big").innerHTML=`<div><b style="color:${a[imin]<TH?"var(--warn)":"var(--ink)"}">${f1(a[imin],1)} m/s²</b><span>the hardest braking measured: from ${f1(v[imin-dt],1)} to ${f1(v[imin],1)} km/h in ${dt} s</span></div><div><b>${nal}</b><span>${nal===1?"second":"seconds"} with a harsh-braking alert</span></div>`;
+    let m;if(dt===1)m=`With readings 1 s apart, the braking shows in full: the truck loses ${f1(v[imin-1]-v[imin],1)} km/h in one second, <b>${f1(a[imin],1)} m/s²</b>, and the alert fires. Outside the braking, the acceleration jitters a little from GPS noise, but far from the limit.`;
+    else if(a[imin]<TH)m=`With ${dt} s between readings, the braking still crosses the limit (${f1(a[imin],1)} m/s²), but it looks softer and softer: the difference mixes seconds of hard braking with calm seconds. The curve below is smoother.`;
+    else m=`With ${dt} s between readings, the hardest braking measured is <b>${f1(a[imin],1)} m/s²</b> and <b>the alert does not fire</b>, even though the truck braked just as hard. The average over ${dt} s hides the harsh moment, just as the toy's 10-minute average speed hid the traffic jam.`;
+    $("a-msg").innerHTML=m;}
+  inD.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 2: rules ---------- */
+(function(){const svg=$("rul"),inX=$("r-x");let k=0;
+  const F=[
+    {n:"x² (power)",f:x=>x*x,d:x=>2*x,a:-3,b:3,y0:-1,y1:9,d0:-6,d1:6,r:"the derivative of x² is 2·x",dx:x=>"2 · "+f1(x,2)},
+    {n:"3x² + 2x + 5 (sum and fixed numbers)",f:x=>3*x*x+2*x+5,d:x=>6*x+2,a:-3,b:2,y0:0,y1:30,d0:-16,d1:14,r:"the derivative of 3x² + 2x + 5 is 3·2x + 2 = 6x + 2 (the 5 disappears)",dx:x=>"6 · "+f1(x,2)+" + 2"},
+    {n:"eˣ (exponential)",f:Math.exp,d:Math.exp,a:-3,b:2.5,y0:0,y1:12,d0:0,d1:12,r:"the derivative of eˣ is eˣ",dx:x=>"e^"+f1(x,2)},
+    {n:"log x (logarithm)",f:Math.log,d:x=>1/x,a:0.15,b:5,y0:-2,y1:2,d0:0,d1:7,r:"the derivative of log x is 1/x",dx:x=>"1 / "+f1(x,2)},
+    {n:"sigmoid",f:sig,d:x=>sig(x)*(1-sig(x)),a:-6,b:6,y0:0,y1:1,d0:0,d1:0.3,r:"the derivative of the sigmoid is p · (1 − p)",dx:x=>f1(sig(x),3)+" · "+f1(1-sig(x),3)}];
+  chips($("r-c"),F.map(o=>o.n),i=>{k=i;draw();});
+  function draw(){const o=F[k],x=o.a+(o.b-o.a)*(+inX.value)/100,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14;
+    const p1={x:0,y:0,w:W,h:nw?360:250},p2={x:0,y:p1.h+6,w:W,h:nw?300:200},H=p2.y+p2.h;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const fy=v=>f1(v,Math.abs(v)<1&&v!==0?2:0);
+    const A=axes(svg,Object.assign({},p1,{x0:o.a,x1:o.b,y0:o.y0,y1:o.y1,xt:tk(o.a,o.b,6),yt:tk(o.y0,o.y1,4),fy,fx:v=>f1(v,Math.abs(v%1)>1e-9?1:0),yl:"f(x)",FS,padL:FS*2.6,padT:FS*2}));
+    const g=clipRect(svg,A);
+    const P=[];for(let i=0;i<=300;i++){const u=o.a+(o.b-o.a)*i/300;P.push([A.sx(u),A.sy(Math.max(o.y0-50,Math.min(o.y1+50,o.f(u))))]);}
+    el("path",{d:pathOf(P),fill:"none",stroke:"var(--mean)","stroke-width":3.2},g);
+    const fx=o.f(x),dx=o.d(x),span=(o.b-o.a)*0.6;
+    el("line",{x1:A.sx(x-span),y1:A.sy(fx-dx*span),x2:A.sx(x+span),y2:A.sy(fx+dx*span),stroke:"var(--ink)","stroke-width":2,"stroke-dasharray":"6 5"},g);
+    dot(svg,A.sx(x),A.sy(fx),nw?10:7,"var(--point)");
+    const B=axes(svg,Object.assign({},p2,{x0:o.a,x1:o.b,y0:o.d0,y1:o.d1,xt:tk(o.a,o.b,6),yt:tk(o.d0,o.d1,3),fy,fx:v=>f1(v,Math.abs(v%1)>1e-9?1:0),xl:"x",yl:"derivative f′(x)",FS,padL:FS*2.6,padT:FS*2}));
+    const g2=clipRect(svg,B);
+    const Q=[];for(let i=0;i<=300;i++){const u=o.a+(o.b-o.a)*i/300;Q.push([B.sx(u),B.sy(Math.max(o.d0-50,Math.min(o.d1+50,o.d(u))))]);}
+    el("path",{d:pathOf(Q),fill:"none",stroke:"var(--sample)","stroke-width":3},g2);
+    if(o.d0<0)el("line",{x1:B.L,x2:B.R,y1:B.sy(0),y2:B.sy(0),stroke:"var(--muted)","stroke-width":1.2},svg);
+    el("line",{x1:B.sx(x),x2:B.sx(x),y1:A.sy(fx),y2:B.sy(dx),stroke:"var(--muted)","stroke-width":1.2,"stroke-dasharray":"3 4"},svg);
+    dot(svg,B.sx(x),B.sy(dx),nw?10:7,"var(--sample)");
+    lab(svg,B.sx(x),B.sy(dx)-FS*0.9,"slope "+f1(dx,dx<1&&dx>-1?3:2),FS,B,{style:"fill:var(--sample)","font-weight":700});
+    $("r-x-o").textContent=f1(x,2);
+    const extra=k===4?` Notice that the derivative is at most 0.25, right in the center (p = 0.5), and almost 0 at the ends: the curve is flat there. This matters in idea 7.`:k===3?` The further right, the flatter: the logarithm keeps growing, but more and more slowly.`:k===2?` The lower curve is identical to the upper one: the higher it is, the steeper.`:k===1?` The 5 does not appear in the derivative: adding a fixed number lifts the whole curve but does not change its slope.`:` The derivative is a straight line: negative slope to the left of 0, zero at the bottom, positive to the right.`;
+    $("r-msg").innerHTML=`Rule: ${o.r}. At x = ${f1(x,2)}: f′ = ${o.dx(x)} = <b>${f1(dx,3)}</b>. It is the slope of the tangent: if x goes up a tiny bit, f goes up about ${f1(dx,2)} times that tiny bit.${extra}`;}
+  inX.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 3: cheapest speed ---------- */
+(function(){const svg=$("cst"),inV=$("c-v"),inH=$("c-h"),PR=1.6;
+  const fuel=v=>PR*(20+0.0016*v*v),time=(v,H)=>H*100/v,cost=(v,H)=>fuel(v)+time(v,H),dc=(v,H)=>PR*0.0032*v-H*100/(v*v);
+  function draw(){const v=+inV.value,H=+inH.value,vs=Math.cbrt(H*100/(PR*0.0032)),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,Hh=nw?520:360;svg.setAttribute("viewBox",`0 0 ${W} ${Hh}`);svg.textContent="";
+    const ymax=Math.ceil(Math.max(cost(50,H),cost(110,H))/20)*20+10;
+    const A=axes(svg,{x:0,y:0,w:W,h:Hh,x0:50,x1:110,y0:0,y1:ymax,xt:[50,60,70,80,90,100,110],yt:tk(0,ymax,5),xl:"speed (km/h)",yl:"$ per 100 km",FS,padL:FS*2.8,padT:FS*2});
+    const g=clipRect(svg,A),cur=(f,col,w,dash)=>{const P=[];for(let i=0;i<=200;i++){const u=50+60*i/200;P.push([A.sx(u),A.sy(f(u))]);}el("path",{d:pathOf(P),fill:"none",stroke:col,"stroke-width":w,"stroke-dasharray":dash||"none"},g);};
+    cur(fuel,"var(--point)",2,"7 5");cur(u=>time(u,H),"var(--sample)",2,"7 5");cur(u=>cost(u,H),"var(--mean)",3.4);
+    const vl=vs<82?97:62;lab(svg,A.sx(vl),A.sy(fuel(vl))+(fuel(vl)>time(vl,H)?-FS*0.7:FS*1.3),"diesel",FS,A,{style:"fill:var(--point)"});lab(svg,A.sx(vl),A.sy(time(vl,H))+(time(vl,H)>fuel(vl)?-FS*0.7:FS*1.3),"time",FS,A,{style:"fill:var(--sample)"});
+    if(vs<=110){el("line",{x1:A.sx(vs),x2:A.sx(vs),y1:A.T,y2:A.B,stroke:"var(--good)","stroke-width":2,"stroke-dasharray":"5 4"},svg);
+      lab(svg,A.sx(vs),A.T+FS*1.1,"cheapest: "+f1(vs,1)+" km/h",FS,A,{style:"fill:var(--good)","font-weight":700});}
+    const c=cost(v,H),s=dc(v,H),sp=9;
+    el("line",{x1:A.sx(v-sp),y1:A.sy(c-s*sp),x2:A.sx(v+sp),y2:A.sy(c+s*sp),stroke:"var(--ink)","stroke-width":2.4},g);
+    dot(svg,A.sx(v),A.sy(c),nw?10:7,"var(--point)");
+    $("c-v-o").textContent=v+" km/h";$("c-h-o").textContent="$"+H;
+    $("c-big").innerHTML=`<div><b>$${f1(c,2)}</b><span>per 100 km at ${v} km/h ($${f1(fuel(v),2)} of diesel and $${f1(time(v,H),2)} of time)</span></div><div><b style="color:${Math.abs(s)<0.02?"var(--good)":s<0?"var(--mean)":"var(--warn)"}">${sgm(s,3)}</b><span>derivative: how much the cost changes for each extra km/h</span></div><div><b style="color:var(--good)">${f1(vs,1)} km/h</b><span>speed where the derivative is 0 (cost $${f1(cost(vs,H),2)})</span></div>`;
+    let m;if(Math.abs(s)<0.02)m=`At ${v} km/h the tangent is almost flat (derivative ${sgm(s,3)}): you are at the bottom of the valley. Going neither faster nor slower makes it cheaper. The exact calculation gives ${f1(vs,1)} km/h.`;
+    else if(s<0)m=`At ${v} km/h the derivative is <b>${sgm(s,3)}</b> per km/h: the tangent goes down to the right, so going a bit faster <b>makes it cheaper</b> (the time saved is worth more than the extra diesel). Raise the speed until the tangent is flat.`;
+    else m=`At ${v} km/h the derivative is <b>${sgm(s,3)}</b> per km/h: the tangent goes up, so going faster <b>makes it more expensive</b> (the extra diesel is worth more than the time saved). The bottom is at ${f1(vs,1)} km/h.`;
+    if(H!==30)m+=` With the hour at $${H}, the optimum has moved to ${f1(vs,1)} km/h: ${H>30?"if time is expensive, it pays to go faster":"if time is cheap, it pays to go slower"}${vs>90?" (although the legal limit for trucks is often 90 km/h)":""}.`;
+    $("c-msg").innerHTML=m;}
+  [inV,inH].forEach(i=>i.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 4: gradient on the error map ---------- */
+(function(){const svg=$("grd"),X=D.x,Y=D.y,n=X.length,ST=[0.005,0.03,0.04];let si=1,cur=[23,6],path=[[23,6]];
+  const sse=(a,m)=>{let s=0;for(let i=0;i<n;i++){const r=Y[i]-a-m*X[i]/10;s+=r*r;}return s;};
+  const grad=(a,m)=>{let ga=0,gm=0;for(let i=0;i<n;i++){const r=Y[i]-a-m*X[i]/10;ga-=2*r;gm-=2*r*X[i]/10;}return [ga,gm];};
+  const best=D.beta,smin=sse(best[0],best[1]);
+  /* matrix of the quadratic form: SSE = smin + d' M d */
+  let s11=n,s12=0,s22=0;X.forEach(x=>{s12+=x/10;s22+=(x/10)**2;});
+  const tr=s11+s22,det=s11*s22-s12*s12,l1=tr/2+Math.sqrt(tr*tr/4-det),l2=tr/2-Math.sqrt(tr*tr/4-det),th=Math.atan2(l1-s11,s12);
+  let A=null;
+  seg(["g-s0","g-s1","g-s2"],i=>{si=i;path=[cur.slice()];draw();});
+  const step=k=>{for(let j=0;j<k;j++){const g=grad(cur[0],cur[1]);cur=[cur[0]-ST[si]*g[0],cur[1]-ST[si]*g[1]];path.push(cur.slice());if(Math.abs(cur[0])>1e6)break;}draw();};
+  $("g-1").onclick=()=>step(1);$("g-10").onclick=()=>step(10);$("g-re").onclick=()=>{cur=[23,6];path=[[23,6]];draw();};
+  svg.addEventListener("click",e=>{if(!A)return;const r=svg.getBoundingClientRect(),vb=svg.viewBox.baseVal,px=(e.clientX-r.left)/r.width*vb.width,py=(e.clientY-r.top)/r.height*vb.height;
+    if(px<A.L||px>A.R||py<A.T||py>A.B)return;const a=20+(px-A.L)/(A.R-A.L)*12,m=8-(py-A.T)/(A.B-A.T)*8;cur=[a,m];path=[[a,m]];draw();});
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14;
+    const mapW=nw?W:560,pl=FS*2.4,pr=FS*0.9,pt=FS*2,pb=FS*2.6,pw=mapW-pl-pr,ph=pw*8/12,mapH=ph+pt+pb;
+    const p2=nw?{x:0,y:mapH+10,w:W,h:360}:{x:580,y:0,w:320,h:mapH},H=nw?p2.y+p2.h:mapH;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    A=axes(svg,{x:0,y:0,w:mapW,h:mapH,x0:20,x1:32,y0:0,y1:8,xt:[20,22,24,26,28,30,32],yt:[0,2,4,6,8],xl:"height (L/100 km when empty)",yl:"slope (L per 10 t)",FS,padL:pl,padR:pr,padT:pt,padB:pb,grid:false});
+    const g=clipRect(svg,A);
+    el("rect",{x:A.L,y:A.T,width:A.R-A.L,height:A.B-A.T,fill:"var(--mean)","fill-opacity":.03},g);
+    const lev=[2,6,15,30,55,90,140,210,300,420,580];
+    lev.slice().reverse().forEach((c,i)=>{const P=[];for(let j=0;j<=120;j++){const t=2*Math.PI*j/120,u=Math.sqrt(c/l1)*Math.cos(t),w=Math.sqrt(c/l2)*Math.sin(t);
+      const da=u*Math.cos(th)-w*Math.sin(th),dm=u*Math.sin(th)+w*Math.cos(th);P.push([A.sx(best[0]+da),A.sy(best[1]+dm)]);}
+      el("path",{d:pathOf(P)+"Z",fill:"var(--mean)","fill-opacity":0.07,stroke:"var(--mean)","stroke-opacity":.5,"stroke-width":1.2},g);});
+    const sx=A.sx(best[0]),sy=A.sy(best[1]),R=nw?13:10;
+    el("path",{d:Array.from({length:10},(_,i)=>{const r=i%2?R*0.45:R,t=-Math.PI/2+i*Math.PI/5;return (i?"L":"M")+(sx+r*Math.cos(t)).toFixed(1)+" "+(sy+r*Math.sin(t)).toFixed(1);}).join("")+"Z",fill:"var(--ink)"},svg);
+    if(path.length>1)el("path",{d:pathOf(path.map(([a,m])=>[A.sx(a),A.sy(m)])),fill:"none",stroke:"var(--point)","stroke-width":2.4},g);
+    path.forEach(([a,m])=>{if(a>19&&a<33&&m>-1&&m<9)dot(g,A.sx(a),A.sy(m),nw?5:3.5,"var(--point)");});
+    const [a,m]=cur,gr=grad(a,m),gn=Math.hypot(gr[0],gr[1]),inside=a>=20&&a<=32&&m>=0&&m<=8;
+    if(inside&&gn>1e-6){let L=Math.min(3.2,0.06*gn);const fit=(da,dm)=>{let t=1;const a2=a+da,m2=m+dm;if(a2<20.3)t=Math.min(t,(a-20.3)/(-da));if(a2>31.7)t=Math.min(t,(31.7-a)/da);if(m2<0.25)t=Math.min(t,(m-0.25)/(-dm));if(m2>7.75)t=Math.min(t,(7.75-m)/dm);return Math.max(0.15,t);};
+      const ux=gr[0]/gn,uy=gr[1]/gn;const Lu=L*fit(ux*L,uy*L),Ld=L*fit(-ux*L,-uy*L);
+      arrow(svg,A.sx(a),A.sy(m),A.sx(a+ux*Lu),A.sy(m+uy*Lu),"var(--warn)",nw?4:3.2,nw?18:13);arrow(svg,A.sx(a),A.sy(m),A.sx(a-ux*Ld),A.sy(m-uy*Ld),"var(--good)",nw?4:3.2,nw?18:13);}
+    if(inside)dot(svg,A.sx(a),A.sy(m),nw?11:8,"var(--point)");
+    /* data and line */
+    const B=axes(svg,Object.assign({},p2,{x0:0,x1:25,y0:22,y1:38,xt:[0,5,10,15,20,25],yt:[24,28,32,36],xl:"load (t)",yl:"fuel use (L/100 km)",FS,padL:FS*2.2,padT:FS*2}));
+    const g2=clipRect(svg,B);
+    X.forEach((x,i)=>{const yh=a+m*x/10;el("line",{x1:B.sx(x),x2:B.sx(x),y1:B.sy(Y[i]),y2:B.sy(yh),stroke:"var(--sample)","stroke-width":1.6},g2);});
+    el("line",{x1:B.sx(0),y1:B.sy(a),x2:B.sx(25),y2:B.sy(a+m*2.5),stroke:"var(--mean)","stroke-width":3},g2);
+    X.forEach((x,i)=>dot(svg,B.sx(x),B.sy(Y[i]),nw?8:6,"var(--point)"));
+    const e=sse(a,m),blown=!isFinite(e)||e>1e7;
+    $("g-big").innerHTML=`<div><b>${blown?"huge":f1(e,1)}</b><span>error of this line (sum of squared errors); the minimum is ${f1(smin,1)}</span></div><div><b style="color:var(--warn)">${blown?"—":sg(gr[0],1)}</b><span>partial derivative with respect to the height: how much the error rises for each extra liter of height</span></div><div><b style="color:var(--warn)">${blown?"—":sg(gr[1],1)}</b><span>partial derivative with respect to the slope: for each extra liter per 10 t</span></div>`;
+    let msg;const ns=path.length-1;
+    if(blown||e>1e4)msg=`The step is too big: in the steepest direction of the valley each step crosses to the other side and lands higher than before. After ${ns} steps the error is ${blown?"huge":f1(e,0)}: it has <b>escaped</b>. With this valley, any size above 0.037 does that. Press "Back to start" and choose another size.`;
+    else if(e-smin<0.05)msg=`<b>At the bottom of the valley</b> (or nearly): the two partial derivatives are practically 0, the arrow disappears and the error is ${f1(e,2)}. This is the least-squares line from topic 4: height ${f1(best[0],2)} and ${f1(best[1],2)} more liters per 10 t.${ns?` It took ${ns} steps.`:""}`;
+    else if(ns===0)msg=`For this line (height ${f1(a,1)}, slope ${f1(m,2)}) the error is ${f1(e,1)}. The derivative with respect to the height is ${sg(gr[0],1)} and with respect to the slope, ${sg(gr[1],1)}: ${gr[1]<0?"raising the slope would lower the error":"lowering the slope would lower the error"}, and ${gr[0]<0?"so would raising the height":"so would lowering the height"}. The red arrow combines the two: it is perpendicular to the contour line. Press "1 step".`;
+    else msg=`After ${ns} ${ns===1?"step":"steps"} the error has dropped to <b>${f1(e,2)}</b> (the minimum is ${f1(smin,2)}). ${si===0?"With small steps, it moves safely but very slowly.":"Look at the path: first it drops quickly toward the bottom of the valley and then it moves more slowly along it, because there the terrain is almost flat in that direction."} This is gradient descent.`;
+    $("g-msg").innerHTML=msg;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 5: chain rule ---------- */
+(function(){const svg=$("cad"),inV=$("k-v"),inP=$("k-p"),NU=[1,5,20];let ni=0;
+  seg(["k-n0","k-n1","k-n2"],i=>{ni=i;draw();});
+  const Lh=v=>(20+0.0016*v*v)*v/100,dLh=v=>0.2+0.000048*v*v;
+  function draw(){const v=+inV.value,p=+inP.value,dv=NU[ni],nw=narrowOf(svg),W=nw?600:900,FS=nw?27:16;
+    const l=Lh(v),e=p*l,r1=dLh(v),r2=p,dl=Lh(v+dv)-l,de=p*dl;
+    const boxes=[["Speed",f1(v,0)+" km/h"],["Diesel",f1(l,2)+" L/h"],["Spending","$"+f1(e,2)+"/h"]];
+    const nudges=[[sg(dv,0)+" km/h","var(--ink)"],[sg(r1*dv,3)+" L/h","var(--point)"],[sgm(r1*r2*dv,3)+"/h","var(--point)"]];
+    const real=[null,sg(dl,3)+" L/h",sgm(de,3)+"/h"];
+    const rates=[["× "+f1(r1,3),"L/h per km/h"],["× "+f1(r2,2),"$ per liter"]];
+    const bh=FS*7.2;let pos,H;
+    if(nw){pos=[0,1,2].map(i=>({x:10,y:10+i*(bh+120),w:580,h:bh}));H=pos[2].y+bh+FS*4.4;}
+    else{pos=[0,1,2].map(i=>({x:4+i*328,y:16,w:236,h:bh}));H=16+bh+FS*4.2;}
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    pos.forEach((q,i)=>{el("rect",{x:q.x,y:q.y,width:q.w,height:q.h,rx:14,fill:"var(--surface)",stroke:"var(--ink)","stroke-opacity":.5,"stroke-width":1.5},svg);
+      txt(svg,q.x+14,q.y+FS*1.4,boxes[i][0],{"font-size":FS*0.85,class:"t-ink","font-weight":700});
+      txt(svg,q.x+14,q.y+FS*3.1,boxes[i][1],{"font-size":FS*1.45,"font-weight":800,style:"fill:var(--mean)"});
+      txt(svg,q.x+14,q.y+FS*4.8,"nudge: "+nudges[i][0],{"font-size":FS*0.82,style:`fill:${nudges[i][1]}`,"font-weight":700});
+      if(real[i])txt(svg,q.x+14,q.y+FS*6.2,"actual: "+real[i],{"font-size":FS*0.82,style:"fill:var(--mean)"});});
+    [0,1].forEach(i=>{const a=pos[i],b=pos[i+1];
+      if(nw){const x=a.x+70,y1=a.y+a.h+8,y2=b.y-8;arrow(svg,x,y1,x,y2,"var(--muted)",3,16);
+        txt(svg,x+30,(y1+y2)/2-2,rates[i][0],{"font-size":FS*1.1,"font-weight":800,style:"fill:var(--point)"});txt(svg,x+30,(y1+y2)/2+FS*1.0,rates[i][1],{"font-size":FS*0.8,style:"fill:var(--point)"});}
+      else{const y=a.y+a.h/2,x1=a.x+a.w+6,x2=b.x-6;arrow(svg,x1,y,x2,y,"var(--muted)",3,14);
+        txt(svg,(x1+x2)/2,y-FS*0.9,rates[i][0],{"text-anchor":"middle","font-size":FS*1.0,"font-weight":800,style:"fill:var(--point)"});txt(svg,(x1+x2)/2,y+FS*1.5,rates[i][1].split(" ")[0],{"text-anchor":"middle","font-size":FS*0.7,style:"fill:var(--point)"});
+        txt(svg,(x1+x2)/2,y+FS*2.4,rates[i][1].split(" ").slice(1).join(" "),{"text-anchor":"middle","font-size":FS*0.7,style:"fill:var(--point)"});}});
+    const yb=H-FS*(nw?1.6:1.4);
+    if(nw)txt(svg,10,yb-FS*1.2,"the whole chain:",{"font-size":FS*0.8,"font-weight":700,class:"t-ink"});txt(svg,nw?10:6,yb,nw?`${f1(r1,3)} × ${f1(r2,2)} = $${f1(r1*r2,3)}/h per km/h`:`rate of the whole chain: ${f1(r1,3)} × ${f1(r2,2)} = $${f1(r1*r2,3)}/h per km/h (the product of the two derivatives)`,{"font-size":FS*(nw?0.8:0.85),"font-weight":700,class:"t-ink"});
+    $("k-v-o").textContent=v+" km/h";$("k-p-o").textContent="$"+f1(p,2)+"/L";
+    const err=Math.abs(de-r1*r2*dv)/de*100;
+    $("k-msg").innerHTML=dv===1?`At ${v} km/h, one more km/h burns ${f1(r1,3)} L/h more, and each liter costs $${f1(p,2)}: spending goes up ${f1(r1,3)} × ${f1(p,2)} = <b>$${f1(r1*r2,3)}/h</b>. What it actually goes up by is $${f1(de,3)}/h: almost the same (a ${f1(err,1)}% difference). For small changes, the chain rule gets it right.`
+      :`With a nudge of ${dv} km/h, the chain predicts $${f1(r1*r2*dv,2)}/h and spending actually goes up $${f1(de,2)}/h: it falls short by ${f1(err,1)}%. That is because diesel per hour grows faster and faster with speed (the curve bends), and the derivative only looks at the slope at the starting point. The chain rule is exact for very small changes; that is why models learn with small steps.`;}
+  [inV,inP].forEach(i=>i.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 6: backpropagation in a neuron ---------- */
+(function(){const svg=$("bp"),inW=$("b-w"),inB=$("b-b"),inX=$("b-x");let y=1,steps=0,st=null;
+  seg(["b-y1","b-y0"],i=>{y=i===0?1:0;steps=0;st=null;draw();});
+  $("b-st").onclick=()=>{const w=st?st.w:+inW.value,b=st?st.b:+inB.value,x=+inX.value,p=sig(w*x+b),dz=p-y;
+    st={w:Math.max(-3,Math.min(3,w-0.5*dz*x)),b:Math.max(-3,Math.min(3,b-0.5*dz))};inW.value=st.w;inB.value=st.b;steps++;draw();};
+  $("b-re").onclick=()=>{inW.value=0.5;inB.value=-1.5;inX.value=2;st=null;steps=0;draw();};
+  [inW,inB].forEach(i=>i.addEventListener("input",()=>{st=null;steps=0;draw();}));
+  inX.addEventListener("input",()=>{steps=0;draw();});
+  function draw(){const w=st?st.w:+inW.value,b=st?st.b:+inB.value,x=+inX.value,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14;
+    const u=w*x,z=u+b,p=sig(z),L=y?-Math.log(p):-Math.log(1-p),dLp=y?-1/p:1/(1-p),dpz=p*(1-p),dz=p-y,dw=dz*x,dx=dz*w,db=dz;
+    const N={w:["weight w",f1(w,2),"∂/∂w = "+f1(dw,3)],x:["jams x",f1(x,0),"∂/∂x = "+f1(dx,3)],b:["bias b",f1(b,2),"∂/∂b = "+f1(db,3)],
+      u:["u = w · x",f1(u,2),"∂/∂u = "+f1(dz,3)],z:["z = u + b",f1(z,3),"∂/∂z = "+f1(dz,3)],p:["p = σ(z)",f1(p,3),"∂/∂p = "+f1(dLp,3)],L:[y?"penalty −log p":"penalty −log(1−p)",f1(L,3),"∂/∂penalty = 1"]};
+    const bh=FS*4.4;let P,bw,H;
+    if(nw){bw=250;const r=k=>14+k*(bh+64);P={w:[150,r(0)],x:[450,r(0)],u:[150,r(1)],b:[450,r(1)],z:[300,r(2)],p:[300,r(3)],L:[300,r(4)]};H=r(4)+bh+10;}
+    else{bw=122;const yc=20+bh+15;P={w:[76,20],x:[76,yc+15],u:[262,yc-bh/2+7],z:[448,yc-bh/2+7],b:[448,yc+bh/2+50],p:[634,yc-bh/2+7],L:[820,yc-bh/2+7]};H=P.b[1]+bh+10;}
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const box=k=>({l:P[k][0]-bw/2,r:P[k][0]+bw/2,t:P[k][1],b:P[k][1]+bh,cx:P[k][0],cy:P[k][1]+bh/2});
+    /* edges: from the border of a to the border of c, labeled with the rate */
+    const edge=(a,c,rate,side)=>{const A=box(a),C=box(c);let x1,y1,x2,y2;
+      if(Math.abs(A.cy-C.cy)<4){x1=A.cx<C.cx?A.r:A.l;x2=A.cx<C.cx?C.l:C.r;y1=y2=A.cy;}
+      else if(A.cy<C.cy){x1=A.cx+(C.cx-A.cx)*0.12;y1=A.b;x2=C.cx-(C.cx-A.cx)*0.25;y2=C.t;if(!nw&&A.cx<C.cx-5){x1=A.r;y1=A.cy+bh*0.2;x2=C.l;y2=C.cy-bh*0.2*(A.cy<C.cy?1:-1);}}
+      else{x1=A.cx;y1=A.t;x2=C.cx;y2=C.b;if(!nw&&A.cx<C.cx-5){x1=A.r;y1=A.cy-bh*0.2;x2=C.l;y2=C.cy+bh*0.2;}}
+      arrow(svg,x1,y1,x2,y2,"var(--muted)",2.2,nw?16:12);
+      if(rate){const mx=(x1+x2)/2,my=(y1+y2)/2;let ax=mx,ay=my-FS*0.5,an="middle";
+        if(side==="r"){ax=mx+FS*0.6;ay=my+FS*0.3;an="start";}else if(side==="l"){ax=mx-FS*0.6;ay=my+FS*0.3;an="end";}else if(side==="b"){ay=my+FS*1.15;}
+        txt(svg,ax,ay,rate,Object.assign({"text-anchor":an,"font-size":nw?FS*0.8:FS*0.72,"font-weight":700,style:"fill:var(--point)"},halo(4)));}};
+    if(nw){edge("w","u","× x = "+f1(x,0),"l");edge("x","u","× w = "+f1(w,2),"r");edge("u","z","× 1","l");edge("b","z","× 1","r");edge("z","p","× "+f1(dpz,3),"r");edge("p","L","× "+f1(dLp,3),"r");}
+    else{edge("w","u","× "+f1(x,0),"t");edge("x","u","× "+f1(w,2),"b");edge("u","z","× 1","t");edge("b","z","× 1","r");edge("z","p","× "+f1(dpz,3),"t");edge("p","L","× "+f1(dLp,3),"t");}
+    Object.keys(N).forEach(k=>{const B=box(k),n=N[k];
+      el("rect",{x:B.l,y:B.t,width:bw,height:bh,rx:12,fill:"var(--surface)",stroke:k==="L"?"var(--warn)":"var(--ink)","stroke-opacity":k==="L"?.9:.45,"stroke-width":1.5},svg);
+      txt(svg,B.cx,B.t+FS*1.1,n[0],{"text-anchor":"middle","font-size":FS*0.78,class:"t-ink"});
+      txt(svg,B.cx,B.t+FS*2.5,n[1],{"text-anchor":"middle","font-size":FS*1.25,"font-weight":800,style:"fill:var(--mean)"});
+      txt(svg,B.cx,B.t+FS*3.7,n[2],{"text-anchor":"middle","font-size":FS*0.74,"font-weight":700,style:"fill:var(--point)"});});
+    $("b-w-o").textContent=f1(w,2);$("b-b-o").textContent=f1(b,2);$("b-x-o").textContent=x;
+    $("b-big").innerHTML=`<div><b style="color:var(--mean)">${f1(100*p,1)}%</b><span>probability of arriving late that the neuron gives</span></div><div><b style="color:var(--warn)">${f1(L,3)}</b><span>penalty (log loss) for what happened</span></div><div><b style="color:var(--point)">${f1(dz,3)}</b><span>∂penalty/∂z = p − ${y} (probability minus what happened)</span></div>`;
+    let m;const what=y?"it arrived late":"it arrived on time";
+    if(steps>0)m=`Step ${steps}: w has had its derivative × 0.5 subtracted, and b its own × 0.5. Now p = ${f1(100*p,1)}% and the penalty has dropped to <b>${f1(L,3)}</b>. ${Math.abs(dz)<0.1?"The derivatives are already small: the neuron is close to what this delivery asks for, and each step changes little.":"Keep taking steps: each one corrects in proportion to how wrong it is."}${x===0?" With 0 jams, the derivative for w is 0: the weight of the jams plays no part in this delivery, so it learns nothing from it.":""}`;
+    else m=`Forward: ${f1(w,2)} × ${x} = ${f1(u,2)}; plus ${f1(b,2)} gives z = ${f1(z,3)}; the sigmoid gives p = ${f1(p,3)}; since ${what}, the penalty is ${f1(L,3)}. Backward: the derivative of the penalty with respect to p is ${f1(dLp,3)}; times the sigmoid's rate, ${f1(dpz,3)}, it gives <b>${f1(dz,3)} = p − ${y}</b>; the sum passes that figure unchanged to b, and the multiplication multiplies it by x = ${x} for w: <b>${f1(dw,3)}</b>. ${Math.abs(dz)<0.0005?"The derivatives are 0: there is nothing to correct.":dz<0?"Both derivatives are negative: raising w and b would lower the penalty.":"Both derivatives are positive: lowering w and b would lower the penalty."}${x===0?" With 0 jams, the derivative with respect to w is 0: this data point says nothing about the weight of the jams.":""}`;
+    $("b-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 7: vanishing and exploding ---------- */
+(function(){const svg=$("van"),inN=$("v-n"),FAC=[0.25,0.9,1,1.5];let fi=0;
+  seg(["v-f0","v-f1","v-f2","v-f3"],i=>{fi=i;draw();});
+  function draw(){const n=+inN.value,f=FAC[fi],nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?460:330;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const lo=-20,hi=6;
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0.5,x1:n+0.5,y0:lo,y1:hi,xt:n<=12?Array.from({length:n},(_,i)=>i+1):[1,...Array.from({length:Math.floor(n/5)},(_,i)=>(i+1)*5).filter(v=>v<n),n],yt:[-20,-16,-12,-8,-4,0,4],fy:v=>v===0?"1":"10"+String(v).replace("-","⁻").replace(/\d/g,c=>"⁰¹²³⁴⁵⁶⁷⁸⁹"[c]),xl:"layer (1 = the first)",yl:"size of the derivative that arrives",FS,padL:FS*3.2,padT:FS*2,grid:false});
+    el("rect",{x:A.L,y:A.sy(1),width:A.R-A.L,height:A.sy(-3)-A.sy(1),fill:"var(--good)","fill-opacity":.12},svg);
+    const bw=Math.min(40,(A.R-A.L)/n*0.7);
+    for(let k=1;k<=n;k++){const val=Math.log10(f)*(n-k),yv=Math.max(lo,Math.min(hi,val));const col=val<-4?"var(--warn)":val>2?"var(--warn)":"var(--mean)";
+      el("rect",{x:A.sx(k)-bw/2,y:Math.min(A.sy(yv),A.sy(lo)),width:bw,height:Math.abs(A.sy(lo)-A.sy(yv))||1,fill:col,"fill-opacity":.75,rx:2},svg);}
+    const first=f**(n-1);
+    $("v-n-o").textContent=n;
+    const sf=v=>{if(v>=0.01&&v<1e4)return f1(v,v<1?3:1);const e=Math.floor(Math.log10(v)),mm=v/10**e;return f1(mm,1)+" · 10"+String(e).replace("-","⁻").replace(/\d/g,c=>"⁰¹²³⁴⁵⁶⁷⁸⁹"[c]);};
+    let m;if(f<1)m=`With ${n} layers and a rate of ${f1(f,2)} per layer, the derivative reaches the first layer multiplied by ${f1(f,2)}<sup>${n-1}</sup> = <b>${sf(first)}</b>. ${first<1e-4?"It is so small that that layer practically does not learn: the gradient has vanished.":"Something still gets through, but the first layers learn more slowly than the last ones."}`;
+    else if(f===1)m=`With a rate of 1 per layer, the derivative reaches every layer unchanged, whether the network has ${n} or 30. That is what the ReLU (rate 1 when active) and connections that skip layers aim for.`;
+    else m=`With ${n} layers and a rate of 1.5 per layer, the derivative reaches the first layer multiplied by <b>${sf(first)}</b>. ${first>100?"That layer's learning steps would be huge and training gets out of control: the gradient has exploded. It is fixed by clipping the gradient or with a more careful initialization.":"It is still manageable, but it grows very fast with more layers."}`;
+    $("v-msg").innerHTML=m;}
+  inN.addEventListener("input",draw);redraws.push(draw);draw();})();
+})();
+</script>
+</body>
+</html>
