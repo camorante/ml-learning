@@ -21,6 +21,11 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);fo
 .lang button{font:inherit;font-family:var(--f-mono);font-size:.82rem;border:0;background:transparent;color:var(--ink);padding:7px 14px;cursor:pointer}
 .lang button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 .lang button:focus-visible{outline:3px solid var(--mean);outline-offset:-3px}
+.brand{display:inline-flex;align-items:center;border-radius:10px}
+.brand img{display:block;height:34px;width:auto}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .brand{background:#fff;padding:7px 12px}}
+:root[data-theme="dark"] .brand{background:#fff;padding:7px 12px}
+@media (max-width:420px){.brand img{height:26px}}
 header{padding:36px 0 32px;display:grid;gap:14px}
 h1{font-family:var(--f-display);font-weight:800;font-size:clamp(2.4rem,7vw,4.2rem);line-height:1.02;letter-spacing:-.02em;margin:0}
 .lede{color:var(--muted);max-width:60ch;margin:0;font-size:1.1rem}
@@ -40,13 +45,14 @@ footer{margin-top:36px;color:var(--muted);font-size:.9rem}
 <body>
 <main class="wrap">
   <div class="top">
-    <p class="eyebrow" data-i="eyebrow">Aprender viendo · machine learning sin cajas negras</p>
+    <span class="brand"><img src="Zonar-Logo-2021-RGB.png" alt="Zonar" width="1309" height="376"></span>
     <div class="lang" role="group" aria-label="Idioma / Language">
       <button type="button" data-lang="es" aria-pressed="true">ES</button>
       <button type="button" data-lang="en" aria-pressed="false">EN</button>
     </div>
   </div>
   <header>
+    <p class="eyebrow" data-i="eyebrow">Aprender viendo · machine learning sin cajas negras</p>
     <h1 data-i="h1">Explicaciones visuales</h1>
     <p class="lede" data-i="lede">Tres colecciones. Cada tema tiene una versión sencilla con gráficos interactivos y un vídeo corto, y una versión técnica con matemáticas y código verificado.</p>
   </header>
