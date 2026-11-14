@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Activation functions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content;max-width:100%}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec p b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.eqline{font-family:var(--f-mono);font-size:.92rem;overflow-wrap:anywhere}
+@media (max-width:620px){.seg{border-radius:14px}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#en" target="_self">← Main menu</a> · Neural networks · topic 2 · explained with drawings · <a href="activation-functions-technical-en.html" target="_self">see the technical version</a> · <a href="neural-networks-en.html" target="_self">all topics</a> · <a href="funciones-de-activacion-es.html" target="_self">en español</a></p>
+  <h1>Activation functions</h1>
+  <p class="lede">A neuron adds up its inputs with weights and then passes the result through a function: the activation. It looks like a detail, but without it a network with a hundred layers can only draw straight lines. With it, a few neurons bend the line and follow curves like a truck's fuel use as a function of speed.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="situ col">
+    <p class="eyebrow">The setup</p>
+    <p>Each dot is a <strong>route segment</strong> driven by one truck of the fleet: its average speed (horizontal) and how much fuel it used (vertical, in liters per 100 km). In town, with stops and starts, it uses a lot; the minimum is around 75 km/h; on the highway it goes back up, because the air pushes back harder. The cloud of dots is shaped like a <strong>U</strong>.</p>
+    <p>A small neural network tries to follow that U. It takes the speed, passes it through a few <strong>hidden neurons</strong> (each one computes a weighted sum, like the neuron in <a href="the-neuron-en.html" target="_self">topic 1</a>, and then applies its <strong>activation</strong>) and returns a fuel use. Each combination of buttons is a different network, already trained: it has found the weights that best follow these 60 segments.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="Fuel use versus speed on 60 segments, the network's prediction and a diagram of the network"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The <b style="color:var(--point)">orange</b> dots are the 60 segments. The <b style="color:var(--mean)">blue</b> line is the fuel use the network predicts for each speed. On the right (below, on a phone) is a diagram of the network: the speed comes in on the left, goes through the hidden neurons, and the fuel use comes out on the right. The little drawing inside each neuron is its activation; thicker lines are larger weights.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>Which activation do the hidden neurons use?</h3>
+      <div class="seg" role="group" aria-label="Activation"><button type="button" id="h-a0" aria-pressed="true">None</button><button type="button" id="h-a1" aria-pressed="false">Sigmoid</button><button type="button" id="h-a2" aria-pressed="false">Tanh</button><button type="button" id="h-a3" aria-pressed="false">ReLU</button></div>
+      <p><b>None</b>: each neuron passes its sum along unchanged. The other three bend it in different ways; you will see them up close in idea 1.</p>
+    </div>
+    <div class="dec">
+      <h3>How many hidden layers?</h3>
+      <div class="seg" role="group" aria-label="Hidden layers"><button type="button" id="h-c0" aria-pressed="true">1 layer</button><button type="button" id="h-c1" aria-pressed="false">3 layers</button></div>
+      <p>Each layer has 3 neurons. With 3 layers the network has <b>34 numbers</b> to tune instead of 10: it should be able to do more.</p>
+    </div>
+  </div>
+  <div class="big3" id="h-big"></div>
+  <div class="col stack">
+    <p><strong>Try this, in order:</strong></p>
+    <ol class="try">
+      <li>With no activation and 1 layer, the network draws a line that goes down: it says the faster you go, the less you use. It is off by about 4 liters on average.</li>
+      <li>Switch to 3 layers, still with no activation: more than three times as many numbers and exactly the same line, with the same error.</li>
+      <li>Pick ReLU: the line bends at elbows and follows the U. The error drops from 4.0 to 1.2 liters.</li>
+      <li>Try sigmoid and tanh: they also follow the U, with smooth curves instead of elbows.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="h-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">What you just saw</p>
+    <h2>The activation is what lets the network bend</h2>
+    <p>Without an activation, each neuron only <strong>multiplies and adds</strong>. And chaining "multiply and add" gives "multiply and add" again: a straight line. It does not matter how many layers you stack; together they are equivalent to a single one. That is why the network with 34 numbers drew the same line as the one with 10.</p>
+    <p>All it takes is for each neuron to do something that is not a straight line after its sum (for example, "if it comes out negative, make it zero", which is the <strong>ReLU</strong>) and the layers no longer merge into one. Each neuron adds a bend, and with a few bends the network follows the curve.</p>
+    <ul>
+      <li><strong>The activation is a function applied after the weighted sum.</strong> The neuron in topic 1 computed a sum; now that sum goes through a curve before it comes out.</li>
+      <li><strong>Without it, more layers are useless.</strong> The whole network is still a straight line (or a flat plane, with more inputs).</li>
+      <li><strong>With it, the network can approximate curves</strong>: the U of fuel use, the probability of a breakdown versus mileage, whatever is needed.</li>
+      <li><strong>Its slope matters for learning.</strong> A network learns by correcting its weights according to the slope of each piece; a flat activation stops passing corrections along.</li>
+    </ul>
+    <p>The ideas that follow show the most common activations (1), why without them two layers are worth the same as one (2), how a few elbows follow the U (3), the slope of each activation (4), what happens with many layers (5) and neurons that switch off for good (6).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 6</p>
+    <h2>Four ways to bend a number (and two more)</h2>
+    <p>The neuron in topic 1 computes a <strong>weighted sum</strong> z: for example, a risk score that a delivery will arrive late, based on traffic jams and distance. The activation decides what comes out of the neuron given that score. The best known ones:</p>
+    <ul>
+      <li><strong>Step</strong>: 1 if z is positive, 0 otherwise. A yes or a no; it is the one used by the perceptron in topic 1.</li>
+      <li><strong>Sigmoid</strong>: an S that turns any number into something between 0 and 1. It reads as a probability.</li>
+      <li><strong>Tanh</strong>: the same S, but between −1 and 1 and centered at 0.</li>
+      <li><strong>ReLU</strong>: if z is negative, 0; if it is positive, z unchanged. The most used one today in hidden layers.</li>
+      <li><strong>Leaky ReLU</strong> and <strong>GELU</strong>: variants of the ReLU. The first lets a tiny bit of the negative part through; the second is a ReLU with a rounded corner, the one used by language models.</li>
+    </ul>
+  </div>
+  <div class="chips col" id="f-c" role="group" aria-label="Activation"></div>
+  <figure class="fig"><svg id="fun" role="img" aria-label="Curve of the chosen activation with the value that goes in and the one that comes out"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Horizontally, the sum z that goes into the neuron; vertically, what comes out. The <b style="color:var(--mean)">blue</b> curve is the chosen activation. The <b style="color:var(--point)">orange</b> dot is the z you pick below. The <b style="color:var(--good)">green</b> band marks every value that activation can produce. The dashed gray diagonal is "do nothing" (output = z).</p>
+  <div class="controls col">
+    <div class="slider"><label for="f-z">Sum going in, z <output id="f-z-o"></output></label><input type="range" id="f-z" min="-6" max="6" step="0.1" value="1.0"><div class="ends"><span>−6 (strongly against)</span><span>6 (strongly for)</span></div></div>
+  </div>
+  <div class="big3 col" id="f-big"></div>
+  <p class="qcard col" id="f-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 6</p>
+    <h2>Without an activation, two layers are worth the same as one</h2>
+    <p>A toy network with two neurons in a row. The first takes the speed v and computes <strong>w₁ · v + b₁</strong> (a weight and a bias). The second takes what comes out of the first and computes <strong>w₂ · (what it gets) + b₂</strong>. Between the two there may or may not be an activation.</p>
+    <p>Without an activation, you can open the parentheses: w₂ · (w₁ · v + b₁) + b₂ = <strong>(w₂ · w₁) · v + (w₂ · b₁ + b₂)</strong>. That is a single neuron with weight w₂ · w₁ and bias w₂ · b₁ + b₂. Four numbers doing the work of two.</p>
+  </div>
+  <figure class="fig"><svg id="two" role="img" aria-label="Output of the first neuron and of the two-neuron network versus speed"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Horizontally, the speed. The dashed <b style="color:var(--sample)">purple</b> line is what comes out of the first neuron; the <b style="color:var(--mean)">blue</b> one, what comes out of the whole network. If you pick ReLU, the part of the purple line below zero becomes zero before it reaches the second neuron, and the <b style="color:var(--point)">orange</b> dot marks the speed where that starts.</p>
+  <div class="decs">
+    <div class="dec"><h3>First neuron</h3>
+      <div class="slider"><label for="t-w1">Weight w₁ <output id="t-w1-o"></output></label><input type="range" id="t-w1" min="-1" max="1" step="0.05" value="-0.8"><div class="ends"><span>−1</span><span>1</span></div></div>
+      <div class="slider"><label for="t-b1">Bias b₁ <output id="t-b1-o"></output></label><input type="range" id="t-b1" min="-60" max="80" step="1" value="56"><div class="ends"><span>−60</span><span>80</span></div></div>
+    </div>
+    <div class="dec"><h3>Second neuron</h3>
+      <div class="slider"><label for="t-w2">Weight w₂ <output id="t-w2-o"></output></label><input type="range" id="t-w2" min="-2" max="2" step="0.05" value="0.5"><div class="ends"><span>−2</span><span>2</span></div></div>
+      <div class="slider"><label for="t-b2">Bias b₂ <output id="t-b2-o"></output></label><input type="range" id="t-b2" min="-40" max="60" step="1" value="30"><div class="ends"><span>−40</span><span>60</span></div></div>
+    </div>
+    <div class="dec"><h3>What is between the two?</h3>
+      <div class="seg" role="group" aria-label="Between the two neurons"><button type="button" id="t-a0" aria-pressed="true">Nothing</button><button type="button" id="t-a1" aria-pressed="false">ReLU</button></div>
+      <p>Move the four numbers with "Nothing": the blue line is always straight. Then switch to ReLU.</p>
+    </div>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 6</p>
+    <h2>A few elbows follow the U of fuel use</h2>
+    <p>A ReLU neuron draws an <strong>elbow</strong>: it is zero up to some speed and from there it rises in a straight line. If the network's output adds up a straight line and a few elbows, each elbow <strong>changes the slope</strong> of the line from its speed onward. With two or three well-placed elbows, a line that could only go down goes down, flattens out and goes back up.</p>
+    <p>Here you choose how many elbows and where. The computer chooses the height of the line and how much each elbow tilts it so the line passes as close as possible to the 60 segments (the same thing training would do with those numbers).</p>
+  </div>
+  <div class="chips col" id="k-c" role="group" aria-label="Number of elbows"></div>
+  <figure class="fig"><svg id="kin" role="img" aria-label="Fuel use versus speed approximated by a line and several ReLU elbows, and below each piece on its own"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, the segments (<b style="color:var(--point)">orange</b>) and the sum of all the pieces (<b style="color:var(--mean)">blue</b>). The vertical dashes mark where each elbow is. At the bottom, each piece on its own: the starting line in gray and each elbow in its own color. Each elbow is zero to its left and grows (or drops) to its right. The blue line at the top is the point-by-point sum of everything below.</p>
+  <div class="controls col" id="k-sl">
+    <div class="slider" id="k-s1"><label for="k-p1">Elbow 1 at <output id="k-p1-o"></output></label><input type="range" id="k-p1" min="20" max="100" step="1" value="60"><div class="ends"><span>20 km/h</span><span>100 km/h</span></div></div>
+    <div class="slider" id="k-s2"><label for="k-p2">Elbow 2 at <output id="k-p2-o"></output></label><input type="range" id="k-p2" min="20" max="100" step="1" value="75"><div class="ends"><span>20 km/h</span><span>100 km/h</span></div></div>
+    <div class="slider" id="k-s3"><label for="k-p3">Elbow 3 at <output id="k-p3-o"></output></label><input type="range" id="k-p3" min="20" max="100" step="1" value="80"><div class="ends"><span>20 km/h</span><span>100 km/h</span></div></div>
+  </div>
+  <div class="big3 col" id="k-big"></div>
+  <p class="qcard col" id="k-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 6</p>
+    <h2>The slope of the activation decides whether the neuron learns</h2>
+    <p>A network learns by correcting its weights little by little. To know how much to correct, it asks each neuron: <strong>"if your sum went up a tiny bit, how much would your output change?"</strong>. The answer is the <strong>slope</strong> (the derivative, from <a href="derivatives-gradient-and-the-chain-rule-en.html" target="_self">math topic 16</a>) of the activation at that point. The correction that reaches the neuron is multiplied by that slope; you will see it in detail in topic 5, backpropagation.</p>
+    <p>If the slope is almost zero, so is the correction: the neuron is <strong>saturated</strong> and stops learning. That is why the shape of the curve matters, not just what it outputs.</p>
+  </div>
+  <div class="chips col" id="d-c" role="group" aria-label="Activation"></div>
+  <figure class="fig"><svg id="der" role="img" aria-label="Activation with its tangent line and below its slope at each point"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, the activation (<b style="color:var(--mean)">blue</b>) and its tangent at the <b style="color:var(--point)">orange</b> dot: the line with the same tilt. At the bottom, the <b style="color:var(--sample)">slope</b> of the curve above at each z. The areas shaded in <b style="color:var(--warn)">red</b> are where the slope drops below 0.05: there the neuron barely learns.</p>
+  <div class="controls col">
+    <div class="slider"><label for="d-z">Sum going in, z <output id="d-z-o"></output></label><input type="range" id="d-z" min="-6" max="6" step="0.1" value="0"><div class="ends"><span>−6</span><span>6</span></div></div>
+  </div>
+  <div class="big3 col" id="d-big"></div>
+  <p class="qcard col" id="d-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 6</p>
+    <h2>With many layers, the correction fades along the way</h2>
+    <p>In a network with many layers, the correction travels from the output back to the first layer, and at each layer it is multiplied by the slope of the activation. With the sigmoid, that slope never goes above 0.25: after ten layers, what arrives is less than one millionth. The first layers get almost no correction and barely learn. This is the <strong>vanishing gradient</strong>.</p>
+    <p>With the ReLU, the slope is exactly 1 when the neuron is active, and the correction arrives whole. That is the main reason the ReLU replaced the sigmoid in hidden layers around 2010.</p>
+  </div>
+  <figure class="fig"><svg id="van" role="img" aria-label="Fraction of the correction that reaches each layer of a deep network"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each bar is a layer: the last one, where the error is measured, on the right; the first, on the left. The height is the fraction of the correction that reaches it, on a logarithmic scale: each horizontal gridline is 100 times less than the one above. In <b style="color:var(--good)">green</b>, the zone where a layer learns well; the <b style="color:var(--warn)">red</b> bars barely learn.</p>
+  <div class="decs">
+    <div class="dec"><h3>Activation in every layer</h3><div class="seg" role="group" aria-label="Activation"><button type="button" id="v-a0" aria-pressed="true">Sigmoid</button><button type="button" id="v-a1" aria-pressed="false">Tanh</button><button type="button" id="v-a2" aria-pressed="false">ReLU</button></div></div>
+    <div class="dec"><div class="slider"><label for="v-n">Number of layers <output id="v-n-o"></output></label><input type="range" id="v-n" min="2" max="20" step="1" value="10"><div class="ends"><span>2</span><span>20</span></div></div></div>
+    <div class="dec"><div class="slider"><label for="v-z">How far from zero each neuron works <output id="v-z-o"></output></label><input type="range" id="v-z" min="0" max="3" step="0.1" value="1"><div class="ends"><span>0 (in the middle)</span><span>3 (on the flat part)</span></div></div><p>It is the typical sum z of each neuron. With the ReLU, an active neuron has slope 1 wherever it works.</p></div>
+  </div>
+  <p class="qcard col" id="v-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 6 of 6</p>
+    <h2>ReLU neurons that switch off for good</h2>
+    <p>The ReLU has its own problem. If a neuron ends up with a bias so negative that its sum comes out negative <strong>on every segment</strong>, it always outputs zero and its slope is always zero. No correction reaches it, so it cannot get out of there: it is a <strong>dead neuron</strong>. It usually happens when the learning step is too large and one push sends it far away.</p>
+    <p>The <strong>Leaky ReLU</strong> avoids this by keeping a small slope (0.01) on the negative side: the switched-off neuron still gets a trickle of correction and can come back.</p>
+  </div>
+  <figure class="fig"><svg id="dead" role="img" aria-label="Output of a ReLU neuron versus speed on the 60 segments, active or switched off"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The neuron takes the segment's speed and computes z = 0.1 × speed + bias. The <b style="color:var(--mean)">blue</b> line is what it outputs after the activation. Each dot is one of the 60 segments: <b style="color:var(--good)">green</b> if the neuron is active on that segment (positive z) and learns from it, <b style="color:var(--warn)">red</b> if it is switched off.</p>
+  <div class="decs">
+    <div class="dec"><div class="slider"><label for="m-b">Bias of the neuron <output id="m-b-o"></output></label><input type="range" id="m-b" min="-14" max="2" step="0.1" value="-5"><div class="ends"><span>−14</span><span>2</span></div></div><p>More negative: the neuron needs more speed to switch on.</p></div>
+    <div class="dec"><h3>Activation</h3><div class="seg" role="group" aria-label="Activation"><button type="button" id="m-a0" aria-pressed="true">ReLU</button><button type="button" id="m-a1" aria-pressed="false">Leaky ReLU</button></div></div>
+  </div>
+  <div class="big3 col" id="m-big"></div>
+  <p class="qcard col" id="m-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The full recipe</h2>
+    <ol class="steps">
+      <li><div><strong>Each neuron</strong> computes a weighted sum and then applies its activation.</div></li>
+      <li><div><strong>Without an activation</strong>, any number of layers is equivalent to a single one: the network only draws straight lines.</div></li>
+      <li><div><strong>With ReLU</strong>, each neuron adds an elbow; with a few elbows the network follows curves like the U of fuel use.</div></li>
+      <li><div><strong>In hidden layers</strong>, ReLU (or its variants, Leaky ReLU and GELU) is the default choice.</div></li>
+      <li><div><strong>At the output</strong>, the activation is chosen by what you want to get out: sigmoid for a probability between 0 and 1, none for a quantity such as liters.</div></li>
+      <li><div><strong>The slope</strong> of the activation decides how much correction gets through: the sigmoid and tanh saturate; the ReLU lets through 1 or 0.</div></li>
+      <li><div><strong>Watch out for dead neurons</strong>: smaller learning steps or Leaky ReLU.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where it shows up in fleet telemetry</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 12c6 18 22 18 28 0"/><path d="M20 27v6"/></svg><h3>Fuel use and emissions</h3><p>Fuel use as a function of speed, load and road grade is not a straight line. The ReLU networks that estimate it help plan the diesel for each route and spot trucks that use more than expected.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6L34 32H6Z"/><path d="M20 16v8M20 28v1"/></svg><h3>Breakdown probability</h3><p>A network that warns about breakdowns ends in a sigmoid: its output is a number between 0 and 1 that reads as "a 12% risk this week" and is compared with an alert threshold.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 28c4-10 8-10 12 0s8 10 16-14"/></svg><h3>GPS time series</h3><p>Networks that read speed second by second (the LSTMs of topic 9) use a sigmoid to decide what to remember and tanh for what they remember, precisely because of their ranges, 0 to 1 and −1 to 1.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="10" width="28" height="22" rx="2"/><path d="M6 16h28M13 6v8M27 6v8"/></svg><h3>Estimated time of arrival</h3><p>Large arrival-time models, with traffic, route and driver, have dozens of layers. They work thanks to activations like ReLU or GELU, which do not switch off the correction in the first layers.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Connections</p>
+    <h2>With the other topics</h2>
+    <p>The weighted sum that goes through the activation is the one from <a href="the-neuron-en.html" target="_self">the neuron of topic 1</a>; there the activation was a step. A neuron with a sigmoid at the output is exactly a <a href="logistic-regression-en.html" target="_self">logistic regression</a>, and its natural penalty is the cross-entropy of <a href="entropy-and-cross-entropy-en.html" target="_self">math topic 15</a>. Two layers without an activation merging into one is the composition of linear transformations from <a href="matrices-as-transformations-en.html" target="_self">topic 3</a>: one matrix times another is another matrix. The slopes of idea 4 and the fading correction are the derivatives and the chain rule of <a href="derivatives-gradient-and-the-chain-rule-en.html" target="_self">topic 16</a>, and those corrections are the steps of <a href="gradient-descent-en.html" target="_self">gradient descent</a>.</p>
+    <p><a href="linear-and-polynomial-regression-en.html" target="_self">Polynomial regression</a> is another way to bend a line: instead of elbows, powers of the speed. In this collection, the multilayer network has its own topic (3), and backpropagation, which uses the slopes of each activation, is topic 5.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>What it gives and what to watch</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>What it gives</h3><ul class="pc">
+      <li>With a simple activation, layers add up instead of merging: the network can follow almost any curve.</li>
+      <li>The ReLU is very cheap to compute (compare with zero) and lets the whole correction through.</li>
+      <li>The sigmoid gives ready-to-use probabilities at the output.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>What to watch</h3><ul class="pc">
+      <li>The sigmoid and tanh saturate: in deep networks they switch off the correction of the first layers.</li>
+      <li>ReLU neurons can die and stop learning.</li>
+      <li>More bends are not always better: a very flexible network can follow the noise in the data instead of the U.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Activation</dt><dd>The function a neuron applies to its weighted sum before passing the result on.</dd>
+      <dt>Nonlinear</dt><dd>Not a straight line. What is needed so the layers do not merge into one.</dd>
+      <dt>Hidden layer</dt><dd>A group of neurons between the input and the output of the network.</dd>
+      <dt>Step</dt><dd>Outputs 1 if the sum is positive and 0 otherwise. The perceptron's activation.</dd>
+      <dt>Sigmoid</dt><dd>An S that maps any number to a value between 0 and 1.</dd>
+      <dt>Tanh</dt><dd>An S between −1 and 1, centered at 0.</dd>
+      <dt>ReLU</dt><dd>Zero if the sum is negative; the sum unchanged if it is positive.</dd>
+      <dt>Leaky ReLU, GELU</dt><dd>Variants of the ReLU: with a little slope on the negative side, or with a rounded corner.</dd>
+      <dt>Saturation</dt><dd>A flat zone of an activation, where its slope is almost zero and the neuron barely learns.</dd>
+      <dt>Vanishing gradient</dt><dd>The correction becoming tiny as it is multiplied by small slopes layer after layer.</dd>
+      <dt>Dead neuron</dt><dd>A ReLU neuron that outputs zero for all the data and no longer gets any correction.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the math behind it</summary>
+    <p style="padding-top:10px">You do not need it to understand the idea:</p>
+    <div class="formula">neuron:      z = w₁·x₁ + w₂·x₂ + … + b        output = f(z)
+
+step:        f(z) = 1 if z &gt; 0, else 0         slope 0 (except at z = 0)
+sigmoid:     f(z) = 1 / (1 + e⁻ᶻ)              slope f·(1 − f) ≤ 0.25
+tanh:        f(z) = (eᶻ − e⁻ᶻ)/(eᶻ + e⁻ᶻ)       slope 1 − f² ≤ 1
+ReLU:        f(z) = max(0, z)                  slope 1 if z &gt; 0, else 0
+Leaky ReLU:  f(z) = z if z &gt; 0, else 0.01·z    slope 1 or 0.01
+
+no activation, two layers:
+   w₂·(w₁·v + b₁) + b₂ = (w₂·w₁)·v + (w₂·b₁ + b₂)       → a straight line
+   with w₁ = −0.8, b₁ = 56, w₂ = 0.5, b₂ = 30:  −0.4·v + 58
+
+line plus two elbows (u = speed / 100, elbows at 40 and 73 km/h):
+   fuel = a + b·u + s₁·max(0, u − 0.40) + s₂·max(0, u − 0.73)
+   a = 61.6   b = −66.2   s₁ = 45.5   s₂ = 35.0       mean error 1.22 L/100 km
+
+correction reaching layer 1 of n:   slope¹ × slope² × … × slopeⁿ⁻¹
+   sigmoid at z = 0, 10 layers:  0.25⁹ ≈ 0.0000038</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in one minute</h2>
+    <p>An animated recap: the activation after the sum, the sigmoid, tanh and ReLU, the two layers that merge into one without an activation, the elbows that follow the U of fuel use, and the correction that fades in a network with many layers. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSAgSA/9k=" aria-label="Animation: activation functions">
+      <source src="activation-functions-with-audio-en.mp4" type="video/mp4">
+      Your browser cannot play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"v":[15.8,17.4,21.0,21.9,22.2,22.5,26.7,30.4,30.4,31.2,31.8,33.2,37.6,38.9,41.3,43.2,45.2,45.9,49.7,50.4,51.8,51.9,53.4,54.4,54.9,56.7,58.1,60.8,62.1,62.6,63.2,67.1,70.0,70.2,70.8,72.1,74.1,75.2,76.4,77.6,78.6,78.9,79.9,80.0,80.8,83.4,87.1,88.0,91.8,93.3,93.8,95.2,96.5,98.7,99.3,99.4,100.0,102.6,106.8,107.4],"c":[53.0,50.5,47.5,46.9,47.6,45.3,41.7,38.4,42.7,40.9,42.3,39.7,36.6,37.5,35.8,33.7,33.4,36.3,33.4,33.3,32.1,31.6,33.1,31.7,30.8,31.1,29.9,30.7,31.7,29.2,31.9,28.9,29.7,28.5,29.2,29.4,28.8,28.4,28.5,28.3,27.4,29.0,29.8,30.4,30.1,32.4,30.2,29.3,32.6,29.4,31.9,29.8,31.6,29.2,32.8,31.6,30.7,34.5,34.5,33.8],"redes":{"1-ninguna":{"rmse":4.014494731035048,"rmse_n":4.7852792533563395,"n":10,"capas":[[[[1.5224622379033317],[0.5312363425205668],[-1.1104239404098837]],[0.38594152384909197,-0.11708764302773565,1.2154528354520944]],[[[-0.4798599277296596,-0.220309051693948,0.8127489179771032]],[0.17624119717686293]]]},"1-sigmoide":{"rmse":1.1418070117993955,"rmse_n":1.1866478298337295,"n":10,"capas":[[[[4.177698448618127],[-32.87232799332747],[-6.642113013871688]],[-8.563749027368221,6.237284320090128,2.1638316780762152]],[[[51.46309906832807,0.8064374368665042,2.7969127362110577]],[-0.9589710657797438]]]},"1-tanh":{"rmse":1.1421541735208582,"rmse_n":1.1776315034697125,"n":10,"capas":[[[[-6.678973369157031],[-2.563831001708666],[-3.997105562959416]],[0.5522141510832714,3.846617336699694,1.6429780521827813]],[[[2.0065125560996564,-3.7207784695950887,0.8714685416237861]],[5.756997381187696]]]},"1-relu":{"rmse":1.2171557734873293,"rmse_n":1.334046895806252,"n":10,"capas":[[[[-2.310205956688171],[-1.742620716489122],[-1.828886757834507]],[1.695107463647781,0.7013601841783128,1.9751905968502]],[[[1.5051215577824963,2.620006126834772,-0.7928118953318176]],[-0.16732906885560447]]]},"3-ninguna":{"rmse":4.014494731035047,"rmse_n":4.785279253356307,"n":34,"capas":[[[[-1.1332683824626377],[0.20778365668947524],[-1.0169489048433904]],[-0.6772867146715792,-0.7896726413019355,0.36826618841397096]],[[[-0.642344886275171,-0.04796661276912897,-1.2621442717544806],[0.013578187075892702,-0.23375893053435837,0.17415398531292486],[0.20923644827382842,-0.15906707372086223,0.48983709294100497]],[-0.6509124303409,-0.2592053517480894,0.35547134435217054]],[[[0.8251350745743258,-0.015904128140625196,-0.06268604307321907],[-0.6620874826233539,-0.09927778755412034,0.34935943172465644],[-0.08856741264548279,-0.5590433847797291,0.32274796277063295]],[-0.11385111533568311,-0.3496223313507761,-0.0817616646312047]],[[[-0.4315765572607397,0.6608805137709223,-0.07732023554409452]],[0.5531377314736038]]]},"3-sigmoide":{"rmse":1.0330544003112316,"rmse_n":1.2475777947317113,"n":34,"capas":[[[[4.260716496204915],[-32.627429745867296],[-11.5953072835259]],[2.479451752658932,29.075915903524947,5.799336748958734]],[[[-6.609222429648698,4.46980380482048,0.6352965268764583],[18.0214955392733,-29.522076010284565,-0.4089841224298515],[0.8588234198599758,34.80608700297155,18.20247632784626]],[-2.5181166734153377,12.963589535749422,3.645931268684084]],[[[-1.4665334947839122,3.839547996417036,-2.388619382875976],[10.542148007877195,4.251952414803281,-14.528156233856713],[2.0065447686777356,-4.363575307626833,1.8590756110432591]],[1.0708283253999131,8.970684851734783,-0.31448312577147713]],[[[-8.317946055131339,17.139371576880826,13.968528169377894]],[2.7914486774007985]]]},"3-tanh":{"rmse":0.9495746207067524,"rmse_n":1.3226035089055537,"n":34,"capas":[[[[4.436165630762297],[-1.675250438577775],[5.109764655783502]],[-4.728670743287874,1.3835008385709826,-1.870596439467917]],[[[-0.8153562893833111,-0.7511880704220862,-11.422891364131086],[-1.279740842649751,-0.20665368535115958,-0.475858711455335],[-1.4552321982966734,7.565066600052564,-3.9475407305455437]],[-3.7928412355637153,-0.7808189389442574,4.297717526791699]],[[[-5.567818194216871,-1.8548842854261132,-11.426068986546497],[-12.092273386170758,-8.582295122399401,18.06386223239358],[-8.448507906395884,-5.231704621460939,-17.33169239035009]],[5.409576109783281,0.406088765126592,7.223335957817381]],[[[-1.9153527845180351,-6.453688645396638,1.3953963600498547]],[6.539002662592046]]]},"3-relu":{"rmse":1.1193047733119263,"rmse_n":1.194464562488002,"n":34,"capas":[[[[-1.670156038109633],[-0.8827034985738392],[-0.8756741534955687]],[1.150023787823354,0.9517896159793742,-0.22973894197613554]],[[[1.2917592035344578,-0.2700696703067431,-0.39529011328172337],[1.0003176189553913,-1.1962519210119877,0.008505742809447159],[0.8907966207793001,0.8663404492445641,0.2834606976617512]],[-0.7225899931615283,0.3288393937675244,0.20375887029506126]],[[[1.4292592814067018,1.0419885046101849,0.5370972231060531],[1.9318031141730774,0.6573325472440321,0.7390231682361025],[-0.34331550798242844,-1.5338282383087685,-0.4267605418358892]],[0.027553873657974633,-0.852801241491028,0.7930027660648599]],[[[0.8158444558982402,1.015906672835077,-0.6984574881904047]],[-0.41856618915684374]]]}}};
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g,",");s=fr?i+"."+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const sg=(v,d)=>(v>0&&+v.toFixed(d??1)!==0?"+":"")+f1(v,d);
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+const redraws=[];window.addEventListener("resize",()=>redraws.forEach(g=>g()));
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+function axes(svg,o){const FS=o.FS,L=o.x+(o.padL??FS*3.4),R=o.x+o.w-(o.padR??FS*0.9),T=o.y+(o.padT??FS*2.2),B=o.y+o.h-(o.padB??FS*2.6);
+  const sx=v=>L+(v-o.x0)/(o.x1-o.x0)*(R-L),sy=v=>B-(v-o.y0)/(o.y1-o.y0)*(B-T),g=el("g",null,svg);
+  for(const v of (o.yt||[])){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},g);txt(g,L-7,sy(v)+FS*0.3,(o.fy||(v=>f1(v,0)))(v),{"text-anchor":"end","font-size":FS*0.8});}
+  for(const v of (o.xt||[])){if(o.grid!==false)el("line",{x1:sx(v),x2:sx(v),y1:T,y2:B,class:"g-line","stroke-opacity":.55},g);
+    const s=(o.fx||(v=>f1(v,0)))(v),w=s.length*FS*0.8*0.62,X=sx(v);let a="middle",xx=X;if(X+w/2>o.x+o.w-3){a="end";xx=o.x+o.w-3;}else if(X-w/2<o.x+3){a="start";xx=o.x+3;}
+    txt(g,xx,B+FS*1.05,s,{"text-anchor":a,"font-size":FS*0.8});}
+  el("line",{x1:L,x2:R,y1:B,y2:B,class:"g-axis"},g);
+  if(o.xl)txt(g,R,o.y+o.h-FS*0.25,o.xl,{"text-anchor":"end","font-size":FS*0.85,class:"t-ink"});
+  if(o.yl)txt(g,L,T-FS*0.75,o.yl,{"font-size":FS*0.8});
+  return {L,R,T,B,sx,sy,FS};}
+const dot=(g,x,y,r,fill,extra)=>el("circle",Object.assign({cx:x,cy:y,r,fill,stroke:"var(--point-ring)","stroke-width":r>6?2:1.2},extra||{}),g);
+const pathOf=P=>P.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join("");
+const lab=(g,x,y,s,FS,A,extra)=>{extra=extra||{};const fz=extra["font-size"]||FS*0.8,w=s.length*fz*0.6,an=extra["text-anchor"]||"middle",left=an==="middle"?x-w/2:an==="end"?x-w:x;let dx=0;if(left<A.L+2)dx=A.L+2-left;else if(left+w>A.R-2)dx=A.R-2-(left+w);return txt(g,x+dx,y,s,Object.assign({"font-size":fz},halo(5),extra,{"text-anchor":an}));};
+const clipRect=(svg,A)=>{const id="c"+Math.random().toString(36).slice(2,8);el("rect",{x:A.L,y:A.T-2,width:A.R-A.L,height:A.B-A.T+2},el("clipPath",{id},el("defs",null,svg)));return el("g",{"clip-path":`url(#${id})`},svg);};
+const curve=(A,f,a,b,n)=>{n=n||300;const P=[];for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;P.push([A.sx(x),A.sy(f(x))]);}return pathOf(P);};
+
+/* ---------- activations ---------- */
+const sig=z=>1/(1+Math.exp(-z));
+const erf=x=>{const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+0.3275911*x);return s*(1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x));};
+const Phi=z=>0.5*(1+erf(z/Math.SQRT2));
+const ACT={
+  ninguna:{f:z=>z,d:z=>1},
+  escalon:{f:z=>z>0?1:0,d:z=>0},
+  sigmoide:{f:sig,d:z=>sig(z)*(1-sig(z))},
+  tanh:{f:Math.tanh,d:z=>1-Math.tanh(z)**2},
+  relu:{f:z=>Math.max(0,z),d:z=>z>0?1:0},
+  leaky:{f:z=>z>0?z:0.01*z,d:z=>z>0?1:0.01},
+  gelu:{f:z=>z*Phi(z),d:z=>Phi(z)+z*Math.exp(-z*z/2)/Math.sqrt(2*Math.PI)}};
+const V=D.v,C=D.c,NT=V.length;
+
+/* ---------- toy: the network that follows the U ---------- */
+(function(){const svg=$("toy"),AK=["ninguna","sigmoide","tanh","relu"],AN=["no activation","sigmoid","tanh","ReLU"];let ai=0,ci=0;
+  seg(["h-a0","h-a1","h-a2","h-a3"],i=>{ai=i;draw();});seg(["h-c0","h-c1"],i=>{ci=i;draw();});
+  const fwd=(net,act,v)=>{let h=[v/100];const L=net.capas;for(let k=0;k<L.length;k++){const [W,b]=L[k];const o=W.map((row,j)=>row.reduce((s,w,i)=>s+w*h[i],b[j]));h=k<L.length-1?o.map(ACT[act].f):o;}return h[0]*10+35;};
+  function draw(){const act=AK[ai],nc=ci?3:1,net=D.redes[nc+"-"+act],nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14;
+    const p1=nw?{x:0,y:0,w:W,h:430}:{x:0,y:0,w:600,h:390},p2=nw?{x:0,y:440,w:W,h:250}:{x:615,y:0,w:285,h:390};const H=nw?p2.y+p2.h:390;
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,Object.assign({},p1,{x0:10,x1:115,y0:20,y1:60,xt:[20,40,60,80,100],yt:[20,30,40,50,60],xl:"average speed of the segment (km/h)",yl:"fuel use (L/100 km)",FS,padL:FS*2.4,padT:FS*2}));
+    const g=clipRect(svg,A);
+    for(let i=0;i<NT;i++)dot(g,A.sx(V[i]),A.sy(C[i]),nw?7:5,"var(--point)");
+    el("path",{d:curve(A,v=>fwd(net,act,v),10,115),fill:"none",stroke:"var(--mean)","stroke-width":nw?5:3.6,"stroke-linecap":"round"},g);
+    /* network diagram */
+    const B=p2,cols=nc+2,colX=k=>B.x+(nw?40:26)+k*(B.w-(nw?80:52))/(cols-1),rowY=(n,j)=>B.y+B.h/2+(j-(n-1)/2)*(nw?62:72);
+    const sizes=[1,...Array(nc).fill(3),1];
+    el("rect",{x:B.x+2,y:B.y+2,width:B.w-4,height:B.h-4,rx:12,fill:"none",stroke:"var(--line)"},svg);
+    let mx=0;net.capas.forEach(([Wm])=>Wm.forEach(r=>r.forEach(w=>mx=Math.max(mx,Math.abs(w)))));
+    net.capas.forEach(([Wm],k)=>{Wm.forEach((row,j)=>row.forEach((w,i)=>{el("line",{x1:colX(k),y1:rowY(sizes[k],i),x2:colX(k+1),y2:rowY(sizes[k+1],j),stroke:w>=0?"var(--mean)":"var(--sample)","stroke-width":0.6+4*Math.sqrt(Math.abs(w)/mx),"stroke-opacity":.7},svg);}));});
+    const R=nw?20:17;
+    for(let k=0;k<cols;k++)for(let j=0;j<sizes[k];j++){const x=colX(k),y=rowY(sizes[k],j);
+      el("circle",{cx:x,cy:y,r:R,fill:"var(--surface)",stroke:k===0||k===cols-1?"var(--point)":"var(--ink)","stroke-width":2},svg);
+      if(k>0&&k<cols-1){const f=ACT[act].f,P=[];for(let q=0;q<=24;q++){const z=-3+6*q/24;let y2=act==="ninguna"?z/3:act==="relu"?f(z)/3*2-1:act==="sigmoide"?f(z)*2-1:f(z);P.push([x-R*0.62+R*1.24*q/24,y-y2*R*0.55]);}
+        el("path",{d:pathOf(P),fill:"none",stroke:"var(--mean)","stroke-width":2},svg);}}
+    txt(svg,B.x+12,B.y+B.h-(nw?14:12),"speed",{"text-anchor":"start","font-size":FS*0.72});
+    txt(svg,B.x+B.w-12,B.y+B.h-(nw?14:12),"fuel use",{"text-anchor":"end","font-size":FS*0.72});
+    txt(svg,B.x+B.w/2,B.y+(nw?30:26),nc===1?"1 hidden layer · 10 numbers":"3 hidden layers · 34 numbers",{"text-anchor":"middle","font-size":FS*0.78,class:"t-ink"});
+    const e=net.rmse,en=net.rmse_n;
+    $("h-big").innerHTML=`<div><b style="color:var(--mean)">${f1(e,2)}</b><span>liters per 100 km of mean error on these 60 segments</span></div><div><b>${f1(en,2)}</b><span>mean error on 200 new segments the network did not see</span></div><div><b style="font-size:1.3rem">${f1(fwd(net,act,20),1)} · ${f1(fwd(net,act,75),1)} · ${f1(fwd(net,act,105),1)}</b><span>fuel use it predicts at 20, 75 and 105 km/h</span></div>`;
+    let m;
+    if(act==="ninguna")m=nc===1?`Without an activation, the network can only draw a <b>straight line</b>: the best possible one is this, which goes down from ${f1(fwd(net,act,20),1)} L/100 km at 20 km/h to ${f1(fwd(net,act,105),1)} at 105 km/h. It is off by ${f1(e,2)} liters on average and says that on the highway you use less than at 75 km/h, exactly the opposite of what happens. Try 3 layers.`:`Three hidden layers and 34 tunable numbers, and the network draws <b>exactly the same line</b> as with one layer: same error, ${f1(e,2)}. Without an activation, the layers merge into a single one (idea 2). Now pick an activation.`;
+    else if(act==="relu")m=`With ReLU, each hidden neuron adds an <b>elbow</b>, and now the line goes down, flattens out and goes back up. The error drops to <b>${f1(e,2)}</b> liters (without an activation it was ${f1(D.redes["1-ninguna"].rmse,2)}). Notice that the line is made of straight pieces: idea 3 explains why.${nc===3?" With 3 layers the elbows combine and more pieces appear.":""}`;
+    else m=`With ${AN[ai]}, each neuron adds a smooth S-shaped curve, and the sum of a few of them follows the U with no corners. Mean error: <b>${f1(e,2)}</b> liters${nc===3?`. With 3 layers it goes down on these segments, but on new segments it gives ${f1(en,2)}: part of what it gains is noise from these 60 points.`:`, and ${f1(en,2)} on new segments.`}`;
+    $("h-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 1: catalog of activations ---------- */
+(function(){const svg=$("fun"),inZ=$("f-z");let k=1;
+  const L=[
+    {n:"Step",a:"escalon",lo:0,hi:1,rng:"0 or 1",y0:-1.5,y1:2},
+    {n:"Sigmoid",a:"sigmoide",lo:0,hi:1,rng:"between 0 and 1",y0:-1.5,y1:2},
+    {n:"Tanh",a:"tanh",lo:-1,hi:1,rng:"between −1 and 1",y0:-1.5,y1:2},
+    {n:"ReLU",a:"relu",lo:0,hi:6,rng:"from 0 upward",y0:-1.5,y1:6},
+    {n:"Leaky ReLU",a:"leaky",lo:-0.06,hi:6,rng:"almost anything (negatives × 0.01)",y0:-1.5,y1:6},
+    {n:"GELU",a:"gelu",lo:-0.17,hi:6,rng:"from −0.17 upward",y0:-1.5,y1:6}];
+  chips($("f-c"),L.map(o=>o.n),i=>{k=i;draw();},k);
+  function draw(){const o=L[k],z=+inZ.value,f=ACT[o.a].f,y=f(z),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?470:330;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:-6,x1:6,y0:o.y0,y1:o.y1,xt:[-6,-4,-2,0,2,4,6],yt:o.y1>3?[-1,0,2,4,6]:[-1,0,1,2],xl:"z (sum going in)",yl:"what comes out",FS,padL:FS*2.4,padT:FS*2});
+    const g=clipRect(svg,A);
+    el("rect",{x:A.L,y:A.sy(Math.min(o.hi,o.y1)),width:A.R-A.L,height:A.sy(Math.max(o.lo,o.y0))-A.sy(Math.min(o.hi,o.y1)),fill:"var(--good)","fill-opacity":.1},g);
+    el("line",{x1:A.sx(-6),y1:A.sy(-6),x2:A.sx(6),y2:A.sy(6),stroke:"var(--muted)","stroke-width":1.4,"stroke-dasharray":"6 5"},g);
+    el("line",{x1:A.sx(0),x2:A.sx(0),y1:A.T,y2:A.B,stroke:"var(--muted)","stroke-width":1,"stroke-opacity":.6},g);
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(0),y2:A.sy(0),stroke:"var(--muted)","stroke-width":1,"stroke-opacity":.6},g);
+    if(o.a==="escalon"){el("path",{d:`M${A.sx(-6)} ${A.sy(0)}L${A.sx(0)} ${A.sy(0)}M${A.sx(0)} ${A.sy(1)}L${A.sx(6)} ${A.sy(1)}`,fill:"none",stroke:"var(--mean)","stroke-width":nw?5:3.6},g);
+      el("line",{x1:A.sx(0),x2:A.sx(0),y1:A.sy(0),y2:A.sy(1),stroke:"var(--mean)","stroke-width":1.5,"stroke-dasharray":"3 4"},g);}
+    else el("path",{d:curve(A,f,-6,6,400),fill:"none",stroke:"var(--mean)","stroke-width":nw?5:3.6},g);
+    el("line",{x1:A.sx(z),x2:A.sx(z),y1:A.sy(0),y2:A.sy(y),stroke:"var(--point)","stroke-width":2,"stroke-dasharray":"4 4"},svg);
+    dot(svg,A.sx(z),A.sy(y),nw?11:8,"var(--point)");
+    lab(svg,A.sx(z),A.sy(y)+(y>o.y1*0.7?FS*1.8:-FS*0.9),"out "+f1(y,o.a==="escalon"?0:3),FS,A,{style:"fill:var(--point)","font-weight":700});
+    $("f-z-o").textContent=f1(z,1);
+    $("f-big").innerHTML=`<div><b>${f1(z,1)}</b><span>sum going into the neuron, z</span></div><div><b style="color:var(--point)">${f1(y,o.a==="escalon"?0:3)}</b><span>what comes out after the activation</span></div><div><b style="color:var(--good);font-size:1.15rem">${o.rng}</b><span>everything it can possibly output</span></div>`;
+    let m;
+    if(o.a==="escalon")m=`The step only says <b>yes (1) or no (0)</b>: with z = ${f1(z,1)} it outputs ${y}. It is the activation of the perceptron in topic 1. It cannot tell "just above" from "far above", and its slope is zero everywhere: idea 4 explains why that prevents learning with the method modern networks use.`;
+    else if(o.a==="sigmoide")m=`The sigmoid maps z = ${f1(z,1)} to <b>${f1(y,3)}</b>, which reads as <b>${f1(100*y,1)}%</b>: "a ${f1(100*y,0)}% chance the delivery arrives late". It never reaches 0 or 1. ${Math.abs(z)>4?"With z this far from 0 it is on its flat part: moving z barely changes what comes out.":"Near z = 0 is where it changes the most."} That is why it is used at the <b>output</b> when you want a probability, as in <a href="logistic-regression-en.html" target="_self">logistic regression</a>.`;
+    else if(o.a==="tanh")m=`Tanh maps z = ${f1(z,1)} to <b>${f1(y,3)}</b>. It is an S like the sigmoid, but between −1 and 1 and <b>centered at 0</b>: a sum of 0 comes out as 0, and negative sums come out negative. That helps the next layer, which receives numbers spread around zero. ${Math.abs(z)>3?"Here it is already on the flat part.":""}`;
+    else if(o.a==="relu")m=z>0?`The ReLU lets z = ${f1(z,1)} through <b>unchanged</b>: it outputs ${f1(y,3)}. For positive sums it is the line "output = input". It has no ceiling, so it works for quantities like "how many extra liters".`:`The ReLU turns any negative sum into <b>0</b>: with z = ${f1(z,1)} the neuron is "switched off". That cut at z = 0 is all it does, and it is enough to let the network bend (ideas 2 and 3).`;
+    else if(o.a==="leaky")m=z>0?`For positive z, the Leaky ReLU is the same as the ReLU: it outputs ${f1(y,3)}.`:`For negative z, the Leaky ReLU does not cut to zero: it lets 1% through. With z = ${f1(z,1)} it outputs <b>${f1(y,3)}</b>. It looks like nothing, but it keeps the neuron from switching off for good (idea 6).`;
+    else m=`The GELU is a ReLU with a rounded corner: with z = ${f1(z,1)} it outputs <b>${f1(y,3)}</b>${z<0?", slightly negative near zero (at most −0.17)":""}. It multiplies z by the probability that a random normal number is less than z. It is the one used by BERT, GPT and most language models (you will see it in topic 11).`;
+    $("f-msg").innerHTML=m;}
+  inZ.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 2: two layers without activation = one ---------- */
+(function(){const svg=$("two"),I=["t-w1","t-b1","t-w2","t-b2"].map($);let relu=false;
+  seg(["t-a0","t-a1"],i=>{relu=i===1;draw();});
+  function draw(){const [w1,b1,w2,b2]=I.map(e=>+e.value),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?480:340;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const z1=v=>w1*v+b1,out=v=>w2*(relu?Math.max(0,z1(v)):z1(v))+b2;
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0,x1:120,y0:-60,y1:120,xt:[0,20,40,60,80,100,120],yt:[-60,-30,0,30,60,90,120],xl:"speed v (km/h)",yl:"output",FS,padL:FS*2.6,padT:FS*2});
+    const g=clipRect(svg,A);
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(0),y2:A.sy(0),stroke:"var(--muted)","stroke-width":1.4},g);
+    el("path",{d:curve(A,z1,0,120,2),fill:"none",stroke:"var(--sample)","stroke-width":nw?3.4:2.4,"stroke-dasharray":"8 6"},g);
+    if(relu)el("path",{d:curve(A,v=>Math.max(0,z1(v)),0,120,600),fill:"none",stroke:"var(--sample)","stroke-width":nw?5:3.4,"stroke-opacity":.5},g);
+    el("path",{d:curve(A,out,0,120,600),fill:"none",stroke:"var(--mean)","stroke-width":nw?5.5:4,"stroke-linecap":"round"},g);
+    const vk=w1!==0?-b1/w1:NaN;
+    if(relu&&vk>0&&vk<120){dot(svg,A.sx(vk),A.sy(out(vk)),nw?10:7,"var(--point)");lab(svg,A.sx(vk),A.sy(out(vk))-FS*1,"elbow at "+f1(vk,0)+" km/h",FS,A,{style:"fill:var(--point)","font-weight":700});}
+    I.forEach((e,i)=>$(e.id+"-o").textContent=f1(+e.value,i%2?0:2));
+    const W_=w2*w1,B_=w2*b1+b2;
+    let m;
+    if(!relu)m=`<span class="eqline">${f1(w2,2)} · (${f1(w1,2)} · v ${b1<0?"−":"+"} ${f1(Math.abs(b1),0)}) ${b2<0?"−":"+"} ${f1(Math.abs(b2),0)} = <b>${f1(W_,3)} · v ${B_<0?"−":"+"} ${f1(Math.abs(B_),1)}</b></span><br>Two neurons and four numbers, but the whole network is a single neuron with weight ${f1(W_,3)} and bias ${f1(B_,1)}: a straight line. Move them however you like; an elbow will never appear. With ten neurons in a row the same would happen.`;
+    else if(!(vk>0&&vk<120))m=`With ReLU, but the first neuron ${z1(60)>0?"is positive at every speed in the chart: the ReLU lets it all through":"is negative at every speed in the chart: the ReLU turns it into zero and the network always gives "+f1(b2,0)}. ${z1(60)>0?"Here the network is still a straight line.":"That neuron is switched off (idea 6)."} Move the bias b₁ so the purple line crosses zero inside the chart.`;
+    else m=`With ReLU between the two, the negative part of the first neuron becomes zero. On one side of <b>${f1(vk,0)} km/h</b> (where w₁ · v + b₁ = 0) the output is a sloped line; on the other, ${w2===0?"everything is flat":"it is flat, with value "+f1(b2,0)}. An <b>elbow</b> has appeared that no combination of weights could produce without an activation. There are no longer any parentheses to open.`;
+    $("t-msg").innerHTML=m;}
+  I.forEach(e=>e.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 3: ReLU elbows on the U ---------- */
+function lstsq(cols,y){const n=cols.length,M=[],r=[];for(let i=0;i<n;i++){M.push([]);for(let j=0;j<n;j++){let s=0;for(let k=0;k<y.length;k++)s+=cols[i][k]*cols[j][k];M[i].push(s+(i===j?1e-9:0));}let s=0;for(let k=0;k<y.length;k++)s+=cols[i][k]*y[k];r.push(s);}
+  for(let i=0;i<n;i++){let p=i;for(let j=i+1;j<n;j++)if(Math.abs(M[j][i])>Math.abs(M[p][i]))p=j;[M[i],M[p]]=[M[p],M[i]];[r[i],r[p]]=[r[p],r[i]];for(let j=i+1;j<n;j++){const f=M[j][i]/M[i][i];for(let k=i;k<n;k++)M[j][k]-=f*M[i][k];r[j]-=f*r[i];}}
+  const x=Array(n).fill(0);for(let i=n-1;i>=0;i--){let s=r[i];for(let k=i+1;k<n;k++)s-=M[i][k]*x[k];x[i]=s/M[i][i];}return x;}
+(function(){const svg=$("kin"),S=[$("k-p1"),$("k-p2"),$("k-p3")],PRE={1:[60],2:[40,73],3:[25,50,80]},COL=["var(--sample)","var(--good)","var(--warn)"];let nk=0;
+  chips($("k-c"),["Just the line","1 elbow","2 elbows","3 elbows"],i=>{nk=i;if(PRE[i])PRE[i].forEach((p,j)=>S[j].value=p);draw();});
+  const relu=z=>Math.max(0,z);
+  function draw(){const ks=S.slice(0,nk).map(e=>+e.value),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14;
+    S.forEach((e,j)=>{$("k-s"+(j+1)).hidden=j>=nk;$(e.id+"-o").textContent=e.value+" km/h";});
+    const cols=[V.map(()=>1),V.map(v=>v/100),...ks.map(c=>V.map(v=>relu(v/100-c/100)))],co=lstsq(cols,C);
+    const fit=v=>co[0]+co[1]*v/100+ks.reduce((s,c,j)=>s+co[j+2]*relu(v/100-c/100),0);
+    let se=0;for(let i=0;i<NT;i++)se+=(fit(V[i])-C[i])**2;const rmse=Math.sqrt(se/NT);
+    const p1={x:0,y:0,w:W,h:nw?420:330},p2={x:0,y:p1.h+6,w:W,h:nw?330:220},H=p2.y+p2.h;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,Object.assign({},p1,{x0:10,x1:115,y0:20,y1:60,xt:[20,40,60,80,100],yt:[20,30,40,50,60],yl:"fuel use (L/100 km)",FS,padL:FS*2.4,padT:FS*2}));
+    const g=clipRect(svg,A);
+    ks.forEach((c,j)=>el("line",{x1:A.sx(c),x2:A.sx(c),y1:A.T,y2:A.B,stroke:COL[j],"stroke-width":2,"stroke-dasharray":"6 5"},g));
+    for(let i=0;i<NT;i++)dot(g,A.sx(V[i]),A.sy(C[i]),nw?7:5,"var(--point)");
+    el("path",{d:curve(A,fit,10,115,420),fill:"none",stroke:"var(--mean)","stroke-width":nw?5:3.6,"stroke-linecap":"round"},g);
+    /* pieces */
+    const pieces=[{f:v=>co[0]+co[1]*v/100,col:"var(--muted)",n:"line"},...ks.map((c,j)=>({f:v=>co[j+2]*relu(v/100-c/100),col:COL[j],n:"elbow "+(j+1)}))];
+    let lo=0,hi=0;pieces.forEach(p=>{for(let v=10;v<=115;v+=1){const y=p.f(v);lo=Math.min(lo,y);hi=Math.max(hi,y);}});
+    const span=hi-lo,st=span>120?40:span>60?20:10;lo=Math.floor(lo/st)*st;hi=Math.ceil(hi/st)*st;const yt=[];for(let y=lo;y<=hi+1e-9;y+=st)yt.push(y);
+    const B=axes(svg,Object.assign({},p2,{x0:10,x1:115,y0:lo,y1:hi,xt:[20,40,60,80,100],yt,xl:"average speed of the segment (km/h)",yl:"each piece on its own",FS,padL:FS*2.4,padT:FS*2}));
+    const g2=clipRect(svg,B);
+    el("line",{x1:B.L,x2:B.R,y1:B.sy(0),y2:B.sy(0),stroke:"var(--muted)","stroke-width":1.2},g2);
+    pieces.forEach(p=>el("path",{d:curve(B,p.f,10,115,420),fill:"none",stroke:p.col,"stroke-width":nw?4:3},g2));
+    const order=ks.map((c,j)=>[c,j]).sort((a,b)=>a[0]-b[0]);const slopes=[co[1]/10];let acc=co[1]/10;order.forEach(([c,j])=>{acc+=co[j+2]/10;slopes.push(acc);});
+    const vmin=(()=>{let b=10,bv=1e9;for(let v=10;v<=115;v+=0.5){const y=fit(v);if(y<bv){bv=y;b=v;}}return [b,bv];})();
+    $("k-big").innerHTML=`<div><b style="color:var(--mean)">${f1(rmse,2)}</b><span>liters per 100 km of mean error on the 60 segments</span></div>${nk?`<div><b>${f1(vmin[0],0)} km/h</b><span>speed with the lowest fuel use according to the blue line (${f1(vmin[1],1)} L/100 km)</span></div>`:`<div><b>none</b><span>a line that goes down has no minimum: according to it, the faster you go, the less you use</span></div>`}<div><b>${nk+2}</b><span>numbers the computer has chosen: height and slope of the line${nk?` and ${nk===1?"how much the elbow tilts it":"how much each elbow tilts it"}`:""}</span></div>`;
+    const sp=slopes.map(s=>sg(s,1)).join(" → ");
+    let m;
+    if(nk===0)m=`A single line: the best one goes down <b>${f1(-co[1]/10,2)} L/100 km for every 10 km/h</b> and is off by ${f1(rmse,2)} liters on average. It cannot go down and then up. Add an elbow.`;
+    else if(nk===1)m=`With an elbow at ${ks[0]} km/h, the slope goes from <b>${sp}</b> liters per 10 km/h: down until the elbow and then up. The error falls to ${f1(rmse,2)}. ${Math.abs(ks[0]-59)<=4?"This position is close to the best one for a single elbow (59 km/h).":"Move the elbow: the lowest error with just one is around 59 km/h."}`;
+    else m=`With ${nk} elbows, the line has ${nk+1} pieces with slopes <b>${sp}</b> liters per 10 km/h (left to right). Error: <b>${f1(rmse,2)}</b> liters. ${rmse<1.25?"It is already very close to the noise in the data (about 1.16 liters): more elbows would barely help and would start following the noise.":"Try moving the elbows: each one should sit where the U changes slope."} Each elbow is a ReLU neuron: the toy network does exactly this, but it also chooses where to put the elbows.`;
+    $("k-msg").innerHTML=m;}
+  S.forEach(e=>e.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 4: slope of each activation ---------- */
+(function(){const svg=$("der"),inZ=$("d-z");let k=0;
+  const L=[{n:"Sigmoid",a:"sigmoide",y0:-0.2,y1:1.2,d1:1.1},{n:"Tanh",a:"tanh",y0:-1.3,y1:1.3,d1:1.1},{n:"ReLU",a:"relu",y0:-1,y1:6,d1:1.1},{n:"Leaky ReLU",a:"leaky",y0:-1,y1:6,d1:1.1},{n:"Step",a:"escalon",y0:-0.2,y1:1.2,d1:1.1}];
+  chips($("d-c"),L.map(o=>o.n),i=>{k=i;draw();});
+  function draw(){const o=L[k],z=+inZ.value,F=ACT[o.a],nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14;
+    const p1={x:0,y:0,w:W,h:nw?340:240},p2={x:0,y:p1.h+6,w:W,h:nw?300:200},H=p2.y+p2.h;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,Object.assign({},p1,{x0:-6,x1:6,y0:o.y0,y1:o.y1,xt:[-6,-4,-2,0,2,4,6],yt:o.y1>3?[0,2,4,6]:o.y0<-1?[-1,0,1]:[0,0.5,1],fy:v=>f1(v,v%1?1:0),yl:"activation",FS,padL:FS*2.6,padT:FS*2}));
+    const B=axes(svg,Object.assign({},p2,{x0:-6,x1:6,y0:0,y1:o.d1,xt:[-6,-4,-2,0,2,4,6],yt:[0,0.25,0.5,1],fy:v=>f1(v,v%1?2:0),xl:"z",yl:"slope",FS,padL:FS*2.6,padT:FS*2}));
+    const g=clipRect(svg,A),g2=clipRect(svg,B);
+    {let st=null;for(let i=0;i<=600;i++){const a=-6+12*i/600,low=i<600&&F.d(a+0.01)<0.05;if(low&&st===null)st=a;if(!low&&st!==null){el("rect",{x:B.sx(st),y:B.T,width:B.sx(a)-B.sx(st),height:B.B-B.T,fill:"var(--warn)","fill-opacity":.12},g2);st=null;}}}
+    if(o.a==="escalon")el("path",{d:`M${A.sx(-6)} ${A.sy(0)}L${A.sx(0)} ${A.sy(0)}M${A.sx(0)} ${A.sy(1)}L${A.sx(6)} ${A.sy(1)}`,fill:"none",stroke:"var(--mean)","stroke-width":nw?5:3.6},g);
+    else el("path",{d:curve(A,F.f,-6,6,400),fill:"none",stroke:"var(--mean)","stroke-width":nw?5:3.6},g);
+    const y=F.f(z),d=F.d(z),sp=3;
+    el("line",{x1:A.sx(z-sp),y1:A.sy(y-d*sp),x2:A.sx(z+sp),y2:A.sy(y+d*sp),stroke:"var(--ink)","stroke-width":2,"stroke-dasharray":"6 5"},g);
+    dot(svg,A.sx(z),A.sy(y),nw?10:7,"var(--point)");
+    if(o.a==="relu"||o.a==="leaky"||o.a==="escalon"){const lo=o.a==="leaky"?0.01:0,hi=o.a==="escalon"?0:1;el("path",{d:`M${B.sx(-6)} ${B.sy(lo)}L${B.sx(0)} ${B.sy(lo)}M${B.sx(0)} ${B.sy(hi)}L${B.sx(6)} ${B.sy(hi)}`,fill:"none",stroke:"var(--sample)","stroke-width":nw?4.5:3.2},g2);}
+    else el("path",{d:curve(B,F.d,-6,6,400),fill:"none",stroke:"var(--sample)","stroke-width":nw?4.5:3.2},g2);
+    el("line",{x1:B.sx(z),x2:B.sx(z),y1:A.sy(y),y2:B.sy(d),stroke:"var(--muted)","stroke-width":1.2,"stroke-dasharray":"3 4"},svg);
+    dot(svg,B.sx(z),B.sy(d),nw?10:7,"var(--sample)");
+    lab(svg,B.sx(z),B.sy(d)-FS*0.9,"slope "+f1(d,3),FS,B,{style:"fill:var(--sample)","font-weight":700});
+    $("d-z-o").textContent=f1(z,1);
+    $("d-big").innerHTML=`<div><b style="color:var(--sample)">${f1(d,3)}</b><span>slope at z = ${f1(z,1)}: of each correction that arrives, this fraction gets through</span></div><div><b>${o.a==="sigmoide"?"0.25":o.a==="escalon"?"0":"1"}</b><span>the highest slope this activation has</span></div>`;
+    let m;
+    if(o.a==="sigmoide")m=`The slope of the sigmoid is at most <b>0.25</b>, at z = 0. ${Math.abs(z)>3?`With z = ${f1(z,1)} it is already ${f1(d,4)}: the neuron is saturated and almost no correction reaches it.`:`${Math.abs(z)<0.05?"Here it is right at that maximum.":`With z = ${f1(z,1)} it is ${f1(d,3)}.`}`} Even in the best case, each sigmoid lets only a quarter of the correction through.`;
+    else if(o.a==="tanh")m=`Tanh has slope <b>1</b> in the middle, four times the sigmoid's, which is why it usually trains better. ${Math.abs(z)>2.5?`But with z = ${f1(z,1)} it is already ${f1(d,4)}: it also saturates at the ends.`:`With z = ${f1(z,1)}, ${f1(d,3)}. Away from the middle it flattens out too.`}`;
+    else if(o.a==="relu")m=z>0?`With positive z, the slope of the ReLU is exactly <b>1</b>: the correction gets through whole, without shrinking, however large z grows. It never saturates on the upper side.`:`With negative z, the slope of the ReLU is <b>0</b>: no correction from this data point reaches the switched-off neuron. If that happens with all the data, it never learns again (idea 6).`;
+    else if(o.a==="leaky")m=z>0?`For positive z, same as the ReLU: slope 1.`:`With negative z, the Leaky ReLU has slope <b>0.01</b> instead of 0: a trickle of correction arrives, and the neuron can switch back on.`;
+    else m=`The step is flat everywhere (except for the jump at z = 0, where there is no usable slope): <b>slope 0</b>. A network of steps gets no correction at all. That is why the perceptron in topic 1 used a different learning rule, and multilayer networks had to swap the step for the sigmoid.`;
+    $("d-msg").innerHTML=m;}
+  inZ.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 5: the correction fades with many layers ---------- */
+(function(){const svg=$("van"),inN=$("v-n"),inZ=$("v-z"),AK=["sigmoide","tanh","relu"],AN=["sigmoid","tanh","ReLU"];let ai=0;
+  seg(["v-a0","v-a1","v-a2"],i=>{ai=i;draw();});
+  const sup=e=>String(e).replace("-","⁻").replace(/\d/g,c=>"⁰¹²³⁴⁵⁶⁷⁸⁹"[c]);
+  const sf=v=>{if(v>=0.001)return f1(v,v<0.01?4:v<1?3:1);const e=Math.floor(Math.log10(v)),mm=v/10**e;return f1(mm,1)+" · 10"+sup(e);};
+  function draw(){const n=+inN.value,z=+inZ.value,act=AK[ai],r=act==="relu"?1:ACT[act].d(z),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?460:320;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const lo=-16,hi=1;
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0.5,x1:n+0.5,y0:lo,y1:hi,xt:n<=10?Array.from({length:n},(_,i)=>i+1):[1,5,10,15,20].filter(v=>v<=n).concat(n%5?[n]:[]),yt:[-16,-14,-12,-10,-8,-6,-4,-2,0],fy:v=>v===0?"1":"10"+sup(v),grid:false,xl:"layer (1 = the first)",yl:"fraction of the correction that arrives",FS,padL:FS*3.2,padT:FS*2});
+    el("rect",{x:A.L,y:A.sy(0),width:A.R-A.L,height:A.sy(-2)-A.sy(0),fill:"var(--good)","fill-opacity":.12},svg);
+    const bw=Math.min(40,(A.R-A.L)/n*0.7);
+    for(let k=1;k<=n;k++){const val=Math.log10(r)*(n-k),yv=Math.max(lo,Math.min(hi,val));
+      el("rect",{x:A.sx(k)-bw/2,y:A.sy(yv),width:bw,height:Math.max(1,A.sy(lo)-A.sy(yv)),fill:val<-4?"var(--warn)":"var(--mean)","fill-opacity":.78,rx:2},svg);}
+    const first=r**(n-1);
+    $("v-n-o").textContent=n;$("v-z-o").textContent=f1(z,1);
+    let m;
+    if(act==="relu")m=`With ReLU, each active neuron has slope 1: the first of the ${n} layers gets the <b>whole</b> correction. This is what made it possible to train networks with dozens of layers. The price is that switched-off neurons have slope 0; if they are off for all the data, they die (idea 6).`;
+    else m=`With ${AN[ai]} and neurons working at z = ${f1(z,1)}, each layer lets ${f1(r,3)} of the correction through. The first of the ${n} layers gets ${f1(r,3)}<sup>${n-1}</sup> = <b>${sf(first)}</b>. ${first<1e-4?"That layer practically does not learn: the gradient has vanished.":first<0.05?"The first layers learn much more slowly than the last ones.":first>0.5?"It arrives almost whole.":"Quite a lot still arrives, but each extra layer shrinks it."}${act==="tanh"&&z<0.5?" Tanh at its center lets almost everything through; the problem comes when the sums move away from 0.":""}`;
+    $("v-msg").innerHTML=m;}
+  [inN,inZ].forEach(e=>e.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 6: dead neurons ---------- */
+(function(){const svg=$("dead"),inB=$("m-b");let leaky=false;
+  seg(["m-a0","m-a1"],i=>{leaky=i===1;draw();});
+  function draw(){const b=+inB.value,f=leaky?ACT.leaky.f:ACT.relu.f,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?440:300;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const z=v=>0.1*v+b,A=axes(svg,{x:0,y:0,w:W,h:H,x0:10,x1:115,y0:-1.5,y1:10,xt:[20,40,60,80,100],yt:[0,2,4,6,8,10],xl:"average speed of the segment (km/h)",yl:"what the neuron outputs",FS,padL:FS*2.4,padT:FS*2});
+    const g=clipRect(svg,A);
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(0),y2:A.sy(0),stroke:"var(--muted)","stroke-width":1.2},g);
+    el("path",{d:curve(A,v=>f(z(v)),10,115,600),fill:"none",stroke:"var(--mean)","stroke-width":nw?5:3.6},g);
+    let on=0;for(let i=0;i<NT;i++){const a=z(V[i])>0;if(a)on++;dot(g,A.sx(V[i]),A.sy(f(z(V[i]))),nw?7.5:5.5,a?"var(--good)":"var(--warn)");}
+    const vk=-b/0.1;if(vk>10&&vk<115){el("line",{x1:A.sx(vk),x2:A.sx(vk),y1:A.T,y2:A.B,stroke:"var(--muted)","stroke-width":1.4,"stroke-dasharray":"5 5"},g);lab(svg,A.sx(vk)+(vk>80?-8:8),A.T+FS*0.9,"switches on at "+f1(vk,0)+" km/h",FS,A,{"text-anchor":vk>80?"end":"start"});}
+    $("m-b-o").textContent=f1(b,1);
+    const teach=leaky?NT:on;
+    $("m-big").innerHTML=`<div><b style="color:${on?"var(--good)":"var(--warn)"}">${on} of ${NT}</b><span>segments where the neuron is on (positive z)</span></div><div><b>${teach} of ${NT}</b><span>segments that send it some correction${leaky&&on<NT?" (the switched-off ones, with slope 0.01)":""}</span></div>`;
+    let m;
+    if(on===NT)m=`With bias ${f1(b,1)}, the neuron is on for all 60 segments. But then the ReLU cuts nothing: on this data it behaves like a straight line and adds no elbow. Lower the bias.`;
+    else if(on>0)m=`The neuron switches on from ${f1(vk,0)} km/h: it is active on ${on} segments and off on ${NT-on}. It adds a useful elbow, and it learns from the ${on} segments where it is on. ${leaky?"With Leaky ReLU, the switched-off ones also send it a little correction.":"Lower the bias further and see what happens when no green dots are left."}`;
+    else m=leaky?`Off on all 60 segments, but with Leaky ReLU its slope on the negative side is 0.01: each segment still sends it a trickle of correction, and training can push its bias back up. <b>It is not dead</b>, just asleep.`:`With bias ${f1(b,1)}, the sum is negative on <b>every</b> segment: the neuron always outputs 0 and its slope is always 0. No segment sends it any correction, so its bias will never change again. <b>It is dead.</b> Try Leaky ReLU.`;
+    $("m-msg").innerHTML=m;}
+  inB.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+})();
+</script>
+</body>
+</html>

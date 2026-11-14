@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Funciones de activación</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content;max-width:100%}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec p b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.eqline{font-family:var(--f-mono);font-size:.92rem;overflow-wrap:anywhere}
+@media (max-width:620px){.seg{border-radius:14px}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#es" target="_self">← Menú principal</a> · Redes neuronales · tema 2 · explicado con dibujos · <a href="funciones-de-activacion-tecnico-es.html" target="_self">ver la versión técnica</a> · <a href="redes-neuronales-es.html" target="_self">todos los temas</a> · <a href="activation-functions-en.html" target="_self">in English</a></p>
+  <h1>Funciones de activación</h1>
+  <p class="lede">Una neurona suma sus entradas con pesos y después pasa el resultado por una función: la activación. Parece un detalle, pero sin ella una red de cien capas solo sabe dibujar rectas. Con ella, unas pocas neuronas doblan la recta y siguen curvas como la del consumo de un camión según la velocidad.</p>
+</header>
+
+<section class="first" aria-label="Juguete interactivo">
+  <div class="situ col">
+    <p class="eyebrow">La situación del juguete</p>
+    <p>Cada punto es un <strong>tramo de ruta</strong> de un camión de la flota: su velocidad media (en horizontal) y lo que gastó (en vertical, en litros cada 100 km). En ciudad, con arranques y paradas, gasta mucho; el mínimo está hacia los 75 km/h; en autovía vuelve a subir, porque el aire frena más. La nube de puntos tiene forma de <strong>U</strong>.</p>
+    <p>Una red neuronal pequeña intenta seguir esa U. Recibe la velocidad, la pasa por unas <strong>neuronas ocultas</strong> (cada una hace una suma ponderada, como la neurona del <a href="la-neurona-es.html" target="_self">tema 1</a>, y después aplica su <strong>activación</strong>) y devuelve un consumo. Cada combinación de botones es una red distinta, ya entrenada: ha buscado los pesos que mejor siguen estos 60 tramos.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="Consumo según la velocidad en 60 tramos, la predicción de la red y el esquema de la red"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Los puntos <b style="color:var(--point)">naranjas</b> son los 60 tramos. La línea <b style="color:var(--mean)">azul</b> es el consumo que predice la red para cada velocidad. A la derecha (debajo en el móvil), el esquema de la red: la velocidad entra por la izquierda, pasa por las neuronas ocultas y sale el consumo por la derecha. El dibujito dentro de cada neurona es su activación; las líneas más gruesas son los pesos más grandes.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>¿Qué activación usan las neuronas ocultas?</h3>
+      <div class="seg" role="group" aria-label="Activación"><button type="button" id="h-a0" aria-pressed="true">Ninguna</button><button type="button" id="h-a1" aria-pressed="false">Sigmoide</button><button type="button" id="h-a2" aria-pressed="false">Tanh</button><button type="button" id="h-a3" aria-pressed="false">ReLU</button></div>
+      <p><b>Ninguna</b>: cada neurona pasa su suma tal cual. Las otras tres la doblan de formas distintas; las verás de cerca en la idea 1.</p>
+    </div>
+    <div class="dec">
+      <h3>¿Cuántas capas ocultas?</h3>
+      <div class="seg" role="group" aria-label="Capas ocultas"><button type="button" id="h-c0" aria-pressed="true">1 capa</button><button type="button" id="h-c1" aria-pressed="false">3 capas</button></div>
+      <p>Cada capa tiene 3 neuronas. Con 3 capas la red tiene <b>34 números</b> que ajustar en vez de 10: debería poder más.</p>
+    </div>
+  </div>
+  <div class="big3" id="h-big"></div>
+  <div class="col stack">
+    <p><strong>Prueba en este orden:</strong></p>
+    <ol class="try">
+      <li>Sin activación y con 1 capa, la red dibuja una recta que baja: dice que cuanto más rápido, menos gasta. Se equivoca unos 4 litros de media.</li>
+      <li>Pasa a 3 capas, todavía sin activación: más del triple de números y exactamente la misma recta, con el mismo error.</li>
+      <li>Elige ReLU: la línea se dobla en codos y sigue la U. El error baja de 4,0 a 1,2 litros.</li>
+      <li>Prueba sigmoide y tanh: también siguen la U, con curvas suaves en vez de codos.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="h-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Lo que acabas de ver</p>
+    <h2>La activación es lo que deja doblarse a la red</h2>
+    <p>Sin activación, cada neurona solo <strong>multiplica y suma</strong>. Y encadenar «multiplicar y sumar» da otra vez «multiplicar y sumar»: una recta. Da igual cuántas capas pongas; todas juntas equivalen a una sola. Por eso la red de 34 números dibujaba la misma recta que la de 10.</p>
+    <p>Basta con que cada neurona haga algo que no sea una recta después de su suma (por ejemplo, «si sale negativo, pon un cero», que es la <strong>ReLU</strong>) para que las capas ya no se fundan en una. Cada neurona aporta un doblez, y con unos pocos dobleces la red sigue la curva.</p>
+    <ul>
+      <li><strong>La activación es una función que se aplica después de la suma ponderada.</strong> La neurona del tema 1 calculaba una suma; ahora esa suma pasa por una curva antes de salir.</li>
+      <li><strong>Sin ella, más capas no sirven de nada.</strong> La red entera sigue siendo una recta (o un plano, con más entradas).</li>
+      <li><strong>Con ella, la red puede aproximar curvas</strong>: la U del consumo, la probabilidad de avería según los kilómetros, lo que haga falta.</li>
+      <li><strong>Su inclinación importa para aprender.</strong> Una red aprende corrigiendo sus pesos según la pendiente de cada pieza; una activación plana deja de transmitir correcciones.</li>
+    </ul>
+    <p>Las ideas que siguen enseñan las activaciones más usadas (1), por qué sin ellas dos capas valen lo mismo que una (2), cómo unos pocos codos siguen la U (3), la pendiente de cada activación (4), qué pasa con muchas capas (5) y las neuronas que se apagan para siempre (6).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 de 6</p>
+    <h2>Cuatro formas de doblar un número (y dos más)</h2>
+    <p>La neurona del tema 1 calcula una <strong>suma ponderada</strong> z: por ejemplo, una puntuación de riesgo de que una entrega llegue tarde a partir de los atascos y la distancia. La activación decide qué sale de la neurona con esa puntuación. Las más conocidas:</p>
+    <ul>
+      <li><strong>Escalón</strong>: 1 si z es positiva, 0 si no. Un sí o un no; es la del perceptrón del tema 1.</li>
+      <li><strong>Sigmoide</strong>: una S que convierte cualquier número en algo entre 0 y 1. Se lee como una probabilidad.</li>
+      <li><strong>Tanh</strong>: la misma S, pero entre −1 y 1 y centrada en 0.</li>
+      <li><strong>ReLU</strong>: si z es negativa, 0; si es positiva, z tal cual. La más usada hoy en las capas ocultas.</li>
+      <li><strong>Leaky ReLU</strong> y <strong>GELU</strong>: variantes de la ReLU. La primera deja pasar un poquito de lo negativo; la segunda es una ReLU con la esquina redondeada, la que usan los modelos de lenguaje.</li>
+    </ul>
+  </div>
+  <div class="chips col" id="f-c" role="group" aria-label="Activación"></div>
+  <figure class="fig"><svg id="fun" role="img" aria-label="Curva de la activación elegida con el valor que entra y el que sale"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> En horizontal, la suma z que entra en la neurona; en vertical, lo que sale. La curva <b style="color:var(--mean)">azul</b> es la activación elegida. El punto <b style="color:var(--point)">naranja</b> es la z que eliges abajo. La franja <b style="color:var(--good)">verde</b> marca todos los valores que puede llegar a dar esa activación. La diagonal gris discontinua es «no hacer nada» (salida = z).</p>
+  <div class="controls col">
+    <div class="slider"><label for="f-z">Suma que entra, z <output id="f-z-o"></output></label><input type="range" id="f-z" min="-6" max="6" step="0.1" value="1.0"><div class="ends"><span>−6 (muy en contra)</span><span>6 (muy a favor)</span></div></div>
+  </div>
+  <div class="big3 col" id="f-big"></div>
+  <p class="qcard col" id="f-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 de 6</p>
+    <h2>Sin activación, dos capas valen lo mismo que una</h2>
+    <p>Una red de juguete con dos neuronas en fila. La primera recibe la velocidad v y calcula <strong>w₁ · v + b₁</strong> (un peso y un sesgo). La segunda recibe lo que sale de la primera y calcula <strong>w₂ · (lo que le llega) + b₂</strong>. Entre las dos puede haber activación o no.</p>
+    <p>Sin activación, se puede deshacer el paréntesis: w₂ · (w₁ · v + b₁) + b₂ = <strong>(w₂ · w₁) · v + (w₂ · b₁ + b₂)</strong>. Es una sola neurona con peso w₂ · w₁ y sesgo w₂ · b₁ + b₂. Cuatro números que hacen el trabajo de dos.</p>
+  </div>
+  <figure class="fig"><svg id="two" role="img" aria-label="Salida de la primera neurona y de la red de dos neuronas según la velocidad"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> En horizontal, la velocidad. La línea <b style="color:var(--sample)">violeta</b> discontinua es lo que sale de la primera neurona; la <b style="color:var(--mean)">azul</b>, lo que sale de la red entera. Si eliges ReLU, la parte de la violeta que queda por debajo de cero se convierte en cero antes de llegar a la segunda neurona, y el punto <b style="color:var(--point)">naranja</b> marca la velocidad donde eso empieza.</p>
+  <div class="decs">
+    <div class="dec"><h3>Primera neurona</h3>
+      <div class="slider"><label for="t-w1">Peso w₁ <output id="t-w1-o"></output></label><input type="range" id="t-w1" min="-1" max="1" step="0.05" value="-0.8"><div class="ends"><span>−1</span><span>1</span></div></div>
+      <div class="slider"><label for="t-b1">Sesgo b₁ <output id="t-b1-o"></output></label><input type="range" id="t-b1" min="-60" max="80" step="1" value="56"><div class="ends"><span>−60</span><span>80</span></div></div>
+    </div>
+    <div class="dec"><h3>Segunda neurona</h3>
+      <div class="slider"><label for="t-w2">Peso w₂ <output id="t-w2-o"></output></label><input type="range" id="t-w2" min="-2" max="2" step="0.05" value="0.5"><div class="ends"><span>−2</span><span>2</span></div></div>
+      <div class="slider"><label for="t-b2">Sesgo b₂ <output id="t-b2-o"></output></label><input type="range" id="t-b2" min="-40" max="60" step="1" value="30"><div class="ends"><span>−40</span><span>60</span></div></div>
+    </div>
+    <div class="dec"><h3>¿Qué hay entre las dos?</h3>
+      <div class="seg" role="group" aria-label="Entre las dos neuronas"><button type="button" id="t-a0" aria-pressed="true">Nada</button><button type="button" id="t-a1" aria-pressed="false">ReLU</button></div>
+      <p>Mueve los cuatro números con «Nada»: la azul siempre es una recta. Después cambia a ReLU.</p>
+    </div>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 de 6</p>
+    <h2>Unos pocos codos siguen la U del consumo</h2>
+    <p>Una neurona ReLU dibuja un <strong>codo</strong>: vale cero hasta una velocidad y a partir de ahí sube en línea recta. Si la salida de la red suma una recta y unos cuantos codos, cada codo <strong>cambia la inclinación</strong> de la recta a partir de su velocidad. Con dos o tres codos bien puestos, una recta que solo sabía bajar baja, se aplana y vuelve a subir.</p>
+    <p>Aquí tú eliges cuántos codos y dónde. El ordenador elige la altura de la recta y lo que inclina cada codo para que la línea pase lo más cerca posible de los 60 tramos (lo mismo que haría el entrenamiento con esos números).</p>
+  </div>
+  <div class="chips col" id="k-c" role="group" aria-label="Número de codos"></div>
+  <figure class="fig"><svg id="kin" role="img" aria-label="Consumo según la velocidad aproximado con una recta y varios codos ReLU, y debajo cada pieza por separado"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Arriba, los tramos (<b style="color:var(--point)">naranja</b>) y la suma de todas las piezas (<b style="color:var(--mean)">azul</b>). Las rayas verticales marcan dónde está cada codo. Abajo, cada pieza por separado: la recta de partida en gris y cada codo en su color. Cada codo vale cero a su izquierda y crece (o baja) a su derecha. La línea azul de arriba es la suma, punto a punto, de todo lo de abajo.</p>
+  <div class="controls col" id="k-sl">
+    <div class="slider" id="k-s1"><label for="k-p1">Codo 1 en <output id="k-p1-o"></output></label><input type="range" id="k-p1" min="20" max="100" step="1" value="60"><div class="ends"><span>20 km/h</span><span>100 km/h</span></div></div>
+    <div class="slider" id="k-s2"><label for="k-p2">Codo 2 en <output id="k-p2-o"></output></label><input type="range" id="k-p2" min="20" max="100" step="1" value="75"><div class="ends"><span>20 km/h</span><span>100 km/h</span></div></div>
+    <div class="slider" id="k-s3"><label for="k-p3">Codo 3 en <output id="k-p3-o"></output></label><input type="range" id="k-p3" min="20" max="100" step="1" value="80"><div class="ends"><span>20 km/h</span><span>100 km/h</span></div></div>
+  </div>
+  <div class="big3 col" id="k-big"></div>
+  <p class="qcard col" id="k-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 de 6</p>
+    <h2>La pendiente de la activación decide si la neurona aprende</h2>
+    <p>Una red aprende corrigiendo sus pesos poco a poco. Para saber cuánto corregir, pregunta a cada neurona: <strong>«si tu suma subiera un poquito, ¿cuánto cambiaría lo que sacas?»</strong>. La respuesta es la <strong>pendiente</strong> (la derivada, del <a href="derivadas-gradiente-y-regla-de-la-cadena-es.html" target="_self">tema 16 de matemáticas</a>) de la activación en ese punto. La corrección que le llega a la neurona se multiplica por esa pendiente; lo verás con detalle en el tema 5, la retropropagación.</p>
+    <p>Si la pendiente es casi cero, la corrección también: la neurona está <strong>saturada</strong> y deja de aprender. Por eso importa la forma de la curva, no solo lo que saca.</p>
+  </div>
+  <div class="chips col" id="d-c" role="group" aria-label="Activación"></div>
+  <figure class="fig"><svg id="der" role="img" aria-label="Activación con su tangente y debajo su pendiente en cada punto"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Arriba, la activación (<b style="color:var(--mean)">azul</b>) y su tangente en el punto <b style="color:var(--point)">naranja</b>: la recta que tiene su misma inclinación. Abajo, la <b style="color:var(--sample)">pendiente</b> de la curva de arriba en cada z. Las zonas sombreadas en <b style="color:var(--warn)">rojo</b> son donde la pendiente baja de 0,05: ahí la neurona casi no aprende.</p>
+  <div class="controls col">
+    <div class="slider"><label for="d-z">Suma que entra, z <output id="d-z-o"></output></label><input type="range" id="d-z" min="-6" max="6" step="0.1" value="0"><div class="ends"><span>−6</span><span>6</span></div></div>
+  </div>
+  <div class="big3 col" id="d-big"></div>
+  <p class="qcard col" id="d-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 de 6</p>
+    <h2>Con muchas capas, la corrección se apaga por el camino</h2>
+    <p>En una red de muchas capas, la corrección viaja desde la salida hasta la primera capa y en cada capa se multiplica por la pendiente de la activación. Con la sigmoide, esa pendiente nunca pasa de 0,25: tras diez capas, lo que llega es menos de una millonésima. Las primeras capas casi no reciben corrección y apenas aprenden. Es el <strong>gradiente que se desvanece</strong>.</p>
+    <p>Con la ReLU, la pendiente vale exactamente 1 cuando la neurona está activa, y la corrección llega entera. Esa es la razón principal de que la ReLU sustituyera a la sigmoide en las capas ocultas hacia 2010.</p>
+  </div>
+  <figure class="fig"><svg id="van" role="img" aria-label="Fracción de la corrección que llega a cada capa de una red profunda"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> Cada barra es una capa: la última, donde se mide el error, a la derecha; la primera, a la izquierda. La altura es la fracción de la corrección que le llega, en escala logarítmica: cada raya horizontal es 100 veces menos que la de encima. En <b style="color:var(--good)">verde</b>, la zona en la que una capa aprende bien; las barras <b style="color:var(--warn)">rojas</b> casi no aprenden.</p>
+  <div class="decs">
+    <div class="dec"><h3>Activación de todas las capas</h3><div class="seg" role="group" aria-label="Activación"><button type="button" id="v-a0" aria-pressed="true">Sigmoide</button><button type="button" id="v-a1" aria-pressed="false">Tanh</button><button type="button" id="v-a2" aria-pressed="false">ReLU</button></div></div>
+    <div class="dec"><div class="slider"><label for="v-n">Número de capas <output id="v-n-o"></output></label><input type="range" id="v-n" min="2" max="20" step="1" value="10"><div class="ends"><span>2</span><span>20</span></div></div></div>
+    <div class="dec"><div class="slider"><label for="v-z">Lo lejos de cero que trabaja cada neurona <output id="v-z-o"></output></label><input type="range" id="v-z" min="0" max="3" step="0.1" value="1"><div class="ends"><span>0 (en el centro)</span><span>3 (en la parte plana)</span></div></div><p>Es la suma z típica de cada neurona. Con la ReLU, una neurona activa tiene pendiente 1 trabaje donde trabaje.</p></div>
+  </div>
+  <p class="qcard col" id="v-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 6 de 6</p>
+    <h2>Neuronas ReLU que se apagan para siempre</h2>
+    <p>La ReLU tiene su propio problema. Si una neurona acaba con un sesgo tan negativo que su suma sale negativa <strong>en todos los tramos</strong>, saca siempre cero y su pendiente es siempre cero. No le llega ninguna corrección, así que no puede salir de ahí: es una <strong>neurona muerta</strong>. Suele pasar cuando el paso de aprendizaje es demasiado grande y un empujón la manda lejos.</p>
+    <p>La <strong>Leaky ReLU</strong> lo evita dejando una pendiente pequeña (0,01) en la parte negativa: la neurona apagada sigue recibiendo un hilo de corrección y puede volver.</p>
+  </div>
+  <figure class="fig"><svg id="dead" role="img" aria-label="Salida de una neurona ReLU según la velocidad en los 60 tramos, activa o apagada"></svg></figure>
+  <p class="howto col"><b>Cómo leer el dibujo.</b> La neurona recibe la velocidad del tramo y calcula z = 0,1 × velocidad + sesgo. La línea <b style="color:var(--mean)">azul</b> es lo que saca después de la activación. Cada punto es uno de los 60 tramos: <b style="color:var(--good)">verde</b> si en ese tramo la neurona está activa (z positiva) y aprende de él, <b style="color:var(--warn)">rojo</b> si está apagada.</p>
+  <div class="decs">
+    <div class="dec"><div class="slider"><label for="m-b">Sesgo de la neurona <output id="m-b-o"></output></label><input type="range" id="m-b" min="-14" max="2" step="0.1" value="-5"><div class="ends"><span>−14</span><span>2</span></div></div><p>Más negativo: la neurona necesita más velocidad para encenderse.</p></div>
+    <div class="dec"><h3>Activación</h3><div class="seg" role="group" aria-label="Activación"><button type="button" id="m-a0" aria-pressed="true">ReLU</button><button type="button" id="m-a1" aria-pressed="false">Leaky ReLU</button></div></div>
+  </div>
+  <div class="big3 col" id="m-big"></div>
+  <p class="qcard col" id="m-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Todo junto</p>
+    <h2>La receta completa</h2>
+    <ol class="steps">
+      <li><div><strong>Cada neurona</strong> hace una suma ponderada y después aplica su activación.</div></li>
+      <li><div><strong>Sin activación</strong>, cualquier número de capas equivale a una sola: la red solo dibuja rectas.</div></li>
+      <li><div><strong>Con ReLU</strong>, cada neurona aporta un codo; con unos pocos codos la red sigue curvas como la U del consumo.</div></li>
+      <li><div><strong>En las capas ocultas</strong>, ReLU (o sus variantes, Leaky ReLU y GELU) es la opción por defecto.</div></li>
+      <li><div><strong>En la salida</strong>, la activación se elige por lo que se quiere sacar: sigmoide para una probabilidad entre 0 y 1, nada para una cantidad como los litros.</div></li>
+      <li><div><strong>La pendiente</strong> de la activación decide cuánta corrección pasa: la sigmoide y la tanh se saturan; la ReLU deja pasar 1 o 0.</div></li>
+      <li><div><strong>Vigila las neuronas muertas</strong>: pasos de aprendizaje más pequeños o Leaky ReLU.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">En el mundo real</p>
+    <h2>Dónde aparece en la telemetría de flota</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 12c6 18 22 18 28 0"/><path d="M20 27v6"/></svg><h3>Consumo y emisiones</h3><p>El consumo según velocidad, carga y pendiente de la carretera no es una recta. Las redes con ReLU que lo estiman sirven para planificar el gasóleo de cada ruta y detectar camiones que gastan más de lo esperado.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6L34 32H6Z"/><path d="M20 16v8M20 28v1"/></svg><h3>Probabilidad de avería</h3><p>Una red que avisa de averías termina en una sigmoide: su salida es un número entre 0 y 1 que se lee como «un 12 % de riesgo esta semana» y se compara con un límite de aviso.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 28c4-10 8-10 12 0s8 10 16-14"/></svg><h3>Series del GPS</h3><p>Las redes que leen la velocidad segundo a segundo (las LSTM del tema 9) usan sigmoide para decidir qué recordar y tanh para lo que recuerdan, justo por sus rangos de 0 a 1 y de −1 a 1.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="10" width="28" height="22" rx="2"/><path d="M6 16h28M13 6v8M27 6v8"/></svg><h3>Hora estimada de llegada</h3><p>Los modelos grandes de hora de llegada, con tráfico, ruta y conductor, tienen decenas de capas. Funcionan gracias a activaciones como ReLU o GELU, que no apagan la corrección en las primeras capas.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Conexiones</p>
+    <h2>Con los otros temas</h2>
+    <p>La suma ponderada que pasa por la activación es la de <a href="la-neurona-es.html" target="_self">la neurona del tema 1</a>; allí la activación era un escalón. Una neurona con sigmoide en la salida es exactamente una <a href="regresion-logistica-es.html" target="_self">regresión logística</a>, y su castigo natural es la entropía cruzada del <a href="entropia-y-entropia-cruzada-es.html" target="_self">tema 15 de matemáticas</a>. Que dos capas sin activación se fundan en una es la composición de transformaciones lineales del <a href="matrices-como-transformaciones-es.html" target="_self">tema 3</a>: una matriz por otra es otra matriz. Las pendientes de la idea 4 y la corrección que se apaga son las derivadas y la regla de la cadena del <a href="derivadas-gradiente-y-regla-de-la-cadena-es.html" target="_self">tema 16</a>, y esas correcciones son los pasos del <a href="descenso-de-gradiente-es.html" target="_self">descenso de gradiente</a>.</p>
+    <p>La <a href="regresion-lineal-polinomial-es.html" target="_self">regresión polinomial</a> es otra forma de doblar una recta: en vez de codos, potencias de la velocidad. En esta colección, la red de varias capas tiene su propio tema (el 3) y la retropropagación, que usa las pendientes de cada activación, el tema 5.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Para ser justos</p>
+    <h2>Lo que da y lo que hay que vigilar</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>Lo que da</h3><ul class="pc">
+      <li>Con una activación sencilla, las capas se suman en vez de fundirse: la red puede seguir casi cualquier curva.</li>
+      <li>La ReLU es baratísima de calcular (comparar con cero) y deja pasar la corrección entera.</li>
+      <li>La sigmoide da probabilidades listas para usar en la salida.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>Lo que hay que vigilar</h3><ul class="pc">
+      <li>La sigmoide y la tanh se saturan: en redes profundas apagan la corrección de las primeras capas.</li>
+      <li>Las neuronas ReLU pueden morir y quedarse sin aprender.</li>
+      <li>Más dobleces no siempre es mejor: una red muy flexible puede seguir el ruido de los datos en vez de la U.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini diccionario</p>
+    <h2>Las palabras raras, en cristiano</h2>
+    <dl>
+      <dt>Activación</dt><dd>La función que aplica una neurona a su suma ponderada antes de pasar el resultado.</dd>
+      <dt>No lineal</dt><dd>Que no es una recta. Lo que hace falta para que las capas no se fundan en una.</dd>
+      <dt>Capa oculta</dt><dd>Un grupo de neuronas entre la entrada y la salida de la red.</dd>
+      <dt>Escalón</dt><dd>Saca 1 si la suma es positiva y 0 si no. La del perceptrón.</dd>
+      <dt>Sigmoide</dt><dd>Una S que lleva cualquier número a un valor entre 0 y 1.</dd>
+      <dt>Tanh</dt><dd>Una S entre −1 y 1, centrada en 0.</dd>
+      <dt>ReLU</dt><dd>Cero si la suma es negativa; la suma tal cual si es positiva.</dd>
+      <dt>Leaky ReLU, GELU</dt><dd>Variantes de la ReLU: con un poco de pendiente en lo negativo, o con la esquina redondeada.</dd>
+      <dt>Saturación</dt><dd>Zona plana de una activación, donde su pendiente es casi cero y la neurona casi no aprende.</dd>
+      <dt>Gradiente que se desvanece</dt><dd>La corrección que se hace diminuta al multiplicarse por pendientes pequeñas capa tras capa.</dd>
+      <dt>Neurona muerta</dt><dd>Neurona ReLU que saca cero con todos los datos y ya no recibe corrección.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>Para curiosos: las cuentas detrás de todo</summary>
+    <p style="padding-top:10px">No hacen falta para entender la idea:</p>
+    <div class="formula">neurona:     z = w₁·x₁ + w₂·x₂ + … + b        salida = f(z)
+
+escalón:     f(z) = 1 si z &gt; 0, si no 0       pendiente 0 (salvo en z = 0)
+sigmoide:    f(z) = 1 / (1 + e⁻ᶻ)              pendiente f·(1 − f) ≤ 0,25
+tanh:        f(z) = (eᶻ − e⁻ᶻ)/(eᶻ + e⁻ᶻ)       pendiente 1 − f² ≤ 1
+ReLU:        f(z) = max(0, z)                  pendiente 1 si z &gt; 0, 0 si no
+Leaky ReLU:  f(z) = z si z &gt; 0, 0,01·z si no    pendiente 1 o 0,01
+
+sin activación, dos capas:
+   w₂·(w₁·v + b₁) + b₂ = (w₂·w₁)·v + (w₂·b₁ + b₂)       → una recta
+   con w₁ = −0,8, b₁ = 56, w₂ = 0,5, b₂ = 30:  −0,4·v + 58
+
+recta y dos codos (u = velocidad / 100, codos en 40 y 73 km/h):
+   consumo = a + b·u + s₁·max(0, u − 0,40) + s₂·max(0, u − 0,73)
+   a = 61,6   b = −66,2   s₁ = 45,5   s₂ = 35,0       error medio 1,22 L/100 km
+
+corrección que llega a la capa 1 de n:   pendiente¹ × pendiente² × … × pendienteⁿ⁻¹
+   sigmoide en z = 0, 10 capas:  0,25⁹ ≈ 0,0000038</div>
+  </details>
+</section>
+
+<section aria-label="Video resumen">
+  <div class="col stack">
+    <p class="eyebrow">Para cerrar</p>
+    <h2>Todo en un minuto</h2>
+    <p>Un repaso animado: la activación después de la suma, la sigmoide, la tanh y la ReLU, las dos capas que sin activación se funden en una, los codos que siguen la U del consumo y la corrección que se apaga en una red de muchas capas. Tiene música, así que sube el volumen.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAPTGF2YzYzLjEuMTAyAP/bAEMACAYGBwYHCAgICAgICQkJCgoKCQkJCQoKCgoKCgwMDAoKCgoKCgoMDAwMDQ4NDQ0MDQ4ODw8PEhIRERUVFRkZH//EAKUAAQACAgMBAAAAAAAAAAAAAAAHBggFBAMBAgEBAQEBAAAAAAAAAAAAAAAAAAECAxABAAIBAwIDAwUJCgkICQMFAAECAwQRBRIGIQcxE0EiURRhMnE2gUIVdJFytDUjsmKzdVJzobFVlDMWohfThDRDksPUgsFjU8JUJNIlg5NEldEYCDfwhcRWoxEBAQEAAwEBAQAAAAAAAAAAABEBQSExEgJR/8AAEQgEOAeAAwEiAAIRAAMRAP/aAAwDAQACEQMRAD8AhIB0cwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/2Q==" aria-label="Animación: funciones de activación">
+      <source src="funciones-de-activacion-con-audio-es.mp4" type="video/mp4">
+      Tu navegador no puede reproducir este video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"v":[15.8,17.4,21.0,21.9,22.2,22.5,26.7,30.4,30.4,31.2,31.8,33.2,37.6,38.9,41.3,43.2,45.2,45.9,49.7,50.4,51.8,51.9,53.4,54.4,54.9,56.7,58.1,60.8,62.1,62.6,63.2,67.1,70.0,70.2,70.8,72.1,74.1,75.2,76.4,77.6,78.6,78.9,79.9,80.0,80.8,83.4,87.1,88.0,91.8,93.3,93.8,95.2,96.5,98.7,99.3,99.4,100.0,102.6,106.8,107.4],"c":[53.0,50.5,47.5,46.9,47.6,45.3,41.7,38.4,42.7,40.9,42.3,39.7,36.6,37.5,35.8,33.7,33.4,36.3,33.4,33.3,32.1,31.6,33.1,31.7,30.8,31.1,29.9,30.7,31.7,29.2,31.9,28.9,29.7,28.5,29.2,29.4,28.8,28.4,28.5,28.3,27.4,29.0,29.8,30.4,30.1,32.4,30.2,29.3,32.6,29.4,31.9,29.8,31.6,29.2,32.8,31.6,30.7,34.5,34.5,33.8],"redes":{"1-ninguna":{"rmse":4.014494731035048,"rmse_n":4.7852792533563395,"n":10,"capas":[[[[1.5224622379033317],[0.5312363425205668],[-1.1104239404098837]],[0.38594152384909197,-0.11708764302773565,1.2154528354520944]],[[[-0.4798599277296596,-0.220309051693948,0.8127489179771032]],[0.17624119717686293]]]},"1-sigmoide":{"rmse":1.1418070117993955,"rmse_n":1.1866478298337295,"n":10,"capas":[[[[4.177698448618127],[-32.87232799332747],[-6.642113013871688]],[-8.563749027368221,6.237284320090128,2.1638316780762152]],[[[51.46309906832807,0.8064374368665042,2.7969127362110577]],[-0.9589710657797438]]]},"1-tanh":{"rmse":1.1421541735208582,"rmse_n":1.1776315034697125,"n":10,"capas":[[[[-6.678973369157031],[-2.563831001708666],[-3.997105562959416]],[0.5522141510832714,3.846617336699694,1.6429780521827813]],[[[2.0065125560996564,-3.7207784695950887,0.8714685416237861]],[5.756997381187696]]]},"1-relu":{"rmse":1.2171557734873293,"rmse_n":1.334046895806252,"n":10,"capas":[[[[-2.310205956688171],[-1.742620716489122],[-1.828886757834507]],[1.695107463647781,0.7013601841783128,1.9751905968502]],[[[1.5051215577824963,2.620006126834772,-0.7928118953318176]],[-0.16732906885560447]]]},"3-ninguna":{"rmse":4.014494731035047,"rmse_n":4.785279253356307,"n":34,"capas":[[[[-1.1332683824626377],[0.20778365668947524],[-1.0169489048433904]],[-0.6772867146715792,-0.7896726413019355,0.36826618841397096]],[[[-0.642344886275171,-0.04796661276912897,-1.2621442717544806],[0.013578187075892702,-0.23375893053435837,0.17415398531292486],[0.20923644827382842,-0.15906707372086223,0.48983709294100497]],[-0.6509124303409,-0.2592053517480894,0.35547134435217054]],[[[0.8251350745743258,-0.015904128140625196,-0.06268604307321907],[-0.6620874826233539,-0.09927778755412034,0.34935943172465644],[-0.08856741264548279,-0.5590433847797291,0.32274796277063295]],[-0.11385111533568311,-0.3496223313507761,-0.0817616646312047]],[[[-0.4315765572607397,0.6608805137709223,-0.07732023554409452]],[0.5531377314736038]]]},"3-sigmoide":{"rmse":1.0330544003112316,"rmse_n":1.2475777947317113,"n":34,"capas":[[[[4.260716496204915],[-32.627429745867296],[-11.5953072835259]],[2.479451752658932,29.075915903524947,5.799336748958734]],[[[-6.609222429648698,4.46980380482048,0.6352965268764583],[18.0214955392733,-29.522076010284565,-0.4089841224298515],[0.8588234198599758,34.80608700297155,18.20247632784626]],[-2.5181166734153377,12.963589535749422,3.645931268684084]],[[[-1.4665334947839122,3.839547996417036,-2.388619382875976],[10.542148007877195,4.251952414803281,-14.528156233856713],[2.0065447686777356,-4.363575307626833,1.8590756110432591]],[1.0708283253999131,8.970684851734783,-0.31448312577147713]],[[[-8.317946055131339,17.139371576880826,13.968528169377894]],[2.7914486774007985]]]},"3-tanh":{"rmse":0.9495746207067524,"rmse_n":1.3226035089055537,"n":34,"capas":[[[[4.436165630762297],[-1.675250438577775],[5.109764655783502]],[-4.728670743287874,1.3835008385709826,-1.870596439467917]],[[[-0.8153562893833111,-0.7511880704220862,-11.422891364131086],[-1.279740842649751,-0.20665368535115958,-0.475858711455335],[-1.4552321982966734,7.565066600052564,-3.9475407305455437]],[-3.7928412355637153,-0.7808189389442574,4.297717526791699]],[[[-5.567818194216871,-1.8548842854261132,-11.426068986546497],[-12.092273386170758,-8.582295122399401,18.06386223239358],[-8.448507906395884,-5.231704621460939,-17.33169239035009]],[5.409576109783281,0.406088765126592,7.223335957817381]],[[[-1.9153527845180351,-6.453688645396638,1.3953963600498547]],[6.539002662592046]]]},"3-relu":{"rmse":1.1193047733119263,"rmse_n":1.194464562488002,"n":34,"capas":[[[[-1.670156038109633],[-0.8827034985738392],[-0.8756741534955687]],[1.150023787823354,0.9517896159793742,-0.22973894197613554]],[[[1.2917592035344578,-0.2700696703067431,-0.39529011328172337],[1.0003176189553913,-1.1962519210119877,0.008505742809447159],[0.8907966207793001,0.8663404492445641,0.2834606976617512]],[-0.7225899931615283,0.3288393937675244,0.20375887029506126]],[[[1.4292592814067018,1.0419885046101849,0.5370972231060531],[1.9318031141730774,0.6573325472440321,0.7390231682361025],[-0.34331550798242844,-1.5338282383087685,-0.4267605418358892]],[0.027553873657974633,-0.852801241491028,0.7930027660648599]],[[[0.8158444558982402,1.015906672835077,-0.6984574881904047]],[-0.41856618915684374]]]}}};
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g," ");s=fr?i+","+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const sg=(v,d)=>(v>0&&+v.toFixed(d??1)!==0?"+":"")+f1(v,d);
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+const redraws=[];window.addEventListener("resize",()=>redraws.forEach(g=>g()));
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+function axes(svg,o){const FS=o.FS,L=o.x+(o.padL??FS*3.4),R=o.x+o.w-(o.padR??FS*0.9),T=o.y+(o.padT??FS*2.2),B=o.y+o.h-(o.padB??FS*2.6);
+  const sx=v=>L+(v-o.x0)/(o.x1-o.x0)*(R-L),sy=v=>B-(v-o.y0)/(o.y1-o.y0)*(B-T),g=el("g",null,svg);
+  for(const v of (o.yt||[])){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},g);txt(g,L-7,sy(v)+FS*0.3,(o.fy||(v=>f1(v,0)))(v),{"text-anchor":"end","font-size":FS*0.8});}
+  for(const v of (o.xt||[])){if(o.grid!==false)el("line",{x1:sx(v),x2:sx(v),y1:T,y2:B,class:"g-line","stroke-opacity":.55},g);
+    const s=(o.fx||(v=>f1(v,0)))(v),w=s.length*FS*0.8*0.62,X=sx(v);let a="middle",xx=X;if(X+w/2>o.x+o.w-3){a="end";xx=o.x+o.w-3;}else if(X-w/2<o.x+3){a="start";xx=o.x+3;}
+    txt(g,xx,B+FS*1.05,s,{"text-anchor":a,"font-size":FS*0.8});}
+  el("line",{x1:L,x2:R,y1:B,y2:B,class:"g-axis"},g);
+  if(o.xl)txt(g,R,o.y+o.h-FS*0.25,o.xl,{"text-anchor":"end","font-size":FS*0.85,class:"t-ink"});
+  if(o.yl)txt(g,L,T-FS*0.75,o.yl,{"font-size":FS*0.8});
+  return {L,R,T,B,sx,sy,FS};}
+const dot=(g,x,y,r,fill,extra)=>el("circle",Object.assign({cx:x,cy:y,r,fill,stroke:"var(--point-ring)","stroke-width":r>6?2:1.2},extra||{}),g);
+const pathOf=P=>P.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join("");
+const lab=(g,x,y,s,FS,A,extra)=>{extra=extra||{};const fz=extra["font-size"]||FS*0.8,w=s.length*fz*0.6,an=extra["text-anchor"]||"middle",left=an==="middle"?x-w/2:an==="end"?x-w:x;let dx=0;if(left<A.L+2)dx=A.L+2-left;else if(left+w>A.R-2)dx=A.R-2-(left+w);return txt(g,x+dx,y,s,Object.assign({"font-size":fz},halo(5),extra,{"text-anchor":an}));};
+const clipRect=(svg,A)=>{const id="c"+Math.random().toString(36).slice(2,8);el("rect",{x:A.L,y:A.T-2,width:A.R-A.L,height:A.B-A.T+2},el("clipPath",{id},el("defs",null,svg)));return el("g",{"clip-path":`url(#${id})`},svg);};
+const curve=(A,f,a,b,n)=>{n=n||300;const P=[];for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;P.push([A.sx(x),A.sy(f(x))]);}return pathOf(P);};
+
+/* ---------- activaciones ---------- */
+const sig=z=>1/(1+Math.exp(-z));
+const erf=x=>{const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+0.3275911*x);return s*(1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x));};
+const Phi=z=>0.5*(1+erf(z/Math.SQRT2));
+const ACT={
+  ninguna:{f:z=>z,d:z=>1},
+  escalon:{f:z=>z>0?1:0,d:z=>0},
+  sigmoide:{f:sig,d:z=>sig(z)*(1-sig(z))},
+  tanh:{f:Math.tanh,d:z=>1-Math.tanh(z)**2},
+  relu:{f:z=>Math.max(0,z),d:z=>z>0?1:0},
+  leaky:{f:z=>z>0?z:0.01*z,d:z=>z>0?1:0.01},
+  gelu:{f:z=>z*Phi(z),d:z=>Phi(z)+z*Math.exp(-z*z/2)/Math.sqrt(2*Math.PI)}};
+const V=D.v,C=D.c,NT=V.length;
+
+/* ---------- juguete: la red que sigue la U ---------- */
+(function(){const svg=$("toy"),AK=["ninguna","sigmoide","tanh","relu"],AN=["sin activación","sigmoide","tanh","ReLU"];let ai=0,ci=0;
+  seg(["h-a0","h-a1","h-a2","h-a3"],i=>{ai=i;draw();});seg(["h-c0","h-c1"],i=>{ci=i;draw();});
+  const fwd=(net,act,v)=>{let h=[v/100];const L=net.capas;for(let k=0;k<L.length;k++){const [W,b]=L[k];const o=W.map((row,j)=>row.reduce((s,w,i)=>s+w*h[i],b[j]));h=k<L.length-1?o.map(ACT[act].f):o;}return h[0]*10+35;};
+  function draw(){const act=AK[ai],nc=ci?3:1,net=D.redes[nc+"-"+act],nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14;
+    const p1=nw?{x:0,y:0,w:W,h:430}:{x:0,y:0,w:600,h:390},p2=nw?{x:0,y:440,w:W,h:250}:{x:615,y:0,w:285,h:390};const H=nw?p2.y+p2.h:390;
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,Object.assign({},p1,{x0:10,x1:115,y0:20,y1:60,xt:[20,40,60,80,100],yt:[20,30,40,50,60],xl:"velocidad media del tramo (km/h)",yl:"consumo (L/100 km)",FS,padL:FS*2.4,padT:FS*2}));
+    const g=clipRect(svg,A);
+    for(let i=0;i<NT;i++)dot(g,A.sx(V[i]),A.sy(C[i]),nw?7:5,"var(--point)");
+    el("path",{d:curve(A,v=>fwd(net,act,v),10,115),fill:"none",stroke:"var(--mean)","stroke-width":nw?5:3.6,"stroke-linecap":"round"},g);
+    /* esquema de la red */
+    const B=p2,cols=nc+2,colX=k=>B.x+(nw?40:26)+k*(B.w-(nw?80:52))/(cols-1),rowY=(n,j)=>B.y+B.h/2+(j-(n-1)/2)*(nw?62:72);
+    const sizes=[1,...Array(nc).fill(3),1];
+    el("rect",{x:B.x+2,y:B.y+2,width:B.w-4,height:B.h-4,rx:12,fill:"none",stroke:"var(--line)"},svg);
+    let mx=0;net.capas.forEach(([Wm])=>Wm.forEach(r=>r.forEach(w=>mx=Math.max(mx,Math.abs(w)))));
+    net.capas.forEach(([Wm],k)=>{Wm.forEach((row,j)=>row.forEach((w,i)=>{el("line",{x1:colX(k),y1:rowY(sizes[k],i),x2:colX(k+1),y2:rowY(sizes[k+1],j),stroke:w>=0?"var(--mean)":"var(--sample)","stroke-width":0.6+4*Math.sqrt(Math.abs(w)/mx),"stroke-opacity":.7},svg);}));});
+    const R=nw?20:17;
+    for(let k=0;k<cols;k++)for(let j=0;j<sizes[k];j++){const x=colX(k),y=rowY(sizes[k],j);
+      el("circle",{cx:x,cy:y,r:R,fill:"var(--surface)",stroke:k===0||k===cols-1?"var(--point)":"var(--ink)","stroke-width":2},svg);
+      if(k>0&&k<cols-1){const f=ACT[act].f,P=[];for(let q=0;q<=24;q++){const z=-3+6*q/24;let y2=act==="ninguna"?z/3:act==="relu"?f(z)/3*2-1:act==="sigmoide"?f(z)*2-1:f(z);P.push([x-R*0.62+R*1.24*q/24,y-y2*R*0.55]);}
+        el("path",{d:pathOf(P),fill:"none",stroke:"var(--mean)","stroke-width":2},svg);}}
+    txt(svg,B.x+12,B.y+B.h-(nw?14:12),"velocidad",{"text-anchor":"start","font-size":FS*0.72});
+    txt(svg,B.x+B.w-12,B.y+B.h-(nw?14:12),"consumo",{"text-anchor":"end","font-size":FS*0.72});
+    txt(svg,B.x+B.w/2,B.y+(nw?30:26),nc===1?"1 capa oculta · 10 números":"3 capas ocultas · 34 números",{"text-anchor":"middle","font-size":FS*0.78,class:"t-ink"});
+    const e=net.rmse,en=net.rmse_n;
+    $("h-big").innerHTML=`<div><b style="color:var(--mean)">${f1(e,2)}</b><span>litros cada 100 km de error medio en estos 60 tramos</span></div><div><b>${f1(en,2)}</b><span>error medio en 200 tramos nuevos que la red no vio</span></div><div><b style="font-size:1.3rem">${f1(fwd(net,act,20),1)} · ${f1(fwd(net,act,75),1)} · ${f1(fwd(net,act,105),1)}</b><span>consumo que predice a 20, 75 y 105 km/h</span></div>`;
+    let m;
+    if(act==="ninguna")m=nc===1?`Sin activación, la red solo puede dibujar una <b>recta</b>: la mejor posible es esta, que baja de ${f1(fwd(net,act,20),1)} L/100 km a 20 km/h hasta ${f1(fwd(net,act,105),1)} a 105 km/h. Se equivoca ${f1(e,2)} litros de media y dice que en autovía se gasta menos que a 75 km/h, justo lo contrario de lo que pasa. Prueba con 3 capas.`:`Tres capas ocultas y 34 números ajustables, y la red dibuja <b>exactamente la misma recta</b> que con una capa: mismo error, ${f1(e,2)}. Sin activación, las capas se funden en una sola (idea 2). Ahora elige una activación.`;
+    else if(act==="relu")m=`Con ReLU, cada neurona oculta aporta un <b>codo</b> y la línea ya baja, se aplana y vuelve a subir. El error baja a <b>${f1(e,2)}</b> litros (sin activación era ${f1(D.redes["1-ninguna"].rmse,2)}). Fíjate en que la línea está hecha de tramos rectos: la idea 3 explica por qué.${nc===3?" Con 3 capas los codos se combinan y aparecen más tramos.":""}`;
+    else m=`Con ${AN[ai]}, cada neurona aporta una curva suave en forma de S, y la suma de unas pocas sigue la U sin esquinas. Error medio: <b>${f1(e,2)}</b> litros${nc===3?`. Con 3 capas baja en estos tramos, pero en tramos nuevos da ${f1(en,2)}: parte de lo que gana es ruido de estos 60 puntos.`:`, y ${f1(en,2)} en tramos nuevos.`}`;
+    $("h-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 1: catálogo de activaciones ---------- */
+(function(){const svg=$("fun"),inZ=$("f-z");let k=1;
+  const L=[
+    {n:"Escalón",a:"escalon",lo:0,hi:1,rng:"0 o 1",y0:-1.5,y1:2},
+    {n:"Sigmoide",a:"sigmoide",lo:0,hi:1,rng:"entre 0 y 1",y0:-1.5,y1:2},
+    {n:"Tanh",a:"tanh",lo:-1,hi:1,rng:"entre −1 y 1",y0:-1.5,y1:2},
+    {n:"ReLU",a:"relu",lo:0,hi:6,rng:"de 0 en adelante",y0:-1.5,y1:6},
+    {n:"Leaky ReLU",a:"leaky",lo:-0.06,hi:6,rng:"casi cualquiera (lo negativo, × 0,01)",y0:-1.5,y1:6},
+    {n:"GELU",a:"gelu",lo:-0.17,hi:6,rng:"desde −0,17 en adelante",y0:-1.5,y1:6}];
+  chips($("f-c"),L.map(o=>o.n),i=>{k=i;draw();},k);
+  function draw(){const o=L[k],z=+inZ.value,f=ACT[o.a].f,y=f(z),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?470:330;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:-6,x1:6,y0:o.y0,y1:o.y1,xt:[-6,-4,-2,0,2,4,6],yt:o.y1>3?[-1,0,2,4,6]:[-1,0,1,2],xl:"z (suma que entra)",yl:"lo que sale",FS,padL:FS*2.4,padT:FS*2});
+    const g=clipRect(svg,A);
+    el("rect",{x:A.L,y:A.sy(Math.min(o.hi,o.y1)),width:A.R-A.L,height:A.sy(Math.max(o.lo,o.y0))-A.sy(Math.min(o.hi,o.y1)),fill:"var(--good)","fill-opacity":.1},g);
+    el("line",{x1:A.sx(-6),y1:A.sy(-6),x2:A.sx(6),y2:A.sy(6),stroke:"var(--muted)","stroke-width":1.4,"stroke-dasharray":"6 5"},g);
+    el("line",{x1:A.sx(0),x2:A.sx(0),y1:A.T,y2:A.B,stroke:"var(--muted)","stroke-width":1,"stroke-opacity":.6},g);
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(0),y2:A.sy(0),stroke:"var(--muted)","stroke-width":1,"stroke-opacity":.6},g);
+    if(o.a==="escalon"){el("path",{d:`M${A.sx(-6)} ${A.sy(0)}L${A.sx(0)} ${A.sy(0)}M${A.sx(0)} ${A.sy(1)}L${A.sx(6)} ${A.sy(1)}`,fill:"none",stroke:"var(--mean)","stroke-width":nw?5:3.6},g);
+      el("line",{x1:A.sx(0),x2:A.sx(0),y1:A.sy(0),y2:A.sy(1),stroke:"var(--mean)","stroke-width":1.5,"stroke-dasharray":"3 4"},g);}
+    else el("path",{d:curve(A,f,-6,6,400),fill:"none",stroke:"var(--mean)","stroke-width":nw?5:3.6},g);
+    el("line",{x1:A.sx(z),x2:A.sx(z),y1:A.sy(0),y2:A.sy(y),stroke:"var(--point)","stroke-width":2,"stroke-dasharray":"4 4"},svg);
+    dot(svg,A.sx(z),A.sy(y),nw?11:8,"var(--point)");
+    lab(svg,A.sx(z),A.sy(y)+(y>o.y1*0.7?FS*1.8:-FS*0.9),"sale "+f1(y,o.a==="escalon"?0:3),FS,A,{style:"fill:var(--point)","font-weight":700});
+    $("f-z-o").textContent=f1(z,1);
+    $("f-big").innerHTML=`<div><b>${f1(z,1)}</b><span>suma que entra en la neurona, z</span></div><div><b style="color:var(--point)">${f1(y,o.a==="escalon"?0:3)}</b><span>lo que sale después de la activación</span></div><div><b style="color:var(--good);font-size:1.15rem">${o.rng}</b><span>todo lo que puede llegar a sacar</span></div>`;
+    let m;
+    if(o.a==="escalon")m=`El escalón solo dice <b>sí (1) o no (0)</b>: con z = ${f1(z,1)} saca ${y}. Es la activación del perceptrón del tema 1. No distingue «justo por encima» de «muy por encima», y su pendiente es cero en todas partes: la idea 4 explica por qué eso impide aprender con el método que usan las redes modernas.`;
+    else if(o.a==="sigmoide")m=`La sigmoide lleva z = ${f1(z,1)} a <b>${f1(y,3)}</b>, que se lee como un <b>${f1(100*y,1)} %</b>: «un ${f1(100*y,0)} % de que la entrega llegue tarde». Nunca llega a 0 ni a 1. ${Math.abs(z)>4?"Con z tan lejos de 0 está en su parte plana: mover z casi no cambia lo que sale.":"Cerca de z = 0 es donde más cambia."} Por eso se usa en la <b>salida</b> cuando se quiere una probabilidad, como la <a href="regresion-logistica-es.html" target="_self">regresión logística</a>.`;
+    else if(o.a==="tanh")m=`La tanh lleva z = ${f1(z,1)} a <b>${f1(y,3)}</b>. Es una S como la sigmoide, pero entre −1 y 1 y <b>centrada en 0</b>: una suma de 0 sale como 0, y las negativas salen negativas. Eso ayuda a la capa siguiente, que recibe números repartidos alrededor de cero. ${Math.abs(z)>3?"Aquí ya está en la parte plana.":""}`;
+    else if(o.a==="relu")m=z>0?`La ReLU deja pasar z = ${f1(z,1)} <b>tal cual</b>: sale ${f1(y,3)}. Para sumas positivas es la recta «salida = entrada». No tiene techo, así que sirve para cantidades como «cuántos litros de más».`:`La ReLU convierte cualquier suma negativa en <b>0</b>: con z = ${f1(z,1)} la neurona está «apagada». Ese corte en z = 0 es todo lo que hace, y basta para que la red pueda doblarse (ideas 2 y 3).`;
+    else if(o.a==="leaky")m=z>0?`Para z positiva, la Leaky ReLU es igual que la ReLU: sale ${f1(y,3)}.`:`Para z negativa, la Leaky ReLU no corta a cero: deja pasar un 1 %. Con z = ${f1(z,1)} sale <b>${f1(y,3)}</b>. Parece nada, pero evita que la neurona se apague para siempre (idea 6).`;
+    else m=`La GELU es una ReLU con la esquina redondeada: con z = ${f1(z,1)} sale <b>${f1(y,3)}</b>${z<0?", un poco negativo cerca de cero (como mucho −0,17)":""}. Multiplica z por la probabilidad de que un número normal al azar sea menor que z. Es la que usan BERT, GPT y la mayoría de modelos de lenguaje (lo verás en el tema 11).`;
+    $("f-msg").innerHTML=m;}
+  inZ.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 2: dos capas sin activación = una ---------- */
+(function(){const svg=$("two"),I=["t-w1","t-b1","t-w2","t-b2"].map($);let relu=false;
+  seg(["t-a0","t-a1"],i=>{relu=i===1;draw();});
+  function draw(){const [w1,b1,w2,b2]=I.map(e=>+e.value),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?480:340;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const z1=v=>w1*v+b1,out=v=>w2*(relu?Math.max(0,z1(v)):z1(v))+b2;
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0,x1:120,y0:-60,y1:120,xt:[0,20,40,60,80,100,120],yt:[-60,-30,0,30,60,90,120],xl:"velocidad v (km/h)",yl:"salida",FS,padL:FS*2.6,padT:FS*2});
+    const g=clipRect(svg,A);
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(0),y2:A.sy(0),stroke:"var(--muted)","stroke-width":1.4},g);
+    el("path",{d:curve(A,z1,0,120,2),fill:"none",stroke:"var(--sample)","stroke-width":nw?3.4:2.4,"stroke-dasharray":"8 6"},g);
+    if(relu)el("path",{d:curve(A,v=>Math.max(0,z1(v)),0,120,600),fill:"none",stroke:"var(--sample)","stroke-width":nw?5:3.4,"stroke-opacity":.5},g);
+    el("path",{d:curve(A,out,0,120,600),fill:"none",stroke:"var(--mean)","stroke-width":nw?5.5:4,"stroke-linecap":"round"},g);
+    const vk=w1!==0?-b1/w1:NaN;
+    if(relu&&vk>0&&vk<120){dot(svg,A.sx(vk),A.sy(out(vk)),nw?10:7,"var(--point)");lab(svg,A.sx(vk),A.sy(out(vk))-FS*1,"codo en "+f1(vk,0)+" km/h",FS,A,{style:"fill:var(--point)","font-weight":700});}
+    I.forEach((e,i)=>$(e.id+"-o").textContent=f1(+e.value,i%2?0:2));
+    const W_=w2*w1,B_=w2*b1+b2;
+    let m;
+    if(!relu)m=`<span class="eqline">${f1(w2,2)} · (${f1(w1,2)} · v ${b1<0?"−":"+"} ${f1(Math.abs(b1),0)}) ${b2<0?"−":"+"} ${f1(Math.abs(b2),0)} = <b>${f1(W_,3)} · v ${B_<0?"−":"+"} ${f1(Math.abs(B_),1)}</b></span><br>Dos neuronas y cuatro números, pero la red entera es una sola neurona con peso ${f1(W_,3)} y sesgo ${f1(B_,1)}: una recta. Muévelos como quieras; nunca saldrá un codo. Con diez neuronas en fila pasaría lo mismo.`;
+    else if(!(vk>0&&vk<120))m=`Con ReLU, pero la primera neurona ${z1(60)>0?"es positiva en todas las velocidades del dibujo: la ReLU la deja pasar entera":"es negativa en todas las velocidades del dibujo: la ReLU la convierte en cero y la red da siempre "+f1(b2,0)}. ${z1(60)>0?"Aquí la red sigue siendo una recta.":"Esa neurona está apagada (idea 6)."} Mueve el sesgo b₁ para que la violeta cruce el cero dentro del dibujo.`;
+    else m=`Con ReLU entre las dos, la parte negativa de la primera neurona se convierte en cero. A un lado de <b>${f1(vk,0)} km/h</b> (donde w₁ · v + b₁ = 0) la salida es una recta inclinada; al otro, ${w2===0?"todo es plano":"plana, con valor "+f1(b2,0)}. Ha aparecido un <b>codo</b> que ninguna combinación de pesos podía dar sin activación. Ya no hay un paréntesis que deshacer.`;
+    $("t-msg").innerHTML=m;}
+  I.forEach(e=>e.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 3: codos ReLU sobre la U ---------- */
+function lstsq(cols,y){const n=cols.length,M=[],r=[];for(let i=0;i<n;i++){M.push([]);for(let j=0;j<n;j++){let s=0;for(let k=0;k<y.length;k++)s+=cols[i][k]*cols[j][k];M[i].push(s+(i===j?1e-9:0));}let s=0;for(let k=0;k<y.length;k++)s+=cols[i][k]*y[k];r.push(s);}
+  for(let i=0;i<n;i++){let p=i;for(let j=i+1;j<n;j++)if(Math.abs(M[j][i])>Math.abs(M[p][i]))p=j;[M[i],M[p]]=[M[p],M[i]];[r[i],r[p]]=[r[p],r[i]];for(let j=i+1;j<n;j++){const f=M[j][i]/M[i][i];for(let k=i;k<n;k++)M[j][k]-=f*M[i][k];r[j]-=f*r[i];}}
+  const x=Array(n).fill(0);for(let i=n-1;i>=0;i--){let s=r[i];for(let k=i+1;k<n;k++)s-=M[i][k]*x[k];x[i]=s/M[i][i];}return x;}
+(function(){const svg=$("kin"),S=[$("k-p1"),$("k-p2"),$("k-p3")],PRE={1:[60],2:[40,73],3:[25,50,80]},COL=["var(--sample)","var(--good)","var(--warn)"];let nk=0;
+  chips($("k-c"),["Solo la recta","1 codo","2 codos","3 codos"],i=>{nk=i;if(PRE[i])PRE[i].forEach((p,j)=>S[j].value=p);draw();});
+  const relu=z=>Math.max(0,z);
+  function draw(){const ks=S.slice(0,nk).map(e=>+e.value),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14;
+    S.forEach((e,j)=>{$("k-s"+(j+1)).hidden=j>=nk;$(e.id+"-o").textContent=e.value+" km/h";});
+    const cols=[V.map(()=>1),V.map(v=>v/100),...ks.map(c=>V.map(v=>relu(v/100-c/100)))],co=lstsq(cols,C);
+    const fit=v=>co[0]+co[1]*v/100+ks.reduce((s,c,j)=>s+co[j+2]*relu(v/100-c/100),0);
+    let se=0;for(let i=0;i<NT;i++)se+=(fit(V[i])-C[i])**2;const rmse=Math.sqrt(se/NT);
+    const p1={x:0,y:0,w:W,h:nw?420:330},p2={x:0,y:p1.h+6,w:W,h:nw?330:220},H=p2.y+p2.h;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,Object.assign({},p1,{x0:10,x1:115,y0:20,y1:60,xt:[20,40,60,80,100],yt:[20,30,40,50,60],yl:"consumo (L/100 km)",FS,padL:FS*2.4,padT:FS*2}));
+    const g=clipRect(svg,A);
+    ks.forEach((c,j)=>el("line",{x1:A.sx(c),x2:A.sx(c),y1:A.T,y2:A.B,stroke:COL[j],"stroke-width":2,"stroke-dasharray":"6 5"},g));
+    for(let i=0;i<NT;i++)dot(g,A.sx(V[i]),A.sy(C[i]),nw?7:5,"var(--point)");
+    el("path",{d:curve(A,fit,10,115,420),fill:"none",stroke:"var(--mean)","stroke-width":nw?5:3.6,"stroke-linecap":"round"},g);
+    /* piezas */
+    const pieces=[{f:v=>co[0]+co[1]*v/100,col:"var(--muted)",n:"recta"},...ks.map((c,j)=>({f:v=>co[j+2]*relu(v/100-c/100),col:COL[j],n:"codo "+(j+1)}))];
+    let lo=0,hi=0;pieces.forEach(p=>{for(let v=10;v<=115;v+=1){const y=p.f(v);lo=Math.min(lo,y);hi=Math.max(hi,y);}});
+    const span=hi-lo,st=span>120?40:span>60?20:10;lo=Math.floor(lo/st)*st;hi=Math.ceil(hi/st)*st;const yt=[];for(let y=lo;y<=hi+1e-9;y+=st)yt.push(y);
+    const B=axes(svg,Object.assign({},p2,{x0:10,x1:115,y0:lo,y1:hi,xt:[20,40,60,80,100],yt,xl:"velocidad media del tramo (km/h)",yl:"cada pieza por separado",FS,padL:FS*2.4,padT:FS*2}));
+    const g2=clipRect(svg,B);
+    el("line",{x1:B.L,x2:B.R,y1:B.sy(0),y2:B.sy(0),stroke:"var(--muted)","stroke-width":1.2},g2);
+    pieces.forEach(p=>el("path",{d:curve(B,p.f,10,115,420),fill:"none",stroke:p.col,"stroke-width":nw?4:3},g2));
+    const order=ks.map((c,j)=>[c,j]).sort((a,b)=>a[0]-b[0]);const slopes=[co[1]/10];let acc=co[1]/10;order.forEach(([c,j])=>{acc+=co[j+2]/10;slopes.push(acc);});
+    const vmin=(()=>{let b=10,bv=1e9;for(let v=10;v<=115;v+=0.5){const y=fit(v);if(y<bv){bv=y;b=v;}}return [b,bv];})();
+    $("k-big").innerHTML=`<div><b style="color:var(--mean)">${f1(rmse,2)}</b><span>litros cada 100 km de error medio en los 60 tramos</span></div>${nk?`<div><b>${f1(vmin[0],0)} km/h</b><span>velocidad con el consumo más bajo según la línea azul (${f1(vmin[1],1)} L/100 km)</span></div>`:`<div><b>ninguna</b><span>una recta que baja no tiene mínimo: según ella, cuanto más rápido, menos gasta</span></div>`}<div><b>${nk+2}</b><span>números que ha elegido el ordenador: altura e inclinación de la recta${nk?` y ${nk===1?"lo que inclina el codo":"lo que inclina cada codo"}`:""}</span></div>`;
+    const sp=slopes.map(s=>sg(s,1)).join(" → ");
+    let m;
+    if(nk===0)m=`Una sola recta: la mejor baja <b>${f1(-co[1]/10,2)} L/100 km por cada 10 km/h</b> y se equivoca ${f1(rmse,2)} litros de media. No puede bajar y luego subir. Añade un codo.`;
+    else if(nk===1)m=`Con un codo en ${ks[0]} km/h, la inclinación pasa de <b>${sp}</b> litros por cada 10 km/h: baja hasta el codo y luego sube. El error cae a ${f1(rmse,2)}. ${Math.abs(ks[0]-59)<=4?"Esta posición está cerca de la mejor para un solo codo (59 km/h).":"Mueve el codo: el error más bajo con uno solo está hacia los 59 km/h."}`;
+    else m=`Con ${nk} codos, la línea tiene ${nk+1} tramos con inclinaciones <b>${sp}</b> litros por cada 10 km/h (de izquierda a derecha). Error: <b>${f1(rmse,2)}</b> litros. ${rmse<1.25?"Ya está muy cerca del ruido de los datos (unos 1,16 litros): más codos apenas ayudarían y empezarían a seguir el ruido.":"Prueba a mover los codos: cada uno debería estar donde la U cambia de inclinación."} Cada codo es una neurona ReLU: la red del juguete hace esto mismo, pero eligiendo también dónde poner los codos.`;
+    $("k-msg").innerHTML=m;}
+  S.forEach(e=>e.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 4: pendiente de cada activación ---------- */
+(function(){const svg=$("der"),inZ=$("d-z");let k=0;
+  const L=[{n:"Sigmoide",a:"sigmoide",y0:-0.2,y1:1.2,d1:1.1},{n:"Tanh",a:"tanh",y0:-1.3,y1:1.3,d1:1.1},{n:"ReLU",a:"relu",y0:-1,y1:6,d1:1.1},{n:"Leaky ReLU",a:"leaky",y0:-1,y1:6,d1:1.1},{n:"Escalón",a:"escalon",y0:-0.2,y1:1.2,d1:1.1}];
+  chips($("d-c"),L.map(o=>o.n),i=>{k=i;draw();});
+  function draw(){const o=L[k],z=+inZ.value,F=ACT[o.a],nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14;
+    const p1={x:0,y:0,w:W,h:nw?340:240},p2={x:0,y:p1.h+6,w:W,h:nw?300:200},H=p2.y+p2.h;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,Object.assign({},p1,{x0:-6,x1:6,y0:o.y0,y1:o.y1,xt:[-6,-4,-2,0,2,4,6],yt:o.y1>3?[0,2,4,6]:o.y0<-1?[-1,0,1]:[0,0.5,1],fy:v=>f1(v,v%1?1:0),yl:"activación",FS,padL:FS*2.6,padT:FS*2}));
+    const B=axes(svg,Object.assign({},p2,{x0:-6,x1:6,y0:0,y1:o.d1,xt:[-6,-4,-2,0,2,4,6],yt:[0,0.25,0.5,1],fy:v=>f1(v,v%1?2:0),xl:"z",yl:"pendiente",FS,padL:FS*2.6,padT:FS*2}));
+    const g=clipRect(svg,A),g2=clipRect(svg,B);
+    {let st=null;for(let i=0;i<=600;i++){const a=-6+12*i/600,low=i<600&&F.d(a+0.01)<0.05;if(low&&st===null)st=a;if(!low&&st!==null){el("rect",{x:B.sx(st),y:B.T,width:B.sx(a)-B.sx(st),height:B.B-B.T,fill:"var(--warn)","fill-opacity":.12},g2);st=null;}}}
+    if(o.a==="escalon")el("path",{d:`M${A.sx(-6)} ${A.sy(0)}L${A.sx(0)} ${A.sy(0)}M${A.sx(0)} ${A.sy(1)}L${A.sx(6)} ${A.sy(1)}`,fill:"none",stroke:"var(--mean)","stroke-width":nw?5:3.6},g);
+    else el("path",{d:curve(A,F.f,-6,6,400),fill:"none",stroke:"var(--mean)","stroke-width":nw?5:3.6},g);
+    const y=F.f(z),d=F.d(z),sp=3;
+    el("line",{x1:A.sx(z-sp),y1:A.sy(y-d*sp),x2:A.sx(z+sp),y2:A.sy(y+d*sp),stroke:"var(--ink)","stroke-width":2,"stroke-dasharray":"6 5"},g);
+    dot(svg,A.sx(z),A.sy(y),nw?10:7,"var(--point)");
+    if(o.a==="relu"||o.a==="leaky"||o.a==="escalon"){const lo=o.a==="leaky"?0.01:0,hi=o.a==="escalon"?0:1;el("path",{d:`M${B.sx(-6)} ${B.sy(lo)}L${B.sx(0)} ${B.sy(lo)}M${B.sx(0)} ${B.sy(hi)}L${B.sx(6)} ${B.sy(hi)}`,fill:"none",stroke:"var(--sample)","stroke-width":nw?4.5:3.2},g2);}
+    else el("path",{d:curve(B,F.d,-6,6,400),fill:"none",stroke:"var(--sample)","stroke-width":nw?4.5:3.2},g2);
+    el("line",{x1:B.sx(z),x2:B.sx(z),y1:A.sy(y),y2:B.sy(d),stroke:"var(--muted)","stroke-width":1.2,"stroke-dasharray":"3 4"},svg);
+    dot(svg,B.sx(z),B.sy(d),nw?10:7,"var(--sample)");
+    lab(svg,B.sx(z),B.sy(d)-FS*0.9,"pendiente "+f1(d,3),FS,B,{style:"fill:var(--sample)","font-weight":700});
+    $("d-z-o").textContent=f1(z,1);
+    $("d-big").innerHTML=`<div><b style="color:var(--sample)">${f1(d,3)}</b><span>pendiente en z = ${f1(z,1)}: de cada corrección que llega, pasa esta fracción</span></div><div><b>${o.a==="sigmoide"?"0,25":o.a==="escalon"?"0":"1"}</b><span>la pendiente más alta que tiene esta activación</span></div>`;
+    let m;
+    if(o.a==="sigmoide")m=`La pendiente de la sigmoide es como mucho <b>0,25</b>, en z = 0. ${Math.abs(z)>3?`Con z = ${f1(z,1)} ya es ${f1(d,4)}: la neurona está saturada y casi no le llega corrección.`:`${Math.abs(z)<0.05?"Aquí está justo en ese máximo.":`Con z = ${f1(z,1)} vale ${f1(d,3)}.`}`} Incluso en el mejor caso, cada sigmoide deja pasar solo un cuarto de la corrección.`;
+    else if(o.a==="tanh")m=`La tanh tiene pendiente <b>1</b> en el centro, cuatro veces más que la sigmoide, por eso suele entrenar mejor. ${Math.abs(z)>2.5?`Pero con z = ${f1(z,1)} ya es ${f1(d,4)}: también se satura en los extremos.`:`Con z = ${f1(z,1)}, ${f1(d,3)}. Lejos del centro también se aplana.`}`;
+    else if(o.a==="relu")m=z>0?`Con z positiva, la pendiente de la ReLU es exactamente <b>1</b>: la corrección pasa entera, sin encogerse, por mucho que crezca z. No se satura nunca por arriba.`:`Con z negativa, la pendiente de la ReLU es <b>0</b>: a la neurona apagada no le llega ninguna corrección por este dato. Si le pasa con todos los datos, no aprende nunca más (idea 6).`;
+    else if(o.a==="leaky")m=z>0?`Para z positiva, igual que la ReLU: pendiente 1.`:`Con z negativa, la Leaky ReLU tiene pendiente <b>0,01</b> en vez de 0: llega un hilo de corrección, y la neurona puede volver a encenderse.`;
+    else m=`El escalón es plano en todas partes (salvo el salto en z = 0, donde no hay pendiente que valga): <b>pendiente 0</b>. Una red de escalones no recibe ninguna corrección. Por eso el perceptrón del tema 1 usaba otra regla de aprendizaje, y las redes de varias capas tuvieron que cambiar el escalón por la sigmoide.`;
+    $("d-msg").innerHTML=m;}
+  inZ.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 5: la corrección se apaga con muchas capas ---------- */
+(function(){const svg=$("van"),inN=$("v-n"),inZ=$("v-z"),AK=["sigmoide","tanh","relu"];let ai=0;
+  seg(["v-a0","v-a1","v-a2"],i=>{ai=i;draw();});
+  const sup=e=>String(e).replace("-","⁻").replace(/\d/g,c=>"⁰¹²³⁴⁵⁶⁷⁸⁹"[c]);
+  const sf=v=>{if(v>=0.001)return f1(v,v<0.01?4:v<1?3:1);const e=Math.floor(Math.log10(v)),mm=v/10**e;return f1(mm,1)+" · 10"+sup(e);};
+  function draw(){const n=+inN.value,z=+inZ.value,act=AK[ai],r=act==="relu"?1:ACT[act].d(z),nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?460:320;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const lo=-16,hi=1;
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0.5,x1:n+0.5,y0:lo,y1:hi,xt:n<=10?Array.from({length:n},(_,i)=>i+1):[1,5,10,15,20].filter(v=>v<=n).concat(n%5?[n]:[]),yt:[-16,-14,-12,-10,-8,-6,-4,-2,0],fy:v=>v===0?"1":"10"+sup(v),grid:false,xl:"capa (1 = la primera)",yl:"fracción de la corrección que llega",FS,padL:FS*3.2,padT:FS*2});
+    el("rect",{x:A.L,y:A.sy(0),width:A.R-A.L,height:A.sy(-2)-A.sy(0),fill:"var(--good)","fill-opacity":.12},svg);
+    const bw=Math.min(40,(A.R-A.L)/n*0.7);
+    for(let k=1;k<=n;k++){const val=Math.log10(r)*(n-k),yv=Math.max(lo,Math.min(hi,val));
+      el("rect",{x:A.sx(k)-bw/2,y:A.sy(yv),width:bw,height:Math.max(1,A.sy(lo)-A.sy(yv)),fill:val<-4?"var(--warn)":"var(--mean)","fill-opacity":.78,rx:2},svg);}
+    const first=r**(n-1);
+    $("v-n-o").textContent=n;$("v-z-o").textContent=f1(z,1);
+    let m;
+    if(act==="relu")m=`Con ReLU, cada neurona activa tiene pendiente 1: a la primera de las ${n} capas le llega la corrección <b>entera</b>. Es lo que permitió entrenar redes de decenas de capas. El precio es que las neuronas apagadas tienen pendiente 0; si lo están con todos los datos, mueren (idea 6).`;
+    else m=`Con ${act} y neuronas que trabajan con z = ${f1(z,1)}, cada capa deja pasar ${f1(r,3)} de la corrección. A la primera de las ${n} capas le llega ${f1(r,3)}<sup>${n-1}</sup> = <b>${sf(first)}</b>. ${first<1e-4?"Esa capa prácticamente no aprende: el gradiente se ha desvanecido.":first<0.05?"Las primeras capas aprenden mucho más despacio que las últimas.":first>0.5?"Llega casi entera.":"Todavía llega bastante, pero cada capa más la reduce."}${act==="tanh"&&z<0.5?" La tanh en su centro deja pasar casi todo; el problema llega cuando las sumas se alejan de 0.":""}`;
+    $("v-msg").innerHTML=m;}
+  [inN,inZ].forEach(e=>e.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 6: neuronas muertas ---------- */
+(function(){const svg=$("dead"),inB=$("m-b");let leaky=false;
+  seg(["m-a0","m-a1"],i=>{leaky=i===1;draw();});
+  function draw(){const b=+inB.value,f=leaky?ACT.leaky.f:ACT.relu.f,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?440:300;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const z=v=>0.1*v+b,A=axes(svg,{x:0,y:0,w:W,h:H,x0:10,x1:115,y0:-1.5,y1:10,xt:[20,40,60,80,100],yt:[0,2,4,6,8,10],xl:"velocidad media del tramo (km/h)",yl:"lo que saca la neurona",FS,padL:FS*2.4,padT:FS*2});
+    const g=clipRect(svg,A);
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(0),y2:A.sy(0),stroke:"var(--muted)","stroke-width":1.2},g);
+    el("path",{d:curve(A,v=>f(z(v)),10,115,600),fill:"none",stroke:"var(--mean)","stroke-width":nw?5:3.6},g);
+    let on=0;for(let i=0;i<NT;i++){const a=z(V[i])>0;if(a)on++;dot(g,A.sx(V[i]),A.sy(f(z(V[i]))),nw?7.5:5.5,a?"var(--good)":"var(--warn)");}
+    const vk=-b/0.1;if(vk>10&&vk<115){el("line",{x1:A.sx(vk),x2:A.sx(vk),y1:A.T,y2:A.B,stroke:"var(--muted)","stroke-width":1.4,"stroke-dasharray":"5 5"},g);lab(svg,A.sx(vk)+(vk>80?-8:8),A.T+FS*0.9,"se enciende a "+f1(vk,0)+" km/h",FS,A,{"text-anchor":vk>80?"end":"start"});}
+    $("m-b-o").textContent=f1(b,1);
+    const teach=leaky?NT:on;
+    $("m-big").innerHTML=`<div><b style="color:${on?"var(--good)":"var(--warn)"}">${on} de ${NT}</b><span>tramos en los que la neurona está encendida (z positiva)</span></div><div><b>${teach} de ${NT}</b><span>tramos que le mandan alguna corrección${leaky&&on<NT?" (los apagados, con pendiente 0,01)":""}</span></div>`;
+    let m;
+    if(on===NT)m=`Con sesgo ${f1(b,1)}, la neurona está encendida en los 60 tramos. Pero entonces la ReLU no corta nada: en estos datos se comporta como una recta y no aporta ningún codo. Baja el sesgo.`;
+    else if(on>0)m=`La neurona se enciende a partir de ${f1(vk,0)} km/h: está activa en ${on} tramos y apagada en ${NT-on}. Aporta un codo útil, y aprende de los ${on} tramos en los que está encendida. ${leaky?"Con Leaky ReLU, los apagados también le mandan un poquito de corrección.":"Baja más el sesgo y mira qué pasa cuando no queda ninguno verde."}`;
+    else m=leaky?`Apagada en los 60 tramos, pero con Leaky ReLU su pendiente en la parte negativa es 0,01: cada tramo le sigue mandando un hilo de corrección, y el entrenamiento puede volver a subir su sesgo. <b>No está muerta</b>, solo dormida.`:`Con sesgo ${f1(b,1)}, la suma es negativa en <b>todos</b> los tramos: la neurona saca siempre 0 y su pendiente es siempre 0. Ningún tramo le manda corrección, así que su sesgo no volverá a cambiar. <b>Está muerta.</b> Prueba Leaky ReLU.`;
+    $("m-msg").innerHTML=m;}
+  inB.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Neural networks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: índice de la serie. Cabecera con el progreso y una ruta numerada de temas (el orden es la ruta de aprendizaje). Misma paleta que las páginas */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9; --soft:#E8EDF5;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --point:#DD6A26; --point-ring:#FFFFFF; --good:#1C8A5A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545; --soft:#1C2533;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --point:#FF9A55; --point-ring:#0E131B; --good:#4CC38A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545; --soft:#1C2533;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --point:#FF9A55; --point-ring:#0E131B; --good:#4CC38A;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.55;padding-inline:20px;padding-block:0 72px}
+.wrap{max-width:1060px;margin:0 auto}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;margin:0;text-wrap:balance}
+p{margin:0}
+.eyebrow{font-family:var(--f-mono);font-size:.76rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+header.top{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:28px;align-items:center;padding-block:56px 36px}
+header.top>*{min-width:0}
+h1{font-size:clamp(2.6rem,7vw,4.8rem);font-weight:800;letter-spacing:-.025em}
+.lede{font-size:1.18rem;color:var(--muted);max-width:44ch;margin-top:14px}
+.heroart{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:10px}
+.heroart svg{display:block;width:100%;height:auto}
+@media (max-width:760px){header.top{grid-template-columns:1fr;padding-top:40px}}
+
+.stats{display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:22px}
+.stat{display:grid}
+.stat b{font-family:var(--f-display);font-size:1.9rem;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.stat span{font-size:.85rem;color:var(--muted)}
+.progress{margin-top:18px;height:8px;border-radius:4px;background:var(--soft);overflow:hidden;max-width:420px}
+.progress i{display:block;height:100%;background:var(--mean);border-radius:4px}
+
+.bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding-block:8px 18px;border-top:1px solid var(--line);padding-top:22px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:inherit;font-size:.9rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 14px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.chip:hover{border-color:var(--mean)}
+.search{font:inherit;font-size:.95rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 16px;min-width:0;width:240px;max-width:100%}
+:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:grid;grid-template-rows:auto 1fr;transition:transform .15s,border-color .15s,box-shadow .15s}
+.card.ready:hover{transform:translateY(-2px);border-color:var(--band-edge);box-shadow:0 10px 30px -18px rgba(20,40,80,.45)}
+.card .art{background:var(--soft);border-bottom:1px solid var(--line);aspect-ratio:16/8;position:relative}
+.card .art svg{position:absolute;inset:0;width:100%;height:100%}
+.card .num{position:absolute;top:10px;left:12px;font-family:var(--f-mono);font-size:.78rem;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:2px 9px}
+.card .tag{position:absolute;top:10px;right:12px;font-family:var(--f-mono);font-size:.72rem;letter-spacing:.04em;border-radius:999px;padding:3px 9px}
+.tag.ok{background:var(--good);color:var(--surface)}
+.tag.soon{background:var(--surface);color:var(--muted);border:1px dashed var(--line)}
+.card .body{padding:16px 18px 18px;display:grid;gap:10px;align-content:start}
+.card h3{font-size:1.25rem;font-weight:700}
+.card .fam{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mean)}
+.card p.d{font-size:.95rem;color:var(--muted)}
+.links{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.links a{display:inline-flex;align-items:center;gap:7px;font-size:.9rem;text-decoration:none;border-radius:999px;padding:6px 13px;border:1px solid var(--line);color:var(--ink);background:var(--surface)}
+.links a.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+.links a:hover{border-color:var(--mean)}
+.links svg{width:15px;height:15px;flex:none}
+.meta{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:.8rem;color:var(--muted);font-family:var(--f-mono)}
+.meta span{display:inline-flex;align-items:center;gap:5px}
+.card.soon .art svg{opacity:.45;filter:grayscale(.6)}
+.card.soon h3{color:var(--muted)}
+.empty{color:var(--muted);padding:30px 0}
+footer{margin-top:44px;padding-top:22px;border-top:1px solid var(--line);color:var(--muted);font-size:.9rem;display:grid;gap:6px}
+@media (prefers-reduced-motion: reduce){.card{transition:none}.card.ready:hover{transform:none}}
+</style>
+</head>
+<body>
+
+<main class="wrap">
+  <header class="top">
+    <div>
+      <p class="eyebrow"><a data-menu href="index.html#en" target="_self">← Main menu</a> · Collection · from the neuron to transformers · <a href="math-under-ml-en.html" id="mlhub" target="_blank" rel="noopener" style="color:inherit">see The math under ML</a> · <a href="redes-neuronales-es.html" id="eshub" target="_blank" rel="noopener" style="color:inherit">en español</a></p>
+      <h1>Neural networks</h1>
+      <p class="lede">How a neural network works inside, piece by piece: the neuron, activations, layers, the loss, backpropagation and how it is trained, up to convolutional and recurrent networks, embeddings, attention and autoencoders. Every idea with moving drawings and fleet telemetry examples, and the same structure: a simple version with a video and a technical version with verified code.</p>
+      <div class="stats" id="stats"></div>
+      <div class="progress" aria-hidden="true"><i id="prog"></i></div>
+    </div>
+    <div class="heroart"><svg id="heroart" viewBox="0 0 480 300" role="img" aria-label="Illustration: a layered network of neurons with a signal flowing back"></svg></div>
+  </header>
+
+  <div class="bar">
+    <div class="chips" role="group" aria-label="Filter topics">
+      <button class="chip" type="button" data-f="all" aria-pressed="true">All</button>
+      <button class="chip" type="button" data-f="ready" aria-pressed="false">Available</button>
+      <button class="chip" type="button" data-f="soon" aria-pressed="false">Coming soon</button>
+    </div>
+    <input class="search" id="q" type="search" placeholder="Search a topic…" aria-label="Search a topic">
+  </div>
+
+  <p class="eyebrow" style="margin-bottom:14px">Suggested path: each topic builds on the previous ones</p>
+  <div class="grid" id="grid"></div>
+  <p class="empty" id="empty" hidden>No topic matches your search.</p>
+
+  <footer>
+    <p>Each topic includes a simple page with interactive charts and a short video with music, and a technical page with equations, widgets, verified Python code and a step-by-step worked example. Each topic links to The math under ML and to the models of the visual ML series it builds on.</p>
+    <p>Suggested order: the foundations first (the neuron, activations, layers and the loss), then how a network is trained and finally the architectures. It helps to have seen the math topics on the dot product, matrices, cross-entropy and derivatives.</p>
+    <p id="mode"></p>
+  </footer>
+</main>
+
+<script>
+(function(){
+"use strict";
+/* Catálogo. Para añadir un tema: rellenar simple/tech (archivo local y artifact) y poner ready:true. */
+const TOPICS=[
+  {"n": 1, "id": "neu", "title": "The neuron", "fam": "Foundations", "ready": true, "video": true, "d": "Multiply each input by a weight, add up and decide: how a single neuron draws a line that separates normal workdays from the ones to review, and how it learns that line by correcting itself each time it fails.", "kw": "neurona perceptron suma ponderada pesos sesgo escalon sigmoide frontera recta regresion logistica", "simple": {"file": "the-neuron-en.html", "url": "the-neuron-en.html"}, "tech": {"file": "the-neuron-technical-en.html", "url": "the-neuron-technical-en.html"}, "example": "A misclassified day, one correction and a probability"},
+  {"n": 2, "id": "act", "title": "Activation functions", "fam": "Foundations", "ready": true, "video": true, "d": "Sigmoid, tanh and ReLU: the curve that comes after each sum, why without it a hundred-layer network only draws straight lines, and how a few neurons follow the curve of fuel use against speed.", "kw": "activacion sigmoide tanh relu leaky lineal no linealidad gradiente que se desvanece saturacion codos", "simple": {"file": "activation-functions-en.html", "url": "activation-functions-en.html"}, "tech": {"file": "activation-functions-technical-en.html", "url": "activation-functions-technical-en.html"}, "example": "Three ReLU neurons, two routes and a year of diesel"},
+  {"n": 3, "id": "mlp", "title": "The multilayer network", "fam": "Foundations", "ready": true, "video": true, "d": "Hidden layers that bend space: how several neurons together separate what a single line cannot.", "kw": "red multicapa mlp capa oculta xor aproximador universal matriz forward", "simple": {"file": "the-multilayer-network-en.html", "url": "the-multilayer-network-en.html"}, "tech": {"file": "the-multilayer-network-technical-en.html", "url": "the-multilayer-network-technical-en.html"}, "example": "A 2-2-1 network for the band, built and evaluated by hand"},
+  {"n": 4, "id": "loss", "title": "Output and loss", "fam": "Foundations", "ready": true, "video": true, "d": "Softmax, cross-entropy and squared error: how the network gives its answer and how far it is from the right one.", "kw": "softmax entropia cruzada error cuadratico perdida salida probabilidades clasificacion regresion", "simple": {"file": "output-and-loss-en.html", "url": "output-and-loss-en.html"}, "tech": {"file": "output-and-loss-technical-en.html", "url": "output-and-loss-technical-en.html"}, "example": "A 180 km trip through the three heads"},
+  {"n": 5, "id": "bp", "title": "Backpropagation", "fam": "Training", "ready": true, "video": true, "d": "The chain rule walking the network backwards: where each weight's correction comes from.", "kw": "backpropagation retropropagacion regla de la cadena gradiente derivada autograd", "simple": {"file": "backpropagation-en.html", "url": "backpropagation-en.html"}, "tech": {"file": "backpropagation-technical-en.html", "url": "backpropagation-technical-en.html"}, "example": "Trip 3, forward, backward and one step"},
+  {"n": 6, "id": "train", "title": "Training well", "fam": "Training", "ready": true, "video": true, "d": "Mini-batches, learning rate, momentum and Adam: how to take the steps so the network learns fast without getting lost.", "kw": "mini batch lote learning rate tasa de aprendizaje momentum adam sgd optimizador", "simple": {"file": "training-well-en.html", "url": "training-well-en.html"}, "tech": {"file": "training-well-technical-en.html", "url": "training-well-technical-en.html"}, "example": "Three Adam steps on one weight of the fleet network"},
+  {"n": 7, "id": "reg", "title": "Overfitting and regularization", "fam": "Training", "ready": false, "video": false, "d": "Dropout, weight decay, early stopping, initialization and batch norm: how to keep the network from memorizing the data.", "kw": "sobreajuste regularizacion dropout weight decay early stopping inicializacion batch norm"},
+  {"n": 8, "id": "cnn", "title": "Convolutional networks (CNN)", "fam": "Architectures", "ready": false, "video": false, "d": "Small filters that sweep an image or a signal looking for the same pattern everywhere.", "kw": "cnn convolucion filtro kernel pooling imagen senal"},
+  {"n": 9, "id": "rnn", "title": "Recurrent networks and LSTM", "fam": "Architectures", "ready": false, "video": false, "d": "Sequences and time series: a network with memory that reads GPS telemetry step by step.", "kw": "rnn recurrente lstm gru secuencia serie temporal memoria telemetria gps"},
+  {"n": 10, "id": "emb", "title": "Embeddings", "fam": "Architectures", "ready": false, "video": false, "d": "Categories and words turned into vectors: routes, customers or fault codes that are alike end up close together.", "kw": "embedding vector categoria palabra similitud coseno one hot"},
+  {"n": 11, "id": "att", "title": "Attention and Transformers", "fam": "Architectures", "ready": false, "video": false, "d": "The piece behind LLMs: each element decides which others to look at.", "kw": "atencion transformer llm query key value self attention"},
+  {"n": 12, "id": "ae", "title": "Autoencoders", "fam": "Architectures", "ready": false, "video": false, "d": "Compress and rebuild: spotting anomalies by how badly the network rebuilds an odd data point.", "kw": "autoencoder compresion reconstruccion anomalias pca cuello de botella"},
+  {"n": 13, "id": "proj", "title": "End-to-end project", "fam": "Project", "ready": false, "video": false, "d": "A network from start to finish on fleet data: prepare, train, evaluate and decide.", "kw": "proyecto completo red neuronal flota entrenamiento evaluacion"}
+];
+const LOCAL=true; /* copia para carpeta y GitHub Pages: enlaces a los archivos de esta carpeta */
+const href=o=>o?(LOCAL?o.file:o.url):"#";
+const NS="http://www.w3.org/2000/svg";
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a||{})e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const path=(pts)=>pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join("");
+
+/* mini ilustraciones (viewBox 320x160) */
+const ART={
+  neu(s){[[60,40],[60,80],[60,120]].forEach(([x,y])=>{el("path",{d:`M${x} ${y}L170 80`,stroke:"var(--line)","stroke-width":3},s);el("circle",{cx:x,cy:y,r:9,fill:"var(--sample)"},s);});el("circle",{cx:170,cy:80,r:22,fill:"var(--mean)"},s);el("path",{d:"M192 80H262",stroke:"var(--point)","stroke-width":4},s);el("path",{d:"M262 80l-12-7v14z",fill:"var(--point)"},s);},
+  act(s){let a="",b="";for(let i=0;i<=100;i++){const x=30+i*2.6,z=(i-50)/9;a+=(i?"L":"M")+x+" "+(130-90/(1+Math.exp(-z)));b+=(i?"L":"M")+x+" "+(130-Math.max(0,(i-50))*1.8);}el("path",{d:"M30 130H290",stroke:"var(--line)","stroke-width":2},s);el("path",{d:a,stroke:"var(--mean)","stroke-width":3,fill:"none"},s);el("path",{d:b,stroke:"var(--point)","stroke-width":3,fill:"none"},s);},
+  mlp(s){const L=[[45,75,105,135].map(y=>[60,y-10]),[30,62,94,126].map(y=>[160,y+2]),[[260,80]]];for(let k=0;k<2;k++)L[k].forEach(([x,y])=>L[k+1].forEach(([u,v])=>el("path",{d:`M${x} ${y}L${u} ${v}`,stroke:"var(--line)","stroke-width":1.5},s)));L.forEach((l,k)=>l.forEach(([x,y])=>el("circle",{cx:x,cy:y,r:9,fill:["var(--sample)","var(--mean)","var(--point)"][k]},s)));},
+  loss(s){[0.12,0.68,0.2].forEach((p,i)=>el("rect",{x:50+i*48,y:135-100*p,width:36,height:100*p,rx:4,fill:i===1?"var(--point)":"var(--mean)","fill-opacity":i===1?.9:.5},s));let d="";for(let i=0;i<=60;i++){const p=0.03+i*0.016;d+=(i?"L":"M")+(205+i*1.6)+" "+(135+18*Math.log(p));}el("path",{d,stroke:"var(--sample)","stroke-width":3,fill:"none"},s);},
+  bp(s){const P=[[50,50],[50,110],[160,40],[160,80],[160,120],[270,80]];[[0,2],[0,3],[1,3],[1,4],[2,5],[3,5],[4,5]].forEach(([a,b])=>el("path",{d:`M${P[a][0]} ${P[a][1]}L${P[b][0]} ${P[b][1]}`,stroke:"var(--line)","stroke-width":2},s));P.forEach(([x,y])=>el("circle",{cx:x,cy:y,r:9,fill:"var(--mean)"},s));el("path",{d:"M255 100Q215 140 175 128",stroke:"var(--point)","stroke-width":3,fill:"none","stroke-dasharray":"6 4"},s);el("path",{d:"M145 120Q105 140 62 120",stroke:"var(--point)","stroke-width":3,fill:"none","stroke-dasharray":"6 4"},s);},
+  train(s){[90,65,40,18].forEach((r,i)=>el("ellipse",{cx:200,cy:85,rx:r*1.4,ry:r*0.7,fill:"none",stroke:"var(--line)","stroke-width":2},s));const p=[[50,30],[110,120],[140,50],[175,105],[185,72],[198,88]];el("path",{d:"M"+p.map(q=>q.join(" ")).join("L"),stroke:"var(--point)","stroke-width":3,fill:"none"},s);p.forEach(([x,y])=>el("circle",{cx:x,cy:y,r:4,fill:"var(--point)"},s));},
+  reg(s){const r=mulberry32(11);const pts=[];for(let i=0;i<12;i++){const x=30+i*23,y=80-35*Math.sin((x-30)/80)+(r()-.5)*36;pts.push([x,y]);el("circle",{cx:x,cy:y,r:4,fill:"var(--sample)"},s);}el("path",{d:"M"+pts.map(q=>q.join(" ")).join("L"),stroke:"var(--point)","stroke-width":2,fill:"none","stroke-opacity":.8},s);let d="";for(let i=0;i<=100;i++){const x=30+i*2.6;d+=(i?"L":"M")+x+" "+(80-35*Math.sin((x-30)/80));}el("path",{d,stroke:"var(--mean)","stroke-width":4,fill:"none"},s);},
+  cnn(s){for(let i=0;i<6;i++)for(let j=0;j<6;j++)el("rect",{x:40+i*18,y:28+j*18,width:16,height:16,rx:2,fill:"var(--line)"},s);el("rect",{x:76,y:46,width:52,height:52,rx:4,fill:"var(--point)","fill-opacity":.35,stroke:"var(--point)","stroke-width":3},s);el("path",{d:"M150 72H190",stroke:"var(--muted)","stroke-width":3},s);for(let i=0;i<4;i++)for(let j=0;j<4;j++)el("rect",{x:205+i*18,y:46+j*18,width:16,height:16,rx:2,fill:"var(--mean)","fill-opacity":i===1&&j===1?1:.4},s);},
+  rnn(s){[40,120,200].forEach((x,i)=>{el("rect",{x,y:60,width:56,height:40,rx:8,fill:"var(--mean)","fill-opacity":.6},s);if(i<2){el("path",{d:`M${x+56} 80H${x+80}`,stroke:"var(--point)","stroke-width":3},s);el("path",{d:`M${x+80} 80l-9-5v10z`,fill:"var(--point)"},s);}el("path",{d:`M${x+28} 135V100`,stroke:"var(--sample)","stroke-width":3},s);el("circle",{cx:x+28,cy:138,r:5,fill:"var(--sample)"},s);});el("path",{d:"M40 40H280",stroke:"var(--line)","stroke-width":2,"stroke-dasharray":"5 4"},s);},
+  emb(s){const r=mulberry32(13);[[100,60,"var(--mean)"],[220,50,"var(--point)"],[170,115,"var(--sample)"]].forEach(([cx,cy,c])=>{for(let i=0;i<9;i++)el("circle",{cx:cx+gaussR(r)*16,cy:cy+gaussR(r)*11,r:5,fill:c,"fill-opacity":.75},s);});},
+  att(s){const X=[50,105,160,215,270];X.forEach(x=>el("rect",{x:x-20,y:110,width:40,height:24,rx:5,fill:"var(--mean)","fill-opacity":.55},s));[[0,.25],[1,.5],[3,1],[4,.4]].forEach(([j,w])=>el("path",{d:`M160 108Q${(160+X[j])/2} ${40-15*w} ${X[j]} 108`,stroke:"var(--point)","stroke-width":1+4*w,fill:"none","stroke-opacity":.4+.6*w},s));el("rect",{x:140,y:110,width:40,height:24,rx:5,fill:"var(--point)"},s);},
+  ae(s){el("path",{d:"M40 25L140 60V100L40 135Z",fill:"var(--mean)","fill-opacity":.45},s);el("path",{d:"M280 25L180 60V100L280 135Z",fill:"var(--sample)","fill-opacity":.45},s);el("rect",{x:140,y:60,width:40,height:40,rx:4,fill:"var(--point)"},s);},
+  proj(s){["var(--sample)","var(--mean)","var(--point)","var(--good)"].forEach((c,i)=>{el("rect",{x:25+i*74,y:60,width:52,height:40,rx:8,fill:c,"fill-opacity":.7},s);if(i<3){el("path",{d:`M${77+i*74} 80H${97+i*74}`,stroke:"var(--muted)","stroke-width":3},s);el("path",{d:`M${99+i*74} 80l-8-5v10z`,fill:"var(--muted)"},s);}});}
+};
+function gaussR(r){let u=0;while(u===0)u=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*r());}
+const ICON={
+  play:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>',
+  sigma:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.5 3H3.5l5 5-5 5h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>'
+};
+
+/* cabecera */
+const ready=TOPICS.filter(t=>t.ready).length;
+document.getElementById("stats").innerHTML=`<div class="stat"><b>${ready}</b><span>topics ready</span></div><div class="stat"><b>${ready*2}</b><span>pages</span></div><div class="stat"><b>${TOPICS.filter(t=>t.video).length}</b><span>videos</span></div><div class="stat"><b>${TOPICS.length-ready}</b><span>on the way</span></div>`;
+document.getElementById("prog").style.width=(ready/TOPICS.length*100)+"%";
+if(LOCAL){const m=document.getElementById("mlhub");m.href="math-under-ml-en.html";m.target="_self";const e=document.getElementById("eshub");e.href="redes-neuronales-es.html";e.target="_self";}
+document.getElementById("mode").textContent=LOCAL?"Links go to the pages in this same folder (videos must sit next to them).":"Opened online: links go to the published pages.";
+(function(){const s=document.getElementById("heroart");
+  const L=[[70,[70,130,190,250]],[190,[50,110,170,230]],[310,[80,150,220]],[420,[150]]];
+  for(let k=0;k<L.length-1;k++)L[k][1].forEach(y=>L[k+1][1].forEach(v=>el("path",{d:`M${L[k][0]} ${y}L${L[k+1][0]} ${v}`,stroke:"var(--line)","stroke-width":2},s)));
+  el("path",{d:"M70 130L190 110L310 150L420 150",stroke:"var(--mean)","stroke-width":5,fill:"none"},s);
+  el("path",{d:"M405 175Q300 270 190 250",stroke:"var(--point)","stroke-width":4,fill:"none","stroke-dasharray":"8 6"},s);
+  const C=["var(--sample)","var(--mean)","var(--mean)","var(--point)"];
+  L.forEach(([x,ys],k)=>ys.forEach(y=>el("circle",{cx:x,cy:y,r:14,fill:C[k]},s)));
+})();
+
+/* tarjetas */
+const grid=document.getElementById("grid");
+for(const t of TOPICS){
+  const c=document.createElement("article");c.className="card "+(t.ready?"ready":"soon");c.dataset.state=t.ready?"ready":"soon";
+  c.dataset.text=(t.title+" "+t.fam+" "+t.d+" "+(t.kw||"")).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+  c.innerHTML=`<div class="art"><svg viewBox="0 0 320 160" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg><span class="num">${String(t.n).padStart(2,"0")}</span><span class="tag ${t.ready?"ok":"soon"}">${t.ready?"Available":"Coming soon"}</span></div>
+  <div class="body"><p class="fam">${t.fam}</p><h3>${t.title}</h3><p class="d">${t.d}</p>
+  ${t.ready?`<div class="meta">${t.video?"<span>▶ video included</span>":""}${t.example?`<span>example: ${t.example}</span>`:""}</div>
+  <div class="links"><a class="primary" href="${href(t.simple)}" target="${LOCAL?"_self":"_blank"}" rel="noopener">${ICON.play}Simple version</a><a href="${href(t.tech)}" target="${LOCAL?"_self":"_blank"}" rel="noopener">${ICON.sigma}Technical version</a></div>`:""}</div>`;
+  grid.appendChild(c);ART[t.id](c.querySelector("svg"));
+}
+/* filtros */
+let F="all";const q=document.getElementById("q");
+function apply(){const s=q.value.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim();let n=0;
+  grid.querySelectorAll(".card").forEach(c=>{const ok=(F==="all"||c.dataset.state===F)&&(!s||c.dataset.text.includes(s));c.hidden=!ok;if(ok)n++;});
+  document.getElementById("empty").hidden=n>0;}
+document.querySelectorAll(".chip").forEach(b=>b.addEventListener("click",()=>{F=b.dataset.f;document.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));apply();}));
+q.addEventListener("input",apply);
+})();
+</script>
+</body>
+</html>

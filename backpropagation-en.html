@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Backpropagation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content;max-width:100%}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec p b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.rowb{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.stage{font-family:var(--f-mono);font-size:.85rem;color:var(--muted)}
+.subt{font-family:var(--f-display);font-size:clamp(1.2rem,3vw,1.6rem);font-weight:700;color:var(--point)}
+@media (max-width:620px){.seg{border-radius:14px}}
+@media (max-width:520px){.fig{padding:6px}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#en" target="_self">← Main menu</a> · Neural networks · topic 5 · explained with drawings · <a href="backpropagation-technical-en.html" target="_self">see the technical version</a> · <a href="neural-networks-en.html" target="_self">all topics</a> · <a href="backpropagation-es.html" target="_self">en español</a></p>
+  <h1>Backpropagation</h1>
+  <p class="subt">the chain rule, backwards</p>
+  <p class="lede">For a network to learn, you need to know, for each of its weights, whether moving it a little brings the error down, and by how much. Trying them one by one is impossible when there are millions. Backpropagation computes them all at once: it walks the network backwards, from the error to the input, and shares out the blame among the weights according to what each one contributed.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="situ col">
+    <p class="eyebrow">The setup</p>
+    <p>These are the same <strong>30 trips</strong> from topics <a href="the-neuron-en.html" target="_self">1</a> and <a href="the-multilayer-network-en.html" target="_self">3</a>: for each one we know the <strong>load</strong> (in tonnes) and the <strong>fuel use</strong> (in liters per 100 km). Normal trips form a sloping band, and there are 12 trips that don’t add up: 6 burn too much and 6 burn too little.</p>
+    <p>The network is the one from topic 3: <strong>neuron A</strong> watches whether a trip burns too much, <strong>neuron B</strong> whether it burns too little, and the <strong>output neuron</strong> combines their votes. But this time someone has set it up wrong: line B is <strong>3.5 liters too low</strong>, and the 6 trips that burn too little get away. Let’s see how the network works out, on its own, which weights are to blame.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="The 2-2-1 network with the numbers of one trip: forward, the answer; backward, the blame of each weight"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> On the left, the trip’s two numbers; in the middle, neurons A and B; on the right, the output neuron and the <b>loss</b>, the number that measures how badly the network did (the one from <a href="output-and-loss-en.html" target="_self">topic 4</a>: 0 if it is right and completely sure, more and more if it is wrong). The arrows carry the weights. Numbers in <b style="color:var(--ink)">black</b> go forward (what the network computes); numbers in <b style="color:var(--point)">orange</b> go backward: they are the <b>blame</b>, how much the loss would change if that number went up a tiny bit. A negative blame means “raise me and the loss goes down”.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>Which trip goes in</h3>
+      <div class="slider"><label for="t-i">Trip <output id="t-i-o"></output></label><input type="range" id="t-i" min="1" max="30" step="1" value="3"><div class="ends"><span>1</span><span>30</span></div></div>
+      <p>Start with <b>trip 3</b>: it burns 4 L less than normal for its load, and the badly set-up network doesn’t raise an alert. Then try a normal trip (6) or one that burns too much (5).</p>
+    </div>
+    <div class="dec">
+      <h3>Walk through the network, step by step</h3>
+      <div class="rowb"><button type="button" id="t-prev">◀ Back</button><button type="button" id="t-next" class="primary">Next ▶</button><button type="button" id="t-re">↺ Start over</button></div>
+      <p class="stage" id="t-stage"></p>
+      <p>There are six steps: the forward pass, the output error, the blame of the output weights, the blame of the hidden neurons, the blame of the input weights and, at the end, <b>one learning step</b>: each weight moves a little against its blame.</p>
+    </div>
+  </div>
+  <div class="big3" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Try this, in order:</strong></p>
+    <ol class="try">
+      <li>With trip 3, press “Next” until the end. Notice that the blame gets multiplied by a number at every arrow and every neuron.</li>
+      <li>In step 4, look at neuron A: its blame is almost zero. A didn’t vote on this trip (its vote is 0.0002%), and a neuron that switched off can’t change anything. The blame falls entirely on B.</li>
+      <li>In step 6, the loss of trip 3 drops from 4.81 to 2.17 in a single step.</li>
+      <li>Switch to trip 6, which is normal and which the network already gets right: all the blames come out tiny. If you’re not wrong, you hardly correct anything.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">What you just saw</p>
+    <h2>Forward to answer, backward to share out the blame</h2>
+    <p>Training a network means moving its weights so that the loss goes down. To know which way to move each one, you need its <strong>gradient</strong>: how much the loss changes if that weight goes up a tiny bit (it is the derivative from <a href="derivatives-gradient-and-the-chain-rule-en.html" target="_self">math topic 16</a>). Here we have called it blame. <strong>Backpropagation</strong> is the way to compute all the blames at once:</p>
+    <ul>
+      <li><strong>First, forward.</strong> The network computes its answer and <em>keeps</em> the numbers in between: the scores and the votes of each neuron.</li>
+      <li><strong>At the output, the error is very simple.</strong> With the sigmoid and the cross-entropy from topic 4, the blame of the output score is <strong>p − y</strong>: what the network said minus what really happened.</li>
+      <li><strong>Then, backward.</strong> Each neuron receives its blame from above and passes it down multiplied by its <strong>local slope</strong>: how much what comes out changes if what goes in changes. That is the <strong>chain rule</strong>.</li>
+      <li><strong>The blame of a weight</strong> is the signal that goes in along its arrow times the error that comes back along it.</li>
+      <li><strong>One learning step</strong> moves each weight a little against its blame.</li>
+    </ul>
+    <p>The ideas that follow take it one piece at a time: why you don’t try weight by weight (1), the chain of multiplications (2), what happens where paths split (3), the “signal times error” shortcut (4), what happens to the blame in networks with many layers (5) and one learning step with all 30 trips at once (6).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 6</p>
+    <h2>What if you nudge each weight by hand?</h2>
+    <p>There is a way to get the blame of a weight without knowing anything about chains: move it a tiny bit, run the 30 trips through the network again and see how much the loss changed. It works, and it is what you would do with a spreadsheet. The problem is the price: <strong>one full pass over the data for every weight</strong>.</p>
+  </div>
+  <div class="chips col" id="n-c" role="group" aria-label="Weight being nudged"></div>
+  <figure class="fig"><svg id="nud" role="img" aria-label="Average loss of the 30 trips depending on how much a weight is nudged, with the line predicted by backpropagation"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Pick above which weight gets nudged. Across, how much is added to that weight; up, the average loss of the 30 trips. The <b style="color:var(--mean)">blue</b> curve is the real loss, computed by running the 30 trips through the network at every point. The dashed <b style="color:var(--point)">orange</b> line is the one that comes from backpropagation: it goes through the starting point with the tilt given by that weight’s blame. The dot is the slider’s nudge.</p>
+  <div class="controls col">
+    <div class="slider"><label for="n-h">Nudge to the weight <output id="n-h-o"></output></label><input type="range" id="n-h" min="-0.1" max="0.1" step="0.005" value="0.01"><div class="ends"><span>−0.1</span><span>+0.1</span></div></div>
+  </div>
+  <div class="big3" id="n-big"></div>
+  <p class="qcard col" id="n-msg"></p>
+  <div class="col stack">
+    <p>This network has 9 weights, so nudging them one at a time costs 10 passes (one more for the starting loss). Real networks have millions. The chart below compares the two methods, with times really measured on a computer for networks of growing size.</p>
+  </div>
+  <div class="chips col" id="c-c" role="group" aria-label="Network size"></div>
+  <figure class="fig"><svg id="cost" role="img" aria-label="Time to compute all the blames by nudging weight by weight or with backpropagation"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each bar is the time to compute the blames of <em>all</em> the weights of a network, with the 30 trips. The scale jumps in factors of 10: each vertical line is ten times more time than the one before. <b style="color:var(--sample)">Purple</b>: nudging each weight (two passes per weight, one up and one down, which is the most accurate). <b style="color:var(--good)">Green</b>: backpropagation.</p>
+  <div class="big3" id="c-big"></div>
+  <p class="qcard col" id="c-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 6</p>
+    <h2>The chain: blame multiplies link by link</h2>
+    <p>Think of a delivery that arrives late. You can trace the final delay backwards through each leg of the route: how much the unloading delayed the arrival, how much the traffic jam delayed the unloading, how much the late departure delayed the jam. If each leg turns one minute of delay into two, three legs turn one into eight: <strong>the effects multiply</strong>.</p>
+    <p>The same happens in the network. The weight that links fuel use to neuron B affects the loss through a chain: the weight changes B’s score, the score changes B’s vote, the vote changes the output score and that changes the loss. The weight’s blame is the product of the four links.</p>
+  </div>
+  <figure class="fig"><svg id="chain" role="img" aria-label="The chain from the fuel-use weight of neuron B to the loss, with the slope of each link and the running product"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> From right to left (on a phone, from top to bottom), the blame travels from the loss to the weight. Each box is a link and its <b style="color:var(--point)">orange</b> number is its local slope: how much what comes out of the link changes if what goes in changes. Underneath, the blame accumulated on reaching that point: the product of all the links it has crossed. On wide screens, some bars give an idea of the size of each blame (on a scale in factors of 10).</p>
+  <div class="controls col">
+    <div class="slider"><label for="ch-i">Trip <output id="ch-i-o"></output></label><input type="range" id="ch-i" min="1" max="30" step="1" value="3"><div class="ends"><span>1</span><span>30</span></div></div>
+  </div>
+  <p class="qcard col" id="ch-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 6</p>
+    <h2>Where paths split, the blames add up</h2>
+    <p>The trip’s fuel use goes into both neurons, A and B. If the measured fuel use were a bit higher, the loss would change <strong>along two paths at once</strong>: through A and through B. The total blame of the fuel use is the <strong>sum</strong> of what arrives along each path. It is like a delay at the warehouse that affects two routes: the total cost is the delay to one plus the delay to the other.</p>
+    <p>It is not just a curiosity: with many neurons, each signal spreads over hundreds of paths, and backpropagation adds up what comes back along all of them. The same happens with the trips: the blame of a weight is the sum of what each trip contributes (you will see it in idea 4).</p>
+  </div>
+  <figure class="fig"><svg id="fork" role="img" aria-label="How much the loss would change if the fuel use of trip 3 went up, along A’s path, along B’s path and in total"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Trip 3 carries a 4.8 t load. Across, the fuel use it could have logged; up, how much the loss would rise for each extra liter of fuel use (its blame). The <b style="color:var(--mean)">blue</b> line is what arrives along A’s path; the <b style="color:var(--good)">green</b> one, along B’s; the thick <b style="color:var(--ink)">black</b> one is the sum. Above zero, more fuel use makes the loss worse; below, it makes it better. The vertical line is the slider’s fuel use.</p>
+  <div class="controls col">
+    <div class="slider"><label for="fk-q">Trip fuel use <output id="fk-q-o"></output></label><input type="range" id="fk-q" min="18" max="36" step="0.1" value="22.6"><div class="ends"><span>18 L</span><span>36 L</span></div></div>
+  </div>
+  <div class="big3" id="fk-big"></div>
+  <p class="qcard col" id="fk-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 6</p>
+    <h2>The shortcut: signal in times error back</h2>
+    <p>There is a rule that saves nearly all the arithmetic: the blame of a weight is <strong>the signal that goes in along its arrow</strong> (what the neuron before it sends) <strong>times the error that comes back</strong> to the neuron it reaches. A weight that carries no signal can’t be to blame, and neither can one that reaches a neuron with no error.</p>
+    <p>With 30 trips, the blame of each weight is the average of what each trip contributes. The chart shows those 30 contributions for the weight you pick.</p>
+  </div>
+  <div class="chips col" id="s-c" role="group" aria-label="Weight"></div>
+  <figure class="fig"><svg id="sxe" role="img" aria-label="What each trip contributes to the blame of a weight: signal in times error back"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> One bar per trip, numbered from 1 to 30. Downward, negative contributions (“raise this weight”); upward, positive ones (“lower it”). <b style="color:var(--point)">Orange</b>: a trip that doesn’t add up; <b style="color:var(--sample)">purple</b>: a normal one. The bars are divided by 30, so the weight’s blame is the sum of all of them; the dashed line is that sum and the big number, its value.</p>
+  <div class="big3" id="s-big"></div>
+  <p class="qcard col" id="s-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 6</p>
+    <h2>With many layers, the blame fades along the way</h2>
+    <p>In <a href="activation-functions-en.html" target="_self">topic 2</a> you saw that the slope of the sigmoid never goes above 0.25. Now you can see why that matters so much: the blame that reaches a layer has crossed every layer above it, and in each one it was multiplied by that slope. Ten layers are ten multiplications.</p>
+    <p>The chart is a real network with 10 hidden layers of 8 neurons, put to work on the 30 trips with random weights (drawn the recommended way for each activation) and repeated with 50 draws. For each layer we measure the average blame of its weights.</p>
+  </div>
+  <div class="chips col" id="d-c" role="group" aria-label="Activation"></div>
+  <figure class="fig"><svg id="deep" role="img" aria-label="Size of the blame that reaches each layer of a network with 10 hidden layers"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> One bar per layer: on the left, the first hidden layer (the one that looks at the data); on the right, the output. The height is the average blame of that layer’s weights compared with the output’s, which is 1. The scale jumps in factors of 10: each horizontal line is ten times less than the one above.</p>
+  <div class="big3" id="d-big"></div>
+  <p class="qcard col" id="d-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 6 of 6</p>
+    <h2>One learning step with all 30 trips</h2>
+    <p>In the toy, the network learned from a single trip. The usual thing is to compute the average blame over many trips and move all the weights at once: <strong>new weight = weight − rate × blame</strong>. The <strong>learning rate</strong> says how long the step is. With 0.03, each weight moves three hundredths of its blame.</p>
+    <p>Here you can take the steps one by one and watch the lines move. How to choose the rate, how many trips to use in each step and when to stop is topic 6, training well; this is the <a href="gradient-descent-en.html" target="_self">gradient descent</a> from the ML series, with the blames supplied by backpropagation.</p>
+  </div>
+  <figure class="fig"><svg id="train" role="img" aria-label="The 30 trips with the lines of neurons A and B, and the average loss step by step"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top (on the left on wide screens), the trips as in topic 3: <b style="color:var(--sample)">purple</b> the normal ones, <b style="color:var(--point)">orange</b> the ones that don’t add up, and a <b style="color:var(--warn)">red</b> ring on every mistake. The <b style="color:var(--mean)">blue</b> line belongs to neuron A and the <b style="color:var(--good)">green</b> one to B; the orange zone is where the network raises an alert. The light gray line is where line B was at the start. At the bottom (on the right), the average loss after each step.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>Learning rate</h3>
+      <div class="seg" role="group" aria-label="Learning rate"><button type="button" id="tr-e0" aria-pressed="false">0.01</button><button type="button" id="tr-e1" aria-pressed="true">0.03</button><button type="button" id="tr-e2" aria-pressed="false">0.1</button></div>
+      <p>Changing the rate starts again from the badly set-up network. A small rate takes short, safe steps; a large one, long steps that can overshoot.</p>
+    </div>
+    <div class="dec">
+      <h3>Steps</h3>
+      <div class="rowb"><button type="button" id="tr-step" class="primary">Take a step</button><button type="button" id="tr-re">↺ Badly set-up network</button></div>
+      <p>Each step runs the 30 trips forward, computes the blames backward and moves the 9 weights.</p>
+    </div>
+  </div>
+  <div class="big3" id="tr-big"></div>
+  <p class="qcard col" id="tr-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The full recipe</h2>
+    <ol class="steps">
+      <li><div><strong>Forward</strong>: run the data through the network and keep the scores and votes of each neuron.</div></li>
+      <li><div><strong>The loss</strong>: compare the answer with what really happened. At the output, the blame is p − y.</div></li>
+      <li><div><strong>Backward, layer by layer</strong>: each neuron receives its blame from above and passes it down multiplied by its slope and by the weight of each arrow.</div></li>
+      <li><div><strong>Where paths meet</strong>, the incoming blames add up.</div></li>
+      <li><div><strong>The blame of each weight</strong>: signal in times error back, added up (or averaged) over all the examples.</div></li>
+      <li><div><strong>One step</strong>: each weight moves a little against its blame. All of this costs about two or three forward passes, whether the network has 9 weights or millions.</div></li>
+      <li><div><strong>Watch the blame in deep networks</strong>: if the slopes are small, almost nothing reaches the first layers.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where it shows up in fleet telemetry</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 30L34 12M6 22L34 4M6 38L34 20"/></svg><h3>Odd fuel-use detectors</h3><p>Any network that learns to tell normal trips from odd ones (by fuel use, load, grade, speed) adjusts its weights with backpropagation, trip by trip or in batches, every time the maintenance shop confirms a new case.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13"/><path d="M20 11v9l6 4"/></svg><h3>Estimated time of arrival</h3><p>Arrival-time models have millions of weights. Nudging them one by one would take days for every step; backpropagation gives all the blames for the cost of two or three passes, which is why they can be retrained every night with the day’s trips.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 32h28M10 32V20M18 32V12M26 32V24M34 32V8"/></svg><h3>Sensor series</h3><p>Networks that read a trip’s series (temperature, engine speed, second-by-second GPS) are very deep “along time”. The fading blame from idea 5 is their big problem; you will see it in topic 9.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 20h8l4-8 4 16 4-8h4"/></svg><h3>Why the network raised an alert</h3><p>The blame of the fuel use or of the load (idea 3) is not only for training: it says which input, if it changed a little, would move the answer the most. It is a quick way to explain an alert to the fleet manager.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Connections</p>
+    <h2>With the other topics</h2>
+    <p>Backpropagation is the <strong>chain rule</strong> from <a href="derivatives-gradient-and-the-chain-rule-en.html" target="_self">math topic 16</a>, applied in order: there you saw how a single neuron learns, backwards, and here the same is done with a whole network. Passing the blame from one layer to the one before is multiplying by the table of weights “turned around” (the transpose from <a href="matrices-as-transformations-en.html" target="_self">topic 3</a>).</p>
+    <p>In this collection, the network is the one from <a href="the-multilayer-network-en.html" target="_self">topic 3</a>, the output blame p − y comes from the loss in <a href="output-and-loss-en.html" target="_self">topic 4</a> and the slopes of each neuron, from the activations in <a href="activation-functions-en.html" target="_self">topic 2</a>, where the fading blame also showed up. In the ML series, a single neuron with a sigmoid is a <a href="logistic-regression-en.html" target="_self">logistic regression</a>, and its blame is the same p − y; moving the weights with the blames is <a href="gradient-descent-en.html" target="_self">gradient descent</a>. Topic 6, training well, deals with the full loop: batches, learning rate, momentum and Adam.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>What it gives you and what to watch</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>What it gives you</h3><ul class="pc">
+      <li>All the blames for the price of about two or three passes, whether the network has 9 weights or billions.</li>
+      <li>It is exact: it doesn’t approximate like the nudge by hand, apart from the computer’s rounding.</li>
+      <li>It is mechanical: each piece only needs to know its own slope. That is why libraries do it on their own.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>What to watch</h3><ul class="pc">
+      <li>You have to keep the numbers from the forward pass: with large networks and large batches, that is a lot of memory.</li>
+      <li>It only says which way is down from here, not where the best point is: with steps that are too long, you overshoot.</li>
+      <li>If the slopes are small (saturated neurons, many layers), the blame doesn’t reach the first layers and those layers don’t learn.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Backpropagation</dt><dd>Computing the blame of every weight by walking the network backwards, from the loss to the input.</dd>
+      <dt>Gradient</dt><dd>The blames of all the weights, taken together: how much the loss changes if each weight goes up a tiny bit.</dd>
+      <dt>Forward pass</dt><dd>Computing the network’s answer, keeping the numbers of each neuron.</dd>
+      <dt>Backward pass</dt><dd>Sharing out the blame from the output to the input, multiplying by the slope of each piece.</dd>
+      <dt>Local slope</dt><dd>How much what comes out of a piece changes if what goes in changes a little.</dd>
+      <dt>Chain rule</dt><dd>In a chain of pieces, the slopes multiply.</dd>
+      <dt>Output error (p − y)</dt><dd>The blame of the output score: what the network said minus what happened.</dd>
+      <dt>Learning rate</dt><dd>How long each step is: what fraction of its blame is subtracted from each weight.</dd>
+      <dt>Finite differences</dt><dd>Computing the blame by nudging the weight by hand and seeing how much the loss changes. Slow, but useful for checking.</dd>
+      <dt>Vanishing gradient</dt><dd>Blame that becomes tiny after crossing many layers with small slopes.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the math behind it</summary>
+    <p style="padding-top:10px">You don’t need them to understand the idea:</p>
+    <div class="formula">forward:   zA = −1.1·load + 2·fuel − 53      hA = σ(zA)
+           zB =  1.1·load − 2·fuel + 36      hB = σ(zB)
+           z  = 10·hA + 10·hB − 5            p  = σ(z)
+loss:      −ln p  if the trip is odd,   −ln(1 − p)  if it is normal
+
+backward:  blame of z      = p − y
+           blame of vB     = hB · (p − y)                  (signal × error)
+           blame of zB     = (p − y) · 10 · hB·(1 − hB)    (= δB)
+           blame of wB     = δB · (load, fuel)             (signal × error)
+           blame of fuel   = δA·2 + δB·(−2)                (two paths: they add up)
+
+trip 3 (4.8 t, 22.6 L):  zB = −3.92  hB = 1.9%   p = 0.8%   loss 4.81
+   p − y = −0.99   δB = −0.99 · 10 · 0.019 = −0.19
+   blame of wB·fuel = −0.19 · 22.6 = −4.28
+
+one step:  new weight = weight − 0.03 · blame
+   wB·fuel: −2 − 0.03·(−4.28) = −1.87   →  loss of trip 3: 2.17</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in one minute</h2>
+    <p>An animated recap: the badly set-up network that lets six trips get away, what it would cost to nudge every weight by hand, the blame traveling backward and multiplying, the step that raises line B and the blame that fades in very deep networks. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBID/2Q==" aria-label="Animation: backpropagation">
+      <source src="backpropagation-with-audio-en.mp4" type="video/mp4">
+      Your browser cannot play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"cc":[22.4,13.3,4.8,19.6,14.1,8.1,10.1,13.3,9.8,4.9,15.2,3.5,23.6,7.2,21.1,20.0,16.7,2.6,22.9,13.0,15.7,12.6,5.3,16.6,14.2,5.0,6.5,4.8,19.3,15.0],"cq":[35.4,30.5,22.6,30.4,37.7,28.4,28.3,30.1,23.8,25.9,31.3,26.4,41.7,23.6,31.8,39.0,32.8,26.5,37.6,30.6,31.9,34.6,26.7,32.7,35.5,27.8,32.8,26.6,35.1,27.2],"cy":[0,0,1,1,1,0,0,0,1,0,0,0,1,1,1,1,0,0,0,0,0,1,0,0,1,0,1,0,0,1],"W1":[[-1.1,2.0],[1.1,-2.0]],"b1":[-53.0,36.0],"w2":[10.0,10.0],"b2":-5.0,"eta":0.03,"coste":[{"P":15,"tp":3.55e-05,"tb":7.97e-05,"tf":0.0015,"est":false},{"P":105,"tp":4.1e-05,"tb":8.91e-05,"tf":0.0116,"est":false},{"P":1185,"tp":6.77e-05,"tb":0.0001254,"tf":0.2431,"est":false},{"P":17025,"tp":0.0001882,"tb":0.000324,"tf":8.6736,"est":false},{"P":264705,"tp":0.0010418,"tb":0.0025681,"tf":551.5393,"est":true},{"P":4204545,"tp":0.012343,"tb":0.0389123,"tf":103793.3979,"est":true}],"capas":{"sigmoide":[1.74e-07,6.88e-07,2.839e-06,1.3042e-05,5.6703e-05,0.00026199,0.001116123,0.004982685,0.021793743,0.095352148,1.0],"tanh":[0.882649342,0.497199642,0.417311374,0.409556141,0.403917012,0.424432274,0.385367917,0.417114563,0.462163731,0.410428438,1.0],"relu":[0.530491195,0.343883168,0.340722526,0.270566539,0.264230397,0.264341193,0.28718203,0.292770517,0.265394945,0.254444116,1.0]},"pend":{"sigmoide":0.235,"tanh":0.923,"relu":0.495}};
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g,",");s=fr?i+"."+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+const redraws=[];window.addEventListener("resize",()=>redraws.forEach(g=>g()));
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((x,j)=>x.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return bs;}
+function axes(svg,o){const FS=o.FS,L=o.x+(o.padL??FS*3.4),R=o.x+o.w-(o.padR??FS*0.9),T=o.y+(o.padT??FS*2.2),B=o.y+o.h-(o.padB??FS*2.6);
+  const sx=v=>L+(v-o.x0)/(o.x1-o.x0)*(R-L),sy=v=>B-(v-o.y0)/(o.y1-o.y0)*(B-T),g=el("g",null,svg);
+  for(const v of (o.yt||[])){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},g);txt(g,L-7,sy(v)+FS*0.3,(o.fy||(v=>f1(v,0)))(v),{"text-anchor":"end","font-size":FS*0.8});}
+  for(const v of (o.xt||[])){el("line",{x1:sx(v),x2:sx(v),y1:T,y2:B,class:"g-line","stroke-opacity":.55},g);
+    const s=(o.fx||(v=>f1(v,0)))(v),w=s.length*FS*0.8*0.62,X=sx(v);let a="middle",xx=X;if(X+w/2>o.x+o.w-3){a="end";xx=o.x+o.w-3;}else if(X-w/2<o.x+3){a="start";xx=o.x+3;}
+    txt(g,xx,B+FS*1.05,s,{"text-anchor":a,"font-size":FS*0.8});}
+  el("line",{x1:L,x2:R,y1:B,y2:B,class:"g-axis"},g);
+  if(o.xl)txt(g,R,o.y+o.h-FS*0.25,o.xl,{"text-anchor":"end","font-size":FS*0.85,class:"t-ink"});
+  if(o.yl)txt(g,L,T-FS*0.75,o.yl,{"font-size":FS*0.8,class:"t-ink"});
+  return {L,R,T,B,sx,sy,FS,o};}
+const dot=(g,x,y,r,fill,extra)=>el("circle",Object.assign({cx:x,cy:y,r,fill,stroke:"var(--point-ring)","stroke-width":r>6?2:1.2},extra||{}),g);
+const pathOf=P=>P.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join("");
+const clipRect=(svg,A)=>{const id="c"+Math.random().toString(36).slice(2,8);el("rect",{x:A.L,y:A.T,width:A.R-A.L,height:A.B-A.T},el("clipPath",{id},el("defs",null,svg)));return el("g",{"clip-path":`url(#${id})`},svg);};
+const arrow=(g,x1,y1,x2,y2,col,w,head)=>{const a=Math.atan2(y2-y1,x2-x1),h=head||12;el("line",{x1,y1,x2:x2-Math.cos(a)*h*0.6,y2:y2-Math.sin(a)*h*0.6,stroke:col,"stroke-width":w||3,"stroke-linecap":"round"},g);
+  el("path",{d:`M${x2} ${y2}L${x2-h*Math.cos(a-0.42)} ${y2-h*Math.sin(a-0.42)}L${x2-h*Math.cos(a+0.42)} ${y2-h*Math.sin(a+0.42)}Z`,fill:col},g);};
+const sig=z=>1/(1+Math.exp(-z));
+const sp=t=>Math.max(t,0)+Math.log1p(Math.exp(-Math.abs(t)));
+const fw=v=>f1(v,3).replace(/0+$/,"").replace(/\.$/,"");
+const pct=(p,d)=>f1(p*100,d??1)+"%";
+/* blames: as many decimals as needed; "≈ 0" when negligible */
+const fg=v=>{const a=Math.abs(v);if(a<5e-5)return "≈ 0";return f1(v,a>=10?1:a>=1?2:a>=0.1?3:a>=0.01?3:a>=0.001?4:5);};
+function shade(A,g,f,nx,ny,fill,op){const x0=A.o.x0,x1=A.o.x1,y0=A.o.y0,y1=A.o.y1,dx=(x1-x0)/nx,dy=(y1-y0)/ny;let d="";
+  for(let j=0;j<ny;j++){const y=y0+(j+0.5)*dy;let s=-1;for(let i=0;i<=nx;i++){const on=i<nx&&f(x0+(i+0.5)*dx,y);
+    if(on&&s<0)s=i;if(!on&&s>=0){const X0=A.sx(x0+s*dx),X1=A.sx(x0+i*dx)+0.5,Y0=A.sy(y0+(j+1)*dy)-0.5,Y1=A.sy(y0+j*dy);d+=`M${X0.toFixed(1)} ${Y0.toFixed(1)}H${X1.toFixed(1)}V${Y1.toFixed(1)}H${X0.toFixed(1)}Z`;s=-1;}}}
+  if(d)el("path",{d,fill,"fill-opacity":op},g);}
+function segIn(f,x0,x1,y0,y1){const C=[[x0,y0],[x1,y0],[x1,y1],[x0,y1]],pts=[];for(let i=0;i<4;i++){const P=C[i],Q=C[(i+1)%4],fa=f(P),fb=f(Q);if(fa===0)pts.push(P);if(fa*fb<0){const t=fa/(fa-fb);pts.push([P[0]+t*(Q[0]-P[0]),P[1]+t*(Q[1]-P[1])]);}}return pts.length>=2?[pts[0],pts[pts.length-1]]:null;}
+function lineF(A,g,f,col,w,dash,op){const s=segIn(f,A.o.x0,A.o.x1,A.o.y0,A.o.y1);if(!s)return null;
+  el("line",{x1:A.sx(s[0][0]),y1:A.sy(s[0][1]),x2:A.sx(s[1][0]),y2:A.sy(s[1][1]),stroke:col,"stroke-width":w,"stroke-dasharray":dash||"none","stroke-linecap":"round","stroke-opacity":op??1},g);return s;}
+function lineLabel(A,svg,s,lab,col,side){if(!s)return;const [P,Q]=s[0][0]<=s[1][0]?s:[s[1],s[0]],u=0.88,X0=A.sx(P[0]+u*(Q[0]-P[0])),Y0=A.sy(P[1]+u*(Q[1]-P[1]));
+  const X=Math.max(A.L+A.FS,Math.min(A.R-A.FS*0.8,X0)),Y=Math.max(A.T+A.FS,Math.min(A.B-A.FS*0.4,Y0-(side||1)*A.FS*0.95+A.FS*0.35));
+  txt(svg,X,Y,lab,Object.assign({"text-anchor":"middle","font-size":A.FS*1.05,"font-weight":800,style:`fill:${col}`},halo(6)));}
+const log10=Math.log10;
+
+/* ---------- the 2-2-1 network (the one from topic 3, with line B 3.5 L lower) ---------- */
+const CC=D.cc,CQ=D.cq,CY=D.cy,NV=CY.length,ETA=D.eta;
+const P0=()=>({W:D.W1.map(r=>r.slice()),b:D.b1.slice(),v:D.w2.slice(),c:D.b2});
+function fwd(P,c,q){const zA=P.W[0][0]*c+P.W[0][1]*q+P.b[0],zB=P.W[1][0]*c+P.W[1][1]*q+P.b[1],hA=sig(zA),hB=sig(zB),z=P.v[0]*hA+P.v[1]*hB+P.c;return {zA,zB,hA,hB,z,p:sig(z)};}
+const lossOf=(n,y)=>y?sp(-n.z):sp(n.z);
+/* backward for one trip: blame of each number (batch of 1) */
+function back(P,c,q,y){const n=fwd(P,c,q),e=n.p-y,sA=n.hA*(1-n.hA),sB=n.hB*(1-n.hB),dA=e*P.v[0]*sA,dB=e*P.v[1]*sB;
+  return {n,L:lossOf(n,y),e,sA,sB,dA,dB,gW:[[dA*c,dA*q],[dB*c,dB*q]],gb:[dA,dB],gv:[n.hA*e,n.hB*e],gc:e};}
+/* average over the 30 trips */
+function gradAll(P){const G={L:0,gW:[[0,0],[0,0]],gb:[0,0],gv:[0,0],gc:0};
+  for(let i=0;i<NV;i++){const g=back(P,CC[i],CQ[i],CY[i]);G.L+=g.L/NV;for(let k=0;k<2;k++){G.gW[k][0]+=g.gW[k][0]/NV;G.gW[k][1]+=g.gW[k][1]/NV;G.gb[k]+=g.gb[k]/NV;G.gv[k]+=g.gv[k]/NV;}G.gc+=g.gc/NV;}return G;}
+const stepP=(P,g,eta)=>({W:P.W.map((r,k)=>r.map((w,j)=>w-eta*g.gW[k][j])),b:P.b.map((b,k)=>b-eta*g.gb[k]),v:P.v.map((v,k)=>v-eta*g.gv[k]),c:P.c-eta*g.gc});
+const meanLoss=P=>{let s=0;for(let i=0;i<NV;i++)s+=lossOf(fwd(P,CC[i],CQ[i]),CY[i]);return s/NV;};
+const nErr=P=>{let e=0;for(let i=0;i<NV;i++)if((fwd(P,CC[i],CQ[i]).p>0.5)!==(CY[i]===1))e++;return e;};
+/* the 9 parameters, with names */
+const PN=[["A · load",P=>P.W[0][0],(P,v)=>P.W[0][0]=v,g=>g.gW[0][0]],["A · fuel use",P=>P.W[0][1],(P,v)=>P.W[0][1]=v,g=>g.gW[0][1]],["A · bias",P=>P.b[0],(P,v)=>P.b[0]=v,g=>g.gb[0]],
+  ["B · load",P=>P.W[1][0],(P,v)=>P.W[1][0]=v,g=>g.gW[1][0]],["B · fuel use",P=>P.W[1][1],(P,v)=>P.W[1][1]=v,g=>g.gW[1][1]],["B · bias",P=>P.b[1],(P,v)=>P.b[1]=v,g=>g.gb[1]],
+  ["output · vote A",P=>P.v[0],(P,v)=>P.v[0]=v,g=>g.gv[0]],["output · vote B",P=>P.v[1],(P,v)=>P.v[1]=v,g=>g.gv[1]],["output · bias",P=>P.c,(P,v)=>P.c=v,g=>g.gc]];
+const clone=P=>({W:P.W.map(r=>r.slice()),b:P.b.slice(),v:P.v.slice(),c:P.c});
+const tripLab=i=>`${i+1} (${f1(CC[i],1)} t, ${f1(CQ[i],1)} L${CY[i]?", odd":", normal"})`;
+function bandFrame(svg,box,nw){const FS=nw?22:14;
+  return axes(svg,{x:box[0],y:box[1],w:box[2],h:box[3],x0:0,x1:25,y0:18,y1:42,xt:[0,5,10,15,20,25],yt:[20,25,30,35,40],fx:v=>v+" t",xl:"load (tonnes)",yl:"fuel use (L/100 km)",FS,padL:FS*2.4,padT:FS*2});}
+
+/* ---------- toy: the network walked forward and backward ---------- */
+(function(){const svg=$("toy"),ii=$("t-i");let st=0;
+  const STG=["Step 1 of 6 · Forward","Step 2 of 6 · The output error","Step 3 of 6 · Blame of the output weights","Step 4 of 6 · Blame of the hidden neurons","Step 5 of 6 · Blame of the input weights","Step 6 of 6 · One learning step"];
+  function node(x,y,r,col,l1,l2,FS,bw,c1,c2){el("circle",{cx:x,cy:y,r,fill:"var(--surface)",stroke:col,"stroke-width":bw||3},svg);
+    txt(svg,x,y-(l2?FS*0.12:-FS*0.35),l1,{"text-anchor":"middle","font-size":FS*0.9,"font-weight":700,style:`fill:${c1||"var(--ink)"}`});
+    if(l2)txt(svg,x,y+FS*1.0,l2,{"text-anchor":"middle","font-size":FS*0.74,style:`fill:${c2||"var(--muted)"}`});}
+  function draw(){const i=+ii.value-1,c=CC[i],q=CQ[i],y=CY[i],P=P0(),g=back(P,c,q,y),P1=stepP(P,g,ETA),g1=back(P1,c,q,y),n=g.n;
+    const nw=narrowOf(svg),W=nw?600:900,H=nw?820:440,FS=nw?23:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const xI=nw?62:90,xH=nw?292:400,xO=nw?500:650,yI=[H*(nw?0.24:0.3),H*(nw?0.6:0.72)],yH=[H*(nw?0.17:0.19),H*(nw?0.67:0.81)],yO=nw?H*0.42:H*0.5,rI=nw?52:42,rH=nw?78:58,rO=nw?72:56;
+    const OR="var(--point)",lab=(x,y,s,col)=>txt(svg,x,y,s,Object.assign({"text-anchor":"middle","font-size":FS*0.85,"font-weight":700,style:`fill:${col}`},halo(6)));
+    /* input arrows */
+    for(let k=0;k<2;k++)for(let j=0;j<2;j++){const w=P.W[k][j],x1=xI+rI,y1=yI[j],x2=xH-rH,y2=yH[k],act=st===4;
+      el("line",{x1,y1,x2,y2,stroke:act?OR:(w>0?"var(--ink)":"var(--muted)"),"stroke-width":act?Math.max(2,Math.min(9,2+2*Math.abs(g.gW[k][j]))):Math.abs(w)*1.6+1,"stroke-opacity":act?.9:.45,"stroke-dasharray":act?"10 6":"none"},svg);
+      const t=j===k?(nw?0.42:0.3):0.72,mx=x1+(x2-x1)*t,my=y1+(y2-y1)*t-FS*0.35;
+      if(st===4)lab(mx,my,fg(g.gW[k][j]),OR);else if(st===5)lab(mx,my,fw(P1.W[k][j]),"var(--ink)");else lab(mx,my,f1(w,w%1?1:0),"var(--ink)");}
+    for(let k=0;k<2;k++){const x1=xH+rH,y1=yH[k],x2=xO-rO,y2=yO,act=st>=2&&st<=4;
+      el("line",{x1,y1,x2,y2,stroke:act?OR:"var(--ink)","stroke-width":act?Math.max(2,Math.min(9,2+20*Math.abs(g.gv[k]))):4,"stroke-opacity":act?.9:.45,"stroke-dasharray":act?"10 6":"none"},svg);
+      const t=nw?0.58:0.45,mx=x1+(x2-x1)*t,my=y1+(y2-y1)*t-FS*0.45;
+      if(act)lab(mx,my,fg(g.gv[k]),OR);else if(st===5)lab(mx,my,f1(P1.v[k],4),"var(--ink)");else lab(mx,my,"10","var(--ink)");}
+    node(xI,yI[0],rI,"var(--ink)",f1(c,1)+" t",null,FS,2);node(xI,yI[1],rI,"var(--ink)",f1(q,1)+" L",null,FS,2);
+    txt(svg,xI,yI[0]-rI-FS*0.4,"load",{"text-anchor":"middle","font-size":FS*0.8});txt(svg,xI,yI[1]-rI-FS*0.4,"fuel use",{"text-anchor":"middle","font-size":FS*0.8});
+    const hid=[[n.zA,n.hA,g.sA,g.dA,g1.n.hA,"A · burns too much","var(--mean)",P.b[0],P1.b[0]],[n.zB,n.hB,g.sB,g.dB,g1.n.hB,"B · burns too little","var(--good)",P.b[1],P1.b[1]]];
+    hid.forEach(([z,h,s,d,h1,nm,col,b,b1],k)=>{
+      if(st<=2)node(xH,yH[k],rH,col,pct(h,h<0.001?4:1),"z = "+f1(z,2),FS,h>0.5?5:3);
+      else if(st<=4)node(xH,yH[k],rH,col,fg(d)==="≈ 0"?"δ ≈ 0":"δ = "+fg(d),"slope "+fg(s),FS,3,OR,OR);
+      else node(xH,yH[k],rH,col,pct(h1,h1<0.001?4:1),"before "+pct(h,h<0.001?4:1),FS,h1>0.5?5:3);
+      const ly=nw&&k===1?yH[k]+rH+FS*1.1:yH[k]-rH-FS*0.45;txt(svg,xH,ly,nm,{"text-anchor":"middle","font-size":FS*0.8,class:"t-ink"});
+      if(!nw)txt(svg,xH,yH[k]+(k===0?rH+FS*1.05:-rH-FS*1.55),st===5?"bias "+f1(b1,3):st>=3?"bias blame "+fg(d):"bias "+f1(b,0),{"text-anchor":"middle","font-size":FS*0.72,style:`fill:${st>=3&&st<5?OR:"var(--muted)"}`});});
+    const on=(st===5?g1.n.p:n.p)>0.5,oc=on?"var(--point)":"var(--sample)";
+    if(st===0)node(xO,yO,rO,oc,pct(n.p),"z = "+f1(n.z,2),FS,4);
+    else if(st<5)node(xO,yO,rO,oc,fg(g.e),"= p − y",FS,4,OR,OR);
+    else node(xO,yO,rO,oc,pct(g1.n.p),"before "+pct(n.p),FS,4);
+    txt(svg,xO,yO-rO-FS*0.45,"output",{"text-anchor":"middle","font-size":FS*0.8,class:"t-ink"});
+    if(!nw)txt(svg,xO,yO+rO+FS*1.05,st===5?"bias "+f1(P1.c,3):st>=1&&st<5?"bias blame "+fg(g.gc):"bias −5",{"text-anchor":"middle","font-size":FS*0.72,style:`fill:${st>=1&&st<5?OR:"var(--muted)"}`});
+    /* the loss */
+    const pw=nw?250:150,px=nw?xO-20:xO+rO+40+pw/2,py=nw?H*0.86:yO,ph=FS*3;
+    if(!nw)arrow(svg,xO+rO+4,yO,px-pw/2-4,yO,"var(--muted)",2.4,11);else arrow(svg,px,yO+rO+4,px,py-ph/2-4,"var(--muted)",2.4,11);
+    el("rect",{x:px-pw/2,y:py-ph/2,width:pw,height:ph,rx:12,fill:"var(--hl)",stroke:"var(--line)","stroke-width":2},svg);
+    txt(svg,px,py-FS*0.25,"loss",{"text-anchor":"middle","font-size":FS*0.75});
+    txt(svg,px,py+FS*0.95,st===5?`${f1(g.L,2)} → ${f1(g1.L,2)}`:f1(g.L,2),{"text-anchor":"middle","font-size":FS*1.05,"font-weight":800,class:"t-ink"});
+    /* direction legend */
+    txt(svg,W-8,H-FS*0.5,st===0?"→ forward":st===5?"step: weight − 0.03 × blame":"← backward (blame in orange)",{"text-anchor":"end","font-size":FS*0.78,style:`fill:${st===0||st===5?"var(--muted)":OR}`});
+    $("t-i-o").textContent=tripLab(i);$("t-stage").textContent=STG[st];
+    $("t-prev").disabled=st===0;$("t-next").disabled=st===5;
+    const gs=[["A · load",g.gW[0][0]],["A · fuel use",g.gW[0][1]],["A · bias",g.gb[0]],["B · load",g.gW[1][0]],["B · fuel use",g.gW[1][1]],["B · bias",g.gb[1]],["vote A",g.gv[0]],["vote B",g.gv[1]],["output bias",g.gc]];
+    const top=gs.reduce((a,b)=>Math.abs(b[1])>Math.abs(a[1])?b:a);
+    $("t-big").innerHTML=`<div><b>${st===5?f1(g.L,2)+" → "+f1(g1.L,2):f1(g.L,2)}</b><span>loss of this trip${st===5?" before and after the step":""}</span></div><div><b style="color:var(--point)">${st>=1?fg(g.e):"—"}</b><span>output blame: p − y = ${pct(n.p)} − ${y}</span></div><div><b style="color:var(--point)">${st>=4?fg(top[1]):"—"}</b><span>largest blame: ${st>=4?"weight "+top[0]:"shows up in step 5"}</span></div>`;
+    const raro=y===1,ok=(n.p>0.5)===raro;let m="";
+    if(st===0)m=`Trip ${i+1} comes in on the left. Neuron A scores ${f1(n.zA,2)} points and votes ${pct(n.hA,n.hA<0.001?4:1)}; B scores ${f1(n.zB,2)} and votes ${pct(n.hB,n.hB<0.001?4:1)}. The output adds 10 for each vote and subtracts 5: ${f1(n.z,2)} points, a <b>${pct(n.p)}</b> chance that the trip doesn’t add up. ${raro?"But the fleet supervisor marked it as odd":"The fleet supervisor marked it as normal"}: the network ${ok?"gets it right":"<b>gets it wrong</b>"}, and the loss is ${f1(g.L,2)}. The network has kept all these numbers: it will need them on the way back.`;
+    else if(st===1)m=`The way back begins. The blame of the output score is simply <b>p − y</b>: what the network said (${f1(n.p,3)}) minus what happened (${y}) = <b>${fg(g.e)}</b>. ${raro?"It is negative: “raise the output score and the loss goes down”.":"It is positive: “lower the output score and the loss goes down”."} This is the shortcut from topic 4: with the sigmoid and the cross-entropy, the rest of the arithmetic cancels out.`;
+    else if(st===2)m=`Each output weight multiplies a vote. Its blame is <b>the signal that goes in</b> (the vote) <b>times the error that comes back</b> (p − y): the weight of B’s vote, ${f1(n.hB,4)} × ${fg(g.e)} = <b>${fg(g.gv[1])}</b>; A’s, ${fg(g.gv[0])}. The output bias is like a weight with signal 1: its blame is ${fg(g.gc)}. A switched-off vote leaves no blame on its weight.`;
+    else if(st===3)m=`Now the blame crosses the arrow of 10 and each neuron’s sigmoid. B receives ${fg(g.e)} × 10 × ${fg(g.sB)} = <b>${fg(g.dB)}</b> (we will call the blame that reaches a neuron δ, “delta”), where ${fg(g.sB)} is the slope of its sigmoid (its vote times one minus its vote). A receives ${fg(g.dA)}: ${n.hA<0.01||n.hA>0.99?"its sigmoid is in a flat zone, with a slope of almost zero, and <b>no blame gets through</b>. A saturated neuron doesn’t learn from this trip.":"its slope is not small, so blame reaches it too."} This δ is also the blame of each neuron’s bias.`;
+    else if(st===4)m=`Last link: the blame of each input weight is again <b>signal × error</b>. For B: load ${f1(c,1)} × ${fg(g.dB)} = ${fg(g.gW[1][0])} and fuel use ${f1(q,1)} × ${fg(g.dB)} = <b>${fg(g.gW[1][1])}</b>. The fuel-use blames are larger because fuel use is a bigger number than load. With one forward pass and one backward pass we have all 9 blames.`;
+    else{const Lm0=meanLoss(P),Lm1=meanLoss(P1);m=`Each weight moves 0.03 times its blame, in the opposite direction: ${Math.abs(P1.W[1][1]+2)<0.0005?"none of them changes noticeably with this trip":"B’s fuel-use weight goes from −2 to "+f1(P1.W[1][1],3)}. With just this change, the loss of trip ${i+1} goes from ${f1(g.L,2)} to <b>${f1(g1.L,2)}</b>${raro&&!ok?` and the alert probability, from ${pct(n.p)} to ${pct(g1.n.p)}`:""}. ${Math.abs(g.L-g1.L)<0.01?"Since the network already got this trip right, almost nothing changes.":"One step isn’t enough to get it right, but it goes in the right direction."} Along the way, the average loss of the 30 trips goes from ${f1(Lm0,3)} to ${f1(Lm1,3)}.`;}
+    $("t-msg").innerHTML=m;}
+  $("t-next").onclick=()=>{if(st<5){st++;draw();}};$("t-prev").onclick=()=>{if(st>0){st--;draw();}};$("t-re").onclick=()=>{st=0;draw();};
+  ii.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 1: nudging a weight by hand, and the cost ---------- */
+(function(){const svg=$("nud"),ih=$("n-h");let k=4;
+  function draw(){const h=+ih.value,P=P0(),G=gradAll(P),g=PN[k][3](G),L0=G.L,nw=narrowOf(svg),W=nw?600:900,H=nw?480:360,FS=nw?22:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const Lof=d=>{const Q=clone(P);PN[k][2](Q,PN[k][1](P)+d);return meanLoss(Q);};
+    const xs=[];for(let j=0;j<=80;j++)xs.push(-0.1+0.2*j/80);const ys=xs.map(Lof);let lo=Math.min(...ys,L0-0.1*Math.abs(g)),hi=Math.max(...ys,L0+0.1*Math.abs(g));const pad=Math.max(0.02,(hi-lo)*0.12);lo=Math.max(0,lo-pad);hi+=pad;
+    const st=(hi-lo)>1?0.25:(hi-lo)>0.4?0.1:(hi-lo)>0.15?0.05:0.01,yt=[];for(let v=Math.ceil(lo/st)*st;v<=hi;v+=st)yt.push(+v.toFixed(3));
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:-0.1,x1:0.1,y0:lo,y1:hi,xt:[-0.1,-0.05,0,0.05,0.1],yt,fx:v=>(v>0?"+":"")+f1(v,2),fy:v=>f1(v,2),xl:"nudge to the weight",yl:"average loss (30 trips)",FS,padL:FS*3,padT:FS*2}),gg=clipRect(svg,A);
+    el("path",{d:pathOf(xs.map((x,j)=>[A.sx(x),A.sy(ys[j])])),fill:"none",stroke:"var(--mean)","stroke-width":nw?5:4},gg);
+    el("line",{x1:A.sx(-0.1),y1:A.sy(L0-0.1*g),x2:A.sx(0.1),y2:A.sy(L0+0.1*g),stroke:"var(--point)","stroke-width":nw?4:3,"stroke-dasharray":"10 7"},gg);
+    const L1=Lof(h);el("line",{x1:A.sx(h),x2:A.sx(h),y1:A.T,y2:A.B,stroke:"var(--muted)","stroke-width":1.5,"stroke-dasharray":"4 5"},gg);
+    dot(svg,A.sx(0),A.sy(L0),nw?9:7,"var(--ink)");dot(svg,A.sx(h),A.sy(L1),nw?10:8,"var(--mean)");
+    $("n-h-o").textContent=(h>0?"+":"")+f1(h,3);
+    const dm=L1-L0,dp=g*h;
+    $("n-big").innerHTML=`<div><b style="color:var(--mean)">${(dm>0?"+":"")+f1(dm,4)}</b><span>measured change in the loss (2 passes of the 30 trips)</span></div><div><b style="color:var(--point)">${(dp>0?"+":"")+f1(dp,4)}</b><span>what the blame predicts: ${fg(g)} × ${f1(h,3)}</span></div><div><b>${f1(L0,4)}</b><span>starting average loss</span></div>`;
+    let m;const rel=Math.abs(dm-dp)/Math.max(Math.abs(dm),1e-9);
+    if(Math.abs(h)<1e-9)m=`No nudge, no change. Move the slider.`;
+    else if(Math.abs(dm)<5e-5&&Math.abs(dp)<5e-5)m=`Nudging “${PN[k][0]}” barely changes the loss: its blame is ${fg(g)}. In this badly set-up network, the problem isn’t here. Try “B · fuel use”, the weight with the most blame.`;
+    else if(rel<0.15)m=`With a nudge of ${f1(h,3)}, the loss changes by ${f1(dm,4)} and the blame predicted ${f1(dp,4)}: <b>almost the same</b>. For small nudges, the blue curve and the orange line match. That is what the blame is: the tilt of the curve at the starting point.`;
+    else m=`With a nudge of ${f1(h,3)}, the loss changes by ${f1(dm,4)}, but the blame predicted ${f1(dp,4)}: ${Math.sign(dm)!==Math.sign(dp)?"<b>not even the same sign</b>":"quite different"}. The blame only describes what happens with small nudges; farther out, the curve bends. That is why learning takes short steps.`;
+    $("n-msg").innerHTML=m;}
+  chips($("n-c"),PN.map(p=>p[0]),i=>{k=i;draw();},k);ih.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+const fT=s=>s<1e-3?f1(s*1e6,0)+" µs":s<1?f1(s*1e3,1)+" ms":s<120?f1(s,1)+" s":s<7200?f1(s/60,0)+" min":f1(s/3600,1)+" h";
+const fP=P=>P>=1e6?f1(P/1e6,1)+" million":f1(P,0);
+(function(){const svg=$("cost"),R=D.coste;let k=R.length-1;
+  function draw(){const r=R[k],nw=narrowOf(svg),W=nw?600:900,H=nw?360:250,FS=nw?22:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:-5,x1:6,y0:0,y1:2,xt:[-5,-3,-1,1,3,5],yt:[],fx:v=>["10 µs","","1 ms","","0.1 s","","10 s","","17 min","","28 h"][v+5]||"",xl:"time (scale in factors of 10)",FS,padL:FS*0.6,padR:FS*1.2,padT:FS*0.8,padB:FS*2.8});
+    for(let v=-5;v<=6;v++)el("line",{x1:A.sx(v),x2:A.sx(v),y1:A.T,y2:A.B,class:"g-line","stroke-opacity":.5},svg);
+    [[r.tf,"var(--sample)","nudging each weight"+(r.est?" (estimated)":"")],[r.tb,"var(--good)","backpropagation"]].forEach(([t,col,nm],j)=>{const y0=A.T+(A.B-A.T)*(j===0?0.1:0.56),bh=(A.B-A.T)*0.34,x1=A.sx(Math.max(-5,log10(t)));
+      el("rect",{x:A.L,y:y0,width:Math.max(3,x1-A.L),height:bh,rx:6,fill:col,"fill-opacity":.85},svg);
+      const inside=x1-A.L>W*0.55,tx=inside?A.L+FS*0.6:x1+FS*0.5;
+      txt(svg,tx,y0+bh/2+FS*0.35,`${nm}: ${fT(t)}`,Object.assign({"font-size":FS*0.85,"font-weight":700,style:`fill:${inside?"var(--surface)":"var(--ink)"}`},inside?{}:halo(5)));});
+    $("c-big").innerHTML=`<div><b>${fP(r.P)}</b><span>weights in the network (${f1(2*r.P,0)} passes to nudge them all)</span></div><div><b style="color:var(--good)">${f1(r.tb/r.tp,1)}</b><span>passes: what backpropagation costs, measured in forward passes</span></div><div><b style="color:var(--sample)">${f1(r.tf/r.tb,0)}</b><span>times slower to nudge weight by weight</span></div>`;
+    let m;if(r.P<50)m=`With ${r.P} weights, nudging them one by one takes ${fT(r.tf)} and backpropagation ${fT(r.tb)}: ${f1(r.tf/r.tb,0)} times less. It doesn’t matter yet.`;
+    else if(!r.est)m=`With ${fP(r.P)} weights, nudging them all takes ${fT(r.tf)}; backpropagation, ${fT(r.tb)}. The gap grows with size because nudging costs 2 passes <b>for every weight</b>, and backpropagation about ${f1(r.tb/r.tp,1)} passes <b>in total</b>.`;
+    else m=`With ${fP(r.P)} weights it can’t even be measured: nudging them one by one would cost about ${fT(r.tf)} (${f1(2*r.P,0)} passes of ${fT(r.tp)} each) <b>for a single learning step</b>. Backpropagation takes ${fT(r.tb)}. Training takes thousands of steps: without backpropagation, large networks wouldn’t exist.`;
+    $("c-msg").innerHTML=m;}
+  chips($("c-c"),R.map(r=>fP(r.P)+" weights"),i=>{k=i;draw();},k);redraws.push(draw);draw();})();
+
+/* ---------- idea 2: the chain along one path ---------- */
+(function(){const svg=$("chain"),ii=$("ch-i");
+  function draw(){const i=+ii.value-1,P=P0(),g=back(P,CC[i],CQ[i],CY[i]),n=g.n,nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?820:200;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    /* nodes from the loss (0) to the weight (4); links between them */
+    const N=[["loss",f1(g.L,2),"var(--ink)"],["output z",f1(n.z,2),"var(--ink)"],["B’s vote",pct(n.hB,n.hB<0.001?4:1),"var(--good)"],["score zB",f1(n.zB,2),"var(--good)"],["weight B·fuel","−2","var(--good)"]];
+    const S=[["p − y",g.e],["weight 10",10],["slope",g.sB],["fuel use",CQ[i]]];
+    const acc=[1,g.e,g.e*10,g.dB,g.gW[1][1]];
+    const pos=nw?N.map((_,j)=>[W/2,70+j*170]):N.map((_,j)=>[W-70-j*((W-140)/4),H*0.4]);
+    const bw=nw?300:118,bh=nw?76:62;
+    for(let j=0;j<4;j++){const [x1,y1]=pos[j],[x2,y2]=pos[j+1],dx=nw?0:-(bw/2+6),dy=nw?bh/2+6:0;
+      arrow(svg,x1+dx,y1+dy,x2-dx,y2-dy,"var(--point)",3,12);
+      const mx=(x1+x2)/2,my=(y1+y2)/2;
+      if(nw){txt(svg,mx+16,my-FS*0.15,"× "+fg(S[j][1]),{"font-size":FS*0.95,"font-weight":800,style:"fill:var(--point)"});txt(svg,mx+16,my+FS*0.95,S[j][0],{"font-size":FS*0.75});}
+      else{txt(svg,mx,my-bh/2-FS*0.9,"× "+fg(S[j][1]),Object.assign({"text-anchor":"middle","font-size":FS*1.0,"font-weight":800,style:"fill:var(--point)"},halo(5)));txt(svg,mx,my-bh/2-FS*2.3,S[j][0],{"text-anchor":"middle","font-size":FS*0.75});}}
+    N.forEach(([nm,v,col],j)=>{const [x,y]=pos[j];el("rect",{x:x-bw/2,y:y-bh/2,width:bw,height:bh,rx:12,fill:"var(--surface)",stroke:col,"stroke-width":2.5},svg);
+      txt(svg,x,y-FS*0.15,nm,{"text-anchor":"middle","font-size":FS*0.78});txt(svg,x,y+FS*1.0,v,{"text-anchor":"middle","font-size":FS*0.95,"font-weight":700,class:"t-ink"});
+      /* accumulated blame and bar */
+      const cy=y+bh/2+FS*1.6;
+      const lab=j===0?"blame 1":"blame "+fg(acc[j]);
+      if(nw)txt(svg,x-14,y+bh/2+FS*1.05,lab,{"text-anchor":"end","font-size":FS*0.85,"font-weight":800,style:"fill:var(--point)"});
+      else{txt(svg,x,cy,lab,{"text-anchor":"middle","font-size":FS*0.9,"font-weight":800,style:"fill:var(--point)"});
+        const a=Math.abs(acc[j]),u=a>0?Math.max(0,Math.min(1,(log10(a)+6)/8)):0;el("rect",{x:x-bw/2,y:cy+FS*0.6,width:bw,height:FS*0.5,rx:3,fill:"var(--line)"},svg);el("rect",{x:x-bw/2,y:cy+FS*0.6,width:Math.max(2,bw*u),height:FS*0.5,rx:3,fill:"var(--point)"},svg);}});
+    $("ch-i-o").textContent=tripLab(i);
+    let m=`Trip ${i+1}. From the loss (blame 1, by definition), the blame crosses four links: ${fg(g.e)} × 10 × ${fg(g.sB)} × ${f1(CQ[i],1)} = <b>${fg(g.gW[1][1])}</b>. `;
+    if(g.sB<0.001)m+=`Here the slope of B’s sigmoid is tiny: B is very sure of its vote (${pct(n.hB,n.hB<0.001?4:1)}) and the link is almost flat. However much error there is above, the blame stays stuck at that link: it is like a leg of the route that absorbs any delay.`;
+    else if(Math.abs(g.e)<0.05)m+=`The first link is already small: the network gets this trip right (p − y = ${fg(g.e)}), and there is no blame to share out.`;
+    else m+=`The two big links (the weight 10 and the fuel use, ${f1(CQ[i],1)} L) amplify the blame and B’s slope (${fg(g.sB)}) shrinks it. One weak link is enough to snuff it out.`;
+    $("ch-msg").innerHTML=m;}
+  ii.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 3: two paths that add up ---------- */
+(function(){const svg=$("fork"),iq=$("fk-q"),c=CC[2],P=P0();
+  const parts=q=>{const g=back(P,c,q,1);return [g.dA*P.W[0][1],g.dB*P.W[1][1]];};
+  function draw(){const q0=+iq.value,nw=narrowOf(svg),W=nw?600:900,H=nw?480:360,FS=nw?22:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const xs=[];for(let j=0;j<=360;j++)xs.push(18+18*j/360);const pp=xs.map(parts);const ym=Math.max(...pp.map(p=>Math.max(Math.abs(p[0]),Math.abs(p[1]),Math.abs(p[0]+p[1]))))*1.1;
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:18,x1:36,y0:-ym,y1:ym,xt:[18,22,26,30,34],yt:[-2,-1,0,1,2],fx:v=>v+" L",fy:v=>f1(v,0),xl:"fuel use of trip 3 (L/100 km)",yl:"blame of the fuel use",FS,padL:FS*2.4,padT:FS*2}),g=clipRect(svg,A);
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(0),y2:A.sy(0),stroke:"var(--muted)","stroke-width":1.5},g);
+    el("path",{d:pathOf(xs.map((x,j)=>[A.sx(x),A.sy(pp[j][0])])),fill:"none",stroke:"var(--mean)","stroke-width":nw?4:3},g);
+    el("path",{d:pathOf(xs.map((x,j)=>[A.sx(x),A.sy(pp[j][1])])),fill:"none",stroke:"var(--good)","stroke-width":nw?4:3},g);
+    el("path",{d:pathOf(xs.map((x,j)=>[A.sx(x),A.sy(pp[j][0]+pp[j][1])])),fill:"none",stroke:"var(--ink)","stroke-width":nw?3:2.4,"stroke-dasharray":"8 5"},g);
+    const lA=26.5+0.55*c,lB=18+0.55*c;
+    [[lB,"line B","var(--good)"],[lA,"line A","var(--mean)"]].forEach(([v,s,col])=>{el("line",{x1:A.sx(v),x2:A.sx(v),y1:A.T,y2:A.B,stroke:col,"stroke-width":1.4,"stroke-dasharray":"2 5"},g);txt(svg,A.sx(v),A.T+FS*0.9,s,Object.assign({"text-anchor":"middle","font-size":FS*0.75,style:`fill:${col}`},halo(4)));});
+    el("line",{x1:A.sx(q0),x2:A.sx(q0),y1:A.T,y2:A.B,stroke:"var(--point)","stroke-width":2.5},g);
+    const [a,b]=parts(q0);dot(svg,A.sx(q0),A.sy(a),nw?8:6,"var(--mean)");dot(svg,A.sx(q0),A.sy(b),nw?8:6,"var(--good)");dot(svg,A.sx(q0),A.sy(a+b),nw?9:7,"var(--ink)");
+    $("fk-q-o").textContent=f1(q0,1)+" L";
+    $("fk-big").innerHTML=`<div><b style="color:var(--mean)">${fg(a)}</b><span>along A’s path (×2 from its weight)</span></div><div><b style="color:var(--good)">${fg(b)}</b><span>along B’s path (×−2 from its weight)</span></div><div><b>${fg(a+b)}</b><span>total blame of the fuel use: the sum</span></div>`;
+    let m;if(q0<lB-0.3)m=`At ${f1(q0,1)} L, the trip is below line B: B votes and the network raises an alert, as it should. Blame arrives only along B’s path (${fg(b)}): positive, because if the fuel use went up, the trip would look more normal and the network would hesitate more.`;
+    else if(q0<=lB+3)m=`At ${f1(q0,1)} L (the real trip 3 logs 22.6), the trip sits just above line B, which is in the wrong place: B barely votes and the network raises no alert. Blame arrives along B (${fg(b)}) and almost nothing along A: <b>the sum is B’s</b>. Lowering the fuel use, or raising line B, would help.`;
+    else if(q0<lA-1.5)m=`At ${f1(q0,1)} L, the trip lies between the two lines, far from both: neither neuron votes and both slopes are almost flat. No blame arrives along either path: the sum is ${fg(a+b)}.`;
+    else if(q0<=lA+2)m=`Near line A, blame arrives along A (${fg(a)}): negative, because more fuel use would make A vote and the network would raise an alert, which is right for a trip that doesn’t add up. Nothing arrives along B. If the two lines were close together, blame would arrive along both paths at once and they would add up (or cancel, because they have opposite signs).`;
+    else m=`Far above line A, the network already raises an alert with total certainty and A’s slope is flat again: almost no blame is left. The sum of the two paths is ${fg(a+b)}.`;
+    $("fk-msg").innerHTML=m;}
+  iq.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 4: signal × error, trip by trip ---------- */
+(function(){const svg=$("sxe");let k=4;
+  function draw(){const P=P0(),nw=narrowOf(svg),W=nw?600:900,H=nw?460:330,FS=nw?22:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const C=[],SG=[],ER=[];for(let i=0;i<NV;i++){const g=back(P,CC[i],CQ[i],CY[i]),n=g.n;const sig_=[CC[i],CQ[i],1,CC[i],CQ[i],1,n.hA,n.hB,1][k],err=[g.dA,g.dA,g.dA,g.dB,g.dB,g.dB,g.e,g.e,g.e][k];SG.push(sig_);ER.push(err);C.push(sig_*err/NV);}
+    const S=C.reduce((a,b)=>a+b,0),mb=Math.max(...C.map(Math.abs),1e-12),mx=Math.max(mb,Math.abs(S),1e-9),lim=mx*1.3;
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0.3,x1:30.7,y0:-lim,y1:lim,xt:nw?[1,10,20,30]:[1,5,10,15,20,25,30],yt:[-mx,0,mx].map(v=>+v.toPrecision(2)),fx:v=>f1(v,0),fy:v=>v===0?"0":fg(v),xl:"trip",yl:"contribution to the blame",FS,padL:FS*4,padT:FS*2});
+    const bw=(A.R-A.L)/30*0.7;
+    for(let i=0;i<NV;i++){const x=A.sx(i+1),y0=A.sy(0),y1=A.sy(C[i]);el("rect",{x:x-bw/2,y:Math.min(y0,y1),width:bw,height:Math.max(1,Math.abs(y1-y0)),fill:CY[i]?"var(--point)":"var(--sample)","fill-opacity":.88},svg);}
+    el("line",{x1:A.L,x2:A.R,y1:A.sy(S),y2:A.sy(S),stroke:"var(--ink)","stroke-width":2,"stroke-dasharray":"8 6"},svg);
+    txt(svg,A.R-4,A.sy(S)+(S<0?FS*1.2:-FS*0.5),"sum = "+fg(S),Object.assign({"text-anchor":"end","font-size":FS*0.85,"font-weight":700,class:"t-ink"},halo(5)));
+    let im=0;for(let i=1;i<NV;i++)if(Math.abs(C[i])>Math.abs(C[im]))im=i;
+    let sn=0;for(let i=0;i<NV;i++)if(!CY[i])sn+=C[i];
+    $("s-big").innerHTML=`<div><b style="color:var(--point)">${fg(S)}</b><span>blame of the weight “${PN[k][0]}”: sum of the 30 bars</span></div><div><b>${im+1}</b><span>trip that contributes the most: signal ${fg(SG[im])} × error ${fg(ER[im])} ÷ 30</span></div><div><b style="color:var(--sample)">${fg(sn)}</b><span>what the 18 normal trips contribute together</span></div>`;
+    const sigName=["the load","the fuel use","1 (the bias is a weight with a fixed signal of 1)","the load","the fuel use","1 (the bias is a weight with a fixed signal of 1)","A’s vote","B’s vote","1 (the bias is a weight with a fixed signal of 1)"][k],errName=k<3?"A’s δ":k<6?"B’s δ":"p − y";
+    let m=`For the weight “${PN[k][0]}”, the signal that goes in is ${sigName} and the error that comes back is ${errName}. `;
+    if(k<3||k===6)m+=`Almost all the bars are tiny: A is in a good place and nearly always sure of its vote, so its error δ is almost zero on every trip. The total blame, ${fg(S)}, says “leave me as I am”.`;
+    else if(k<6)m+=`Trips ${C.map((v,i)=>[v,i]).filter(x=>Math.abs(x[0])>0.1*mb).map(x=>x[1]+1).join(", ")} dominate: the ones that burn too little and the network doesn’t see. The normal ones hardly contribute, because the network already gets them right. ${k===4?"The bars are big because the signal, the fuel use, is 20 or 30 liters.":""}`;
+    else m+=`Here the signal is B’s vote${k===8?" (or 1, for the bias)":""}, and the error p − y is large on the 6 trips that get away.`;
+    $("s-msg").innerHTML=m;}
+  chips($("s-c"),PN.map(p=>p[0]),i=>{k=i;draw();},k);redraws.push(draw);draw();})();
+
+/* ---------- idea 5: the blame by layers ---------- */
+(function(){const svg=$("deep"),KS=["sigmoide","tanh","relu"],NM=["sigmoid","tanh","ReLU"];let a=0;
+  function draw(){const G=D.capas[KS[a]],nw=narrowOf(svg),W=nw?600:900,H=nw?460:330,FS=nw?22:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0.4,x1:11.6,y0:-8,y1:0.5,xt:[1,3,5,7,9,11],yt:[-8,-6,-4,-2,0],fx:v=>v===11?"output":(nw?"":"layer ")+v,fy:v=>v===0?"1":"10^"+v,yl:"layer blame ÷ output blame",FS,padL:FS*3.4,padT:FS*2});
+    const bw=(A.R-A.L)/11*0.62;
+    G.forEach((v,j)=>{const x=A.sx(j+1),y=A.sy(Math.max(-8,log10(v)));el("rect",{x:x-bw/2,y,width:bw,height:A.B-y,rx:4,fill:j===10?"var(--ink)":"var(--mean)","fill-opacity":.85},svg);});
+    $("d-big").innerHTML=`<div><b style="color:var(--mean)">${G[0]<0.01?"1 / "+f1(1/G[0]/1e6,1)+" million":f1(G[0],2)}</b><span>blame of the first layer compared with the output’s</span></div><div><b>${f1(D.pend[KS[a]],2)}</b><span>average slope of the ${NM[a]} in the network’s neurons</span></div>`;
+    $("d-msg").innerHTML=a===0?`With the sigmoid, each layer multiplies the blame by a slope of 0.23 on average (never more than 0.25). The first layer receives <b>a blame about ${f1(1/G[0]/1e6,1)} million times smaller</b> than the output: roughly 0.23 multiplied ten times, plus what the weights contribute. The first layers barely learn. This is the vanishing gradient from topic 2, now seen as it really happens.`:
+      a===1?`With tanh, the average slope is 0.9 and the random weights are chosen to compensate: the blame that reaches the first layer is of the same order as the output’s (${f1(G[0],2)}). Every layer learns.`:
+      `With ReLU, the slope is 1 in active neurons and 0 in switched-off ones (about half, hence the average of ${f1(D.pend.relu,2)}), and the random weights are chosen larger to make up for it: the first layer’s blame stays at ${f1(G[0],2)} of the output’s. That is why deep networks use ReLU and its relatives.`;}
+  chips($("d-c"),NM,i=>{a=i;draw();});redraws.push(draw);draw();})();
+
+/* ---------- idea 6: steps with the 30 trips ---------- */
+(function(){const svg=$("train"),ETS=[0.01,0.03,0.1];let ei=1,P=P0(),hist=[];
+  const reset=()=>{P=P0();hist=[[meanLoss(P),nErr(P)]];};reset();
+  function draw(){const nw=narrowOf(svg),W=nw?600:900,FS=nw?22:14,H=nw?1000:430,bx=nw?[0,0,W,600]:[0,0,560,H],lx=nw?[0,620,W,380]:[580,0,320,H];svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=bandFrame(svg,bx,nw),g=clipRect(svg,A);
+    shade(A,g,(c,q)=>fwd(P,c,q).p>0.5,150,120,"var(--point)",.14);
+    const P00=P0();lineF(A,g,p=>P00.W[1][0]*p[0]+P00.W[1][1]*p[1]+P00.b[1],"var(--muted)",nw?3:2.4,"6 6",.7);
+    const sA=lineF(A,g,p=>P.W[0][0]*p[0]+P.W[0][1]*p[1]+P.b[0],"var(--mean)",nw?5:4),sB=lineF(A,g,p=>P.W[1][0]*p[0]+P.W[1][1]*p[1]+P.b[1],"var(--good)",nw?5:4);
+    lineLabel(A,svg,sA,"A","var(--mean)");lineLabel(A,svg,sB,"B","var(--good)",-1);
+    const r=nw?9:7;for(let i=0;i<NV;i++){const bad=(fwd(P,CC[i],CQ[i]).p>0.5)!==(CY[i]===1);if(bad)el("circle",{cx:A.sx(CC[i]),cy:A.sy(CQ[i]),r:r+6,fill:"none",stroke:"var(--warn)","stroke-width":nw?3.5:3},svg);dot(svg,A.sx(CC[i]),A.sy(CQ[i]),r,CY[i]?"var(--point)":"var(--sample)");}
+    const n=hist.length-1,xm=Math.max(10,n),L=lx;
+    const B=axes(svg,{x:L[0],y:L[1],w:L[2],h:L[3],x0:0,x1:xm,y0:0,y1:3.2,xt:xm<=10?[0,2,4,6,8,10]:[0,Math.round(xm/2),xm],yt:[0,1,2,3],fy:v=>f1(v,0),xl:"steps",yl:"average loss",FS,padL:FS*2.2,padT:FS*2});
+    el("path",{d:pathOf(hist.map((h,j)=>[B.sx(j),B.sy(Math.min(3.2,h[0]))])),fill:"none",stroke:"var(--point)","stroke-width":nw?4:3},svg);
+    hist.forEach((h,j)=>dot(svg,B.sx(j),B.sy(Math.min(3.2,h[0])),nw?7:5,"var(--point)"));
+    const [Lc,ec]=hist[n],kB=-P.b[1]/P.W[1][1],mB=-P.W[1][0]/P.W[1][1];
+    $("tr-big").innerHTML=`<div><b>${n}</b><span>steps taken (rate ${f1(ETS[ei],2)})</span></div><div><b style="color:var(--point)">${f1(Lc,3)}</b><span>average loss${n?` (started at ${f1(hist[0][0],3)})`:""}</span></div><div><b style="color:${ec?"var(--warn)":"var(--good)"}">${ec} of 30</b><span>trips misclassified</span></div><div><b style="color:var(--good)">${f1(kB,1)} L</b><span>height of line B with no load (started at 18 L); slope ${f1(mB,2)} L/t (started at 0.55)</span></div>`;
+    let m;if(n===0)m=`The badly set-up network: line B is 3.5 L below where it should be and the 6 trips that burn too little get away. Average loss ${f1(Lc,3)}. Press “Take a step”.`;
+    else if(Lc>hist[n-1][0]+1e-9)m=`<b>The loss went up</b>, from ${f1(hist[n-1][0],3)} to ${f1(Lc,3)}: with rate ${f1(ETS[ei],2)}, the step is so long that it overshoots. The blame says which way is down from here, not how far. Choosing the rate is part of topic 6.`;
+    else if(ec===0)m=`${n} ${n===1?"step":"steps"} and <b>no mistakes</b>: line B has risen on its own until it separates the trips that burn too little. Nobody told the network which weight to touch; backpropagation shared out the blame and nearly all of it fell on B. The loss (${f1(Lc,3)}) keeps going down little by little with each step.`;
+    else m=`After ${n} ${n===1?"step":"steps"}, the average loss has dropped from ${f1(hist[0][0],3)} to ${f1(Lc,3)} and ${ec} mistakes are left. Notice which line moves: B, which had nearly all the blame. A barely changes.`;
+    $("tr-msg").innerHTML=m;}
+  $("tr-step").onclick=()=>{if(hist.length>40)return;P=stepP(P,gradAll(P),ETS[ei]);hist.push([meanLoss(P),nErr(P)]);draw();};
+  $("tr-re").onclick=()=>{reset();draw();};
+  seg(["tr-e0","tr-e1","tr-e2"],i=>{ei=i;reset();draw();});
+  redraws.push(draw);draw();})();
+
+})();
+</script>
+</body>
+</html>

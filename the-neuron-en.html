@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The neuron</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content;max-width:100%}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec p b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.rowb{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+button:disabled{opacity:.45;cursor:default}
+.rule{font-size:.95rem;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px;display:grid;gap:6px}
+.big3 .wide{grid-column:1/-1}
+@media (max-width:620px){.seg{border-radius:14px}}
+@media (max-width:520px){.fig{padding:6px}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#en" target="_self">← Main menu</a> · Neural networks · topic 1 · explained with drawings · <a href="the-neuron-technical-en.html" target="_self">see the technical version</a> · <a href="neural-networks-en.html" target="_self">all topics</a> · <a href="la-neurona-es.html" target="_self">en español</a></p>
+  <h1>The neuron</h1>
+  <p class="lede">The smallest piece of a neural network is a very simple calculation: it multiplies each piece of data by a weight, adds it all up, adds a starting number and says “yes” or “no” depending on the result. With that, it draws a straight line that separates two groups, and it can learn that line by correcting itself every time it gets something wrong.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="situ col">
+    <p class="eyebrow">The setup</p>
+    <p>A fleet manager wants to know which <strong>driving days</strong> are worth reviewing with the driver (to give tips for smoother, cheaper driving). For each day, the telematics gives two numbers: the <strong>harsh braking events per 100 km</strong> and the <strong>hours the engine spent idling</strong> (running with the truck standing still).</p>
+    <p>The manager has already reviewed <strong>20 days</strong> by hand and marked 10 of them as “review”. Now they want an automatic rule. Their first idea is a points system: <strong>1 point for each harsh brake</strong>, <strong>0.2 points for each hour of idling</strong>, and you start at <strong>−6 points</strong>. If the total ends up above 0, the day gets reviewed. That, exactly, is an <strong>artificial neuron</strong>.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="The 20 days by harsh braking and idle hours, with the line that separates what the neuron sends for review"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each dot is one day: further right means more harsh braking; higher up means more idle hours. The <b style="color:var(--point)">orange</b> dots are the days the manager marked for review, and the <b style="color:var(--sample)">purple</b> ones are the days that are fine. The <b style="color:var(--mean)">blue</b> line is the neuron’s boundary: days in the orange zone score more than 0 points and get reviewed; days in the purple zone don’t. A <b style="color:var(--warn)">red</b> ring marks every day on the wrong side.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>The weights: how much each number counts</h3>
+      <div class="slider"><label for="t-w1">Points for each harsh brake <output id="t-w1-o"></output></label><input type="range" id="t-w1" min="-1" max="2" step="0.01" value="1"><div class="ends"><span>−1</span><span>2</span></div></div>
+      <div class="slider"><label for="t-w2">Points for each hour of idling <output id="t-w2-o"></output></label><input type="range" id="t-w2" min="-1" max="3" step="0.01" value="0.2"><div class="ends"><span>−1</span><span>3</span></div></div>
+      <p>Changing a weight <b>turns</b> the line: it decides which number matters more.</p>
+    </div>
+    <div class="dec">
+      <h3>The bias: the starting points</h3>
+      <div class="slider"><label for="t-b">Points you start with <output id="t-b-o"></output></label><input type="range" id="t-b" min="-10" max="4" step="0.1" value="-6"><div class="ends"><span>−10</span><span>4</span></div></div>
+      <p>Changing the bias <b>shifts</b> the line without turning it: with fewer starting points, it is harder to reach “review”.</p>
+      <div class="rowb"><button type="button" id="t-tr" class="primary">Let it learn on its own</button><button type="button" id="t-re">↺ Back to the first idea</button></div>
+    </div>
+  </div>
+  <div class="big3" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Try this, in order:</strong></p>
+    <ol class="try">
+      <li>With the first idea, 5 days are on the wrong side: almost all of them have many idle hours and little harsh braking. The rule barely looks at idling.</li>
+      <li>Move only the bias: the line shifts in parallel. It fixes some days and breaks others.</li>
+      <li>Raise the points per hour of idling to 1 or more: the line turns and leaves the days with lots of idling on top.</li>
+      <li>Press “Let it learn on its own”: the neuron corrects its weights every time it makes a mistake, until it gets none wrong (you will see it step by step in idea 3).</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">What you just saw</p>
+    <h2>A neuron is a weighted sum that makes a decision</h2>
+    <p>The neuron in the toy always does the same thing with each day: <strong>it multiplies each number by its weight, adds up the results and adds the bias</strong>. If the total is above 0, it says “review”; if not, “OK”. The weights and the bias are its <strong>adjustable numbers</strong>: changing them changes the way it decides.</p>
+    <ul>
+      <li><strong>Its boundary is a straight line.</strong> The days that score exactly 0 form a straight line on the chart. On one side it says “yes” and on the other “no”.</li>
+      <li><strong>The weights turn the line and the bias shifts it.</strong> With two numbers, that is enough to put it anywhere.</li>
+      <li><strong>It can learn on its own.</strong> If it gets a day wrong, it moves its weights a little toward the right answer. By repeating this, it finds a line that separates all 20 correctly.</li>
+    </ul>
+    <p>The neural networks that recognize images or predict arrival times are thousands or millions of these pieces connected together. The ideas below go step by step: the calculation inside (1), the “yes or no” turned into a probability (2), how it learns (3), why there are many valid lines (4) and what a single neuron cannot do (5).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 5</p>
+    <h2>Inside: multiply, add up and decide</h2>
+    <p>The trained neuron gives <strong>0.83 points per harsh brake</strong>, <strong>1.28 per hour of idling</strong> and starts at <strong>−6</strong>. For one particular day, the calculation has three steps: each number is multiplied by its weight; everything is added together with the bias (the <strong>score</strong>); and the score goes through a “switch” that says “review” if it is greater than 0.</p>
+    <p>Multiplying number by number and adding up is called the <strong>dot product</strong> (you saw it in <a href="dot-product-and-cosine-en.html" target="_self">math topic 2</a>): it measures how much the day looks like what the neuron is looking for.</p>
+  </div>
+  <figure class="fig"><svg id="neu" role="img" aria-label="Diagram of the neuron: two numbers multiplied by their weights, the sum with the bias and the decision"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> On the left, the day’s two numbers and a fixed “1” that is multiplied by the bias. Above each arrow, its weight. The <b style="color:var(--mean)">Σ</b> circle adds up the three contributions: that is the score. The next box is the switch (the <b>step</b>): it gives “review” if the score is greater than 0 and “OK” if not. Move the two sliders below to make up a day and watch how each contribution changes.</p>
+  <div class="controls col">
+    <div class="slider"><label for="n-x1">Harsh braking events per 100 km <output id="n-x1-o"></output></label><input type="range" id="n-x1" min="0" max="10" step="0.1" value="4.1"><div class="ends"><span>0</span><span>10</span></div></div>
+    <div class="slider"><label for="n-x2">Idle hours <output id="n-x2-o"></output></label><input type="range" id="n-x2" min="0" max="5" step="0.1" value="2.2"><div class="ends"><span>0 h</span><span>5 h</span></div></div>
+  </div>
+  <div class="big3" id="n-big"></div>
+  <p class="qcard col" id="n-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 5</p>
+    <h2>From “yes or no” to a probability</h2>
+    <p>The switch is abrupt: a day with a score of 0.01 gets reviewed and another with −0.01 doesn’t, even though they are almost the same. If instead of the step you use an S-shaped curve, the <strong>sigmoid</strong>, the neuron gives a <strong>percentage</strong>: close to 100% if the score is very positive, close to 0% if it is very negative, and exactly 50% if it is 0, on the same line as before.</p>
+    <p>A neuron with a sigmoid that learns by comparing its percentages with what actually happened is exactly a <a href="logistic-regression-en.html" target="_self">logistic regression</a>, the model from the ML series. Other possible curves (and why they are needed) are the subject of <a href="activation-functions-en.html" target="_self">activation functions</a>.</p>
+  </div>
+  <figure class="fig"><svg id="sig" role="img" aria-label="Step and sigmoid as a function of the score, with the 20 days"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Horizontally, each day’s score; vertically, the neuron’s answer. The dashed gray line is the step (0% or 100%) and the <b style="color:var(--mean)">blue</b> curve is the sigmoid. Each dot is one of the 20 days (<b style="color:var(--point)">orange</b>: marked for review; <b style="color:var(--sample)">purple</b>: fine), placed on the sigmoid. The slider multiplies both weights and the bias at the same time: the toy’s line does not move, but the scores stretch or shrink.</p>
+  <div class="controls col">
+    <div class="slider"><label for="s-k">Multiply all weights and the bias by <output id="s-k-o"></output></label><input type="range" id="s-k" min="0" max="100" step="1" value="50"><div class="ends"><span>× 0.25 (more hesitant)</span><span>× 4 (more decisive)</span></div></div>
+  </div>
+  <div class="big3" id="s-big"></div>
+  <p class="qcard col" id="s-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 5</p>
+    <h2>Learning from mistakes: the perceptron rule</h2>
+    <p>In 1958, Frank Rosenblatt proposed the <strong>perceptron</strong>: a neuron with a step and a rule for learning its weights. The neuron looks at the days one by one. If it is right, it changes nothing. If it is wrong, it moves each weight a tiny bit <strong>in the direction that would have fixed that mistake</strong>:</p>
+    <div class="rule"><p><b>If it should have said “review” and said “OK”</b>: each weight + 0.1 × its number; bias + 0.1.</p><p><b>If it should have said “OK” and said “review”</b>: each weight − 0.1 × its number; bias − 0.1.</p></div>
+    <p>The 0.1 is the <strong>step size</strong>. When it finishes a pass through the 20 days, it starts another, until a whole pass goes by without a mistake. If there is any line that separates the two groups correctly, it has been proven that the rule finds it in a finite number of corrections.</p>
+  </div>
+  <figure class="fig"><svg id="prc" role="img" aria-label="The 20 days and the perceptron's line, which corrects itself day by day"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The <b style="color:var(--mean)">blue</b> line is the current boundary and the dashed gray one is the boundary before the last correction. The thick black ring marks the day the neuron is looking at. It starts from the manager’s first idea (1 point per harsh brake, 0.2 per hour, −6 to start).</p>
+  <div class="dec col"><h3>Step forward</h3><p>“Next day” looks at just one; “To the next mistake” jumps ahead to the next correction.</p><div class="rowb"><button type="button" id="p-1" class="primary">Next day</button><button type="button" id="p-f">To the next mistake</button><button type="button" id="p-a">To the end</button><button type="button" id="p-r">↺ Start over</button></div></div>
+  <div class="big3" id="p-big"></div>
+  <p class="qcard col" id="p-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 5</p>
+    <h2>Many lines get all 20 right: which one is best?</h2>
+    <p>The perceptron stops as soon as it stops making mistakes, even if the line barely grazes some day. If the days are shown to it in a different order, it ends up with a different line, also with no mistakes. They all get the 20 days it knows right, but not all of them do equally well on <strong>new days</strong>, which is what matters.</p>
+    <p>To check, each line is tested on 1,000 new days from the same fleet (the small dots in the background). The <strong>middle line</strong>, the one that leaves the most free space on both sides, is the idea behind <a href="support-vector-machines-en.html" target="_self">support vector machines</a>.</p>
+  </div>
+  <figure class="fig"><svg id="many" role="img" aria-label="Several perceptron lines trained in different orders and the middle line"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The big dots are the 20 training days; the small dots, the 1,000 new ones. Each <b style="color:var(--sample)">purple</b> line is a perceptron trained on the 20 days in a different order; the <b style="color:var(--mean)">blue</b> one is the latest. The dashed <b style="color:var(--good)">green</b> line is the middle line.</p>
+  <div class="dec col"><h3>Try it</h3><p>Each press shuffles the order of the 20 days and trains another perceptron from the first idea.</p><div class="rowb"><button type="button" id="m-sh" class="primary">Shuffle and train</button><button type="button" id="m-mid" aria-pressed="false">Show the middle line</button><button type="button" id="m-re">↺ Clear</button></div></div>
+  <div class="big3" id="m-big"></div>
+  <p class="qcard col" id="m-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 5</p>
+    <h2>What a straight line cannot separate</h2>
+    <p>Another fleet problem: flagging trips whose fuel use <strong>doesn’t match the load</strong>. A more heavily loaded truck burns more, so normal trips form a sloping band. The odd ones are <strong>above</strong> it (burning too much: a breakdown, low tire pressure, a leak) or <strong>below</strong> it (burning too little: the load or the refueling was logged wrong).</p>
+    <p>A neuron can only draw one line and flag one side of it. The odd trips are on both sides of normal, so part of them always gets away. It is the same problem as the famous “exclusive OR” (XOR), which in 1969 made people doubt neural networks for years. The solution is to combine several neurons: you will see it in topic 3, the multilayer network.</p>
+  </div>
+  <figure class="fig"><svg id="band" role="img" aria-label="Trips by load and fuel use: normal trips form a band and a straight line cannot separate it"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each dot is a trip: horizontally, the load in tonnes; vertically, the fuel use in liters per 100 km. <b style="color:var(--sample)">Purple</b>: normal fuel use for its load. <b style="color:var(--point)">Orange</b>: doesn’t match. The orange zone is where the neuron raises an alert; a <b style="color:var(--warn)">red</b> ring marks every mistake (an extra alert or an odd trip that gets away).</p>
+  <div class="decs">
+    <div class="dec"><h3>The neuron’s line</h3>
+      <p>The first slider tilts it (how much more the line burns for each tonne); the second moves it up or down.</p>
+      <div class="slider"><label for="b-m">Extra liters for each tonne <output id="b-m-o"></output></label><input type="range" id="b-m" min="0" max="1.2" step="0.01" value="0.55"><div class="ends"><span>0</span><span>1.2</span></div></div>
+      <div class="slider"><label for="b-a">Line’s fuel use with no load <output id="b-a-o"></output></label><input type="range" id="b-a" min="10" max="40" step="0.1" value="27.5"><div class="ends"><span>10 L</span><span>40 L</span></div></div>
+    </div>
+    <div class="dec"><h3>Which side does it flag?</h3>
+      <p>A neuron only flags one side of its line. “Find the best line” tries them all and keeps the one with the fewest mistakes.</p>
+      <div class="seg" role="group" aria-label="Side of the alert"><button type="button" id="b-up" aria-pressed="true">Above the line</button><button type="button" id="b-dn" aria-pressed="false">Below</button></div>
+      <div class="rowb"><button type="button" id="b-best" class="primary">Find the best line</button><button type="button" id="b-two" aria-pressed="false">Try with two lines</button></div>
+    </div>
+  </div>
+  <div class="big3" id="b-big"></div>
+  <p class="qcard col" id="b-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>The full recipe</h2>
+    <ol class="steps">
+      <li><div><strong>Input data</strong>: numbers that describe the case (harsh braking, idle hours…).</div></li>
+      <li><div><strong>Weighted sum</strong>: each number times its weight, all added up, plus the bias. That is the score.</div></li>
+      <li><div><strong>Activation</strong>: a step to decide “yes or no”, or a sigmoid to give a percentage.</div></li>
+      <li><div><strong>Boundary</strong>: the scores equal to 0 form a straight line (with more numbers, a plane). The weights turn it and the bias shifts it.</div></li>
+      <li><div><strong>Learning</strong>: each mistake moves the weights a little toward the right answer, pass after pass.</div></li>
+      <li><div><strong>Checking with new cases</strong>: getting the known examples right is not enough; several lines get them right.</div></li>
+      <li><div><strong>Knowing the limit</strong>: if what you are looking for doesn’t lie on just one side of a line, you need several neurons.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where it shows up in fleet telematics</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6L34 32H6Z"/><path d="M20 16v8M20 28v1"/></svg><h3>Driver score</h3><p>The driving scores that many platforms give are weighted sums: harsh braking, harsh acceleration, speeding and idling, each with its own weight. A neuron learns those weights from days that have already been reviewed.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="13"/><path d="M20 12v8l6 4"/></svg><h3>Maintenance alert</h3><p>Engine temperature, hours since the last inspection, fault codes: a sigmoid neuron combines them into a risk percentage, and the maintenance shop decides above which risk to call the truck in.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="8" y="10" width="24" height="20" rx="3"/><path d="M14 18h12M14 24h8"/></svg><h3>Data that doesn’t add up</h3><p>Fuel use versus load, GPS kilometers versus the odometer: normal usually forms a band, and a single neuron is not enough to watch both sides (idea 5).</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 30h24M12 30V18M20 30V10M28 30V22"/></svg><h3>The building block of big models</h3><p>The networks that estimate arrival times or detect drowsiness on a camera are made of thousands of neurons like this one, organized in layers.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Connections</p>
+    <h2>With the other topics</h2>
+    <p>The weighted sum is the dot product from <a href="dot-product-and-cosine-en.html" target="_self">math topic 2</a>, and many neurons at once form a matrix, like the ones in <a href="matrices-as-transformations-en.html" target="_self">topic 3</a>: that is a layer. The neuron in idea 6 of <a href="derivatives-gradient-and-the-chain-rule-en.html" target="_self">topic 16</a> (derivatives) was this very neuron with a sigmoid, learning with the gradient instead of the perceptron rule.</p>
+    <p>In the ML series, a neuron with a sigmoid is <a href="logistic-regression-en.html" target="_self">logistic regression</a>, and it is trained with <a href="gradient-descent-en.html" target="_self">gradient descent</a>. <a href="support-vector-machines-en.html" target="_self">Support vector machines</a> also draw a straight line, but they pick the middle one (idea 4). And since the weights depend on the units of each number, putting them on similar scales helps it learn faster: <a href="preparing-features-en.html" target="_self">preparing features</a> explains how.</p>
+    <p>In this collection, the next step is <a href="activation-functions-en.html" target="_self">topic 2, activation functions</a>: other curves besides the step and the sigmoid, and why without them stacking neurons would be pointless.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>The good and the not so good</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>The good</h3><ul class="pc">
+      <li>It is extremely fast and easy to understand: each weight says how much each number counts.</li>
+      <li>If the two groups can be separated by a straight line, the perceptron is guaranteed to find it.</li>
+      <li>With a sigmoid it gives percentages, which are useful for decisions that involve costs.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>The not so good</h3><ul class="pc">
+      <li>It only separates with a straight line (or a plane): the band in idea 5 defeats it.</li>
+      <li>The perceptron stops at the first line that works, not the best one, and if the groups overlap it never finishes.</li>
+      <li>If the numbers are on very different scales, it takes much longer to learn.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Artificial neuron</dt><dd>A calculation: a weighted sum of the data, plus a bias, and an activation at the end.</dd>
+      <dt>Weight</dt><dd>How much one number counts in the sum. It can be negative (the number subtracts).</dd>
+      <dt>Bias</dt><dd>The starting number of the sum. It shifts the boundary.</dd>
+      <dt>Score</dt><dd>The result of the weighted sum plus the bias, before the activation.</dd>
+      <dt>Activation</dt><dd>What is done with the score at the end: a step (yes or no) or a sigmoid (percentage).</dd>
+      <dt>Decision boundary</dt><dd>The cases with a score of 0: a line that separates the “yes” from the “no”.</dd>
+      <dt>Perceptron</dt><dd>A neuron with a step plus Rosenblatt’s rule for learning from its mistakes.</dd>
+      <dt>Pass (epoch)</dt><dd>One full run through all the training examples.</dd>
+      <dt>Linearly separable</dt><dd>When there is some straight line that leaves all the “yes” on one side and all the “no” on the other.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the math behind it</summary>
+    <p style="padding-top:10px">You don’t need it to understand the idea:</p>
+    <div class="formula">score        z = w₁·x₁ + w₂·x₂ + b          (weighted sum + bias)
+step         review if z &gt; 0
+sigmoid      p = 1 / (1 + e^(−z))            (z = 0  →  p = 50%)
+boundary     w₁·x₁ + w₂·x₂ + b = 0           (a straight line)
+
+perceptron, when it gets a day wrong:
+   wᵢ ← wᵢ + 0.1 · s · xᵢ        b ← b + 0.1 · s
+   s = +1 if it should have said “review”,  −1 if it should have said “OK”
+
+first idea:      w = (1, 0.2)      b = −6     → 5 of 20 on the wrong side
+after learning:  w = (0.83, 1.28)  b = −6.0   → 0 of 20 (20 corrections, 6 passes)
+day with 4.1 harsh brakes and 2.2 h:
+   0.83 × 4.1 + 1.28 × 2.2 − 6.0 = 3.40 + 2.82 − 6.00 = 0.22  → review,  p = 55%</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2>All in one minute</h2>
+    <p>An animated recap: a day’s weighted sum, the line that the weights turn and the bias shifts, the step turned into a probability, the perceptron correcting itself until it makes no mistakes, and the band that a single line cannot separate. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkBAkB//9k=" aria-label="Animation: the neuron">
+      <source src="the-neuron-with-audio-en.mp4" type="video/mp4">
+      Your browser cannot play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"J":[[6.8,1.9,1],[1.2,0.8,0],[8.4,0.9,1],[2.9,1.3,0],[4.6,2.6,1],[4.1,0.6,0],[3.1,3.4,1],[1.8,2.1,0],[7.5,2.8,1],[5.4,0.7,0],[5.9,1.5,1],[3.6,1.8,0],[2.4,3.9,1],[0.7,2.9,0],[9.1,1.6,1],[2.5,0.4,0],[5.2,3.5,1],[6.6,0.4,0],[6.3,1.1,1],[1.0,3.2,0]],"WT":[0.83,1.28,-6.0],"svm":[1.8178,3.6354,-14.4511],"nf":[2.0,3.0,6.5,2.4,4.1,1.8,3.9,3.3,2.3,2.2,3.3,4.4,1.0,1.8,1.4,3.4,1.7,1.6,4.0,6.6,0.7,1.6,3.6,3.0,5.9,5.3,2.8,7.5,9.9,5.6,2.3,7.2,3.9,4.9,3.2,3.7,5.7,1.5,6.0,1.8,4.4,1.4,1.5,3.5,3.4,2.5,0.8,2.8,2.6,2.1,3.8,3.7,4.6,8.6,1.8,3.5,2.3,3.6,2.8,9.2,4.0,1.7,3.4,2.5,5.2,5.7,4.6,5.0,5.2,2.8,5.0,3.5,9.5,1.7,3.5,2.6,8.1,3.0,2.7,4.0,5.0,1.6,2.2,1.0,5.8,5.8,2.7,3.2,3.3,9.9,1.8,4.4,2.4,4.6,4.4,4.7,9.2,1.3,7.5,0.6,3.5,1.7,5.4,3.1,8.6,4.2,3.2,1.9,3.3,3.1,7.1,6.6,3.7,0.5,6.2,1.6,2.4,4.5,2.2,7.1,5.0,1.4,5.0,1.9,3.7,2.8,4.1,5.9,7.1,2.8,4.6,4.8,2.0,6.7,5.2,8.6,3.2,3.7,5.7,2.9,6.9,3.6,0.5,2.8,3.6,1.6,5.6,1.9,3.8,2.4,6.2,6.7,2.2,4.5,3.1,9.9,1.6,1.3,2.1,4.7,1.4,6.2,4.5,4.7,1.5,2.1,2.2,2.8,1.3,9.1,5.1,6.5,5.3,2.9,1.1,1.4,3.9,2.2,2.4,2.7,2.6,4.7,2.2,4.5,3.4,4.2,5.2,3.5,5.7,4.6,4.1,2.5,1.9,8.3,6.6,5.3,1.7,1.7,8.1,3.4,4.2,8.1,1.1,6.0,4.7,3.0,5.8,3.9,3.1,7.5,2.5,5.2,1.4,2.5,1.0,4.1,1.5,7.1,4.2,2.2,2.8,4.7,9.7,7.1,2.3,5.8,5.4,3.9,4.2,2.3,8.9,2.3,2.6,4.0,4.3,5.1,4.0,1.9,5.5,5.0,4.2,4.4,3.0,2.8,4.5,7.1,1.1,5.9,5.3,1.9,5.1,1.9,4.1,3.6,3.1,4.5,4.4,1.8,7.7,1.0,9.6,3.3,1.8,3.8,0.7,2.1,4.0,7.2,7.2,2.4,4.1,0.7,5.3,2.9,6.2,3.6,1.6,8.5,4.1,2.4,2.7,1.2,4.6,2.9,3.3,3.0,3.7,1.2,2.3,0.5,1.8,4.5,3.5,5.4,1.9,3.2,3.0,1.5,6.6,9.8,3.9,2.3,2.4,2.0,7.8,5.5,4.0,6.7,3.8,5.4,3.9,5.9,6.0,3.0,5.4,1.4,9.9,2.3,3.7,2.3,5.1,6.8,2.8,4.5,3.3,4.7,3.6,5.8,3.9,5.3,2.2,2.0,3.3,2.4,3.2,2.1,7.9,2.4,1.2,2.7,2.9,4.2,0.9,5.3,4.5,5.5,2.4,2.4,6.9,8.8,2.6,6.8,1.8,3.8,3.5,2.5,6.4,1.4,4.1,8.6,1.8,7.3,5.7,3.7,4.2,4.4,3.0,4.0,9.9,2.8,3.7,3.7,1.6,2.9,4.9,9.0,3.8,2.8,2.3,0.7,5.7,3.6,2.1,3.9,4.7,4.3,1.5,1.8,2.5,2.0,3.8,8.6,2.9,1.7,7.4,5.2,9.2,2.7,1.7,4.2,5.4,1.7,6.2,2.2,5.4,3.0,6.3,9.9,5.4,5.9,2.6,2.3,8.2,1.7,3.9,3.9,4.2,0.8,1.0,4.3,3.2,9.3,0.8,4.4,2.7,4.9,1.7,1.0,2.3,2.5,4.4,6.7,1.8,2.3,9.9,3.5,2.7,2.8,2.7,1.3,3.2,4.3,2.9,4.0,0.8,1.1,5.3,8.6,1.7,2.6,8.1,2.6,2.0,5.2,2.9,6.6,1.2,1.9,5.1,9.1,1.7,5.9,3.2,6.9,5.5,4.1,2.8,3.8,6.3,2.8,3.8,5.7,3.8,6.2,7.5,1.0,3.9,2.3,4.4,7.4,2.4,5.7,3.9,6.3,7.7,5.2,4.0,1.9,6.0,3.9,2.9,3.6,3.8,5.0,4.0,2.8,2.3,5.0,8.9,3.2,0.8,4.8,7.4,3.2,4.2,1.7,5.2,6.6,3.6,6.1,6.1,4.0,3.1,3.1,3.7,2.4,6.6,3.0,5.6,2.4,7.7,6.2,5.5,1.5,2.6,4.5,5.5,1.3,2.6,2.6,3.8,3.5,3.3,9.9,2.0,5.2,5.6,3.2,2.1,2.1,8.4,3.5,2.5,4.2,5.7,2.8,0.8,2.2,2.1,2.2,4.9,3.8,1.6,5.9,6.4,6.5,6.8,9.9,4.2,3.9,3.0,6.0,3.8,2.5,2.5,4.6,2.5,7.8,5.5,5.4,3.2,3.9,3.4,5.2,1.3,7.8,4.5,3.2,1.1,1.1,6.2,4.1,3.9,3.0,1.4,2.4,2.8,3.1,4.5,9.0,2.4,6.2,5.5,8.0,6.4,1.1,4.2,0.3,6.5,2.6,3.6,6.4,2.5,1.4,7.1,4.0,2.3,5.8,3.5,1.3,2.5,2.4,3.7,3.7,3.0,3.1,1.8,4.8,2.9,2.9,2.5,6.2,2.6,3.8,3.1,2.0,4.5,3.5,3.1,1.4,4.9,2.4,1.9,3.3,3.2,2.6,2.9,3.7,1.3,3.9,0.8,2.2,4.0,6.6,1.3,6.2,1.3,6.3,1.0,3.3,4.2,8.6,3.9,6.4,4.4,1.3,4.8,4.1,3.8,2.8,2.0,3.2,3.9,7.7,1.9,5.1,6.1,2.5,1.0,5.6,2.8,4.9,3.5,5.9,3.4,1.3,2.8,4.0,9.9,4.4,6.2,3.8,2.4,2.7,1.1,2.5,7.2,2.2,3.6,3.4,2.1,1.3,2.3,2.5,4.5,4.0,1.0,4.1,2.7,9.6,2.5,4.0,6.4,3.9,5.8,1.4,2.9,2.7,5.1,3.4,1.7,1.1,5.7,6.9,7.9,5.9,4.4,3.6,3.0,4.4,9.8,3.6,4.9,2.7,3.7,5.3,4.4,2.4,4.8,1.9,1.5,1.5,2.7,0.6,4.5,1.0,1.8,2.5,6.3,5.1,3.0,2.0,5.7,6.9,2.6,0.5,2.3,7.5,5.7,5.3,6.5,4.5,6.6,3.8,4.2,0.9,9.9,0.8,2.0,3.3,2.6,3.7,2.8,3.2,0.6,2.8,9.9,0.9,6.0,1.6,9.0,0.9,5.0,3.8,3.2,1.5,3.2,3.8,2.3,5.7,3.3,3.1,5.2,2.3,3.3,2.3,1.8,2.9,3.0,0.9,3.3,1.0,1.2,4.6,2.1,3.6,0.7,5.3,4.6,4.3,4.0,2.1,3.7,3.1,2.7,7.9,1.2,2.1,5.1,5.5,5.9,3.1,7.9,2.2,4.7,3.7,5.3,4.1,4.4,6.3,4.0,9.9,7.0,5.2,2.3,5.0,4.4,5.2,9.2,2.0,3.8,1.8,4.2,1.3,3.2,6.4,4.7,5.2,5.2,4.7,1.7,3.8,1.4,6.8,3.4,3.6,2.3,3.1,2.8,1.9,6.8,4.0,4.7,6.3,2.4,1.3,6.3,3.0,5.2,2.3,2.0,6.6,4.8,6.3,4.6,2.4,4.8,1.9,1.6,9.9,5.8,3.7,3.2,9.9,7.1,5.3,2.2,2.1,1.7,3.9,8.6,2.5,5.6,2.0,3.4,3.1,4.4,5.4,3.2,3.3,2.8,8.8,3.6,5.5,1.2,5.8,2.1,3.8,4.8,3.4,2.5,6.0,4.2,3.7,2.7,1.8,0.8,6.8,2.9,3.0,6.7,7.9,3.3,1.6,5.6,6.7,6.9,5.1,3.5,6.7,6.7,2.6,0.8,1.2,5.8,4.1,2.7,2.2,6.5,3.5,4.8,4.1,4.0,4.1,3.6,4.4,3.9,2.5,3.9,3.2,5.6,4.4,1.6,3.7,3.4,3.3,1.6,5.0,1.9,3.3,4.3,3.1,2.2,5.8,3.6,6.1,5.1,6.8,4.6,1.9,3.4,4.4,1.2,6.7,2.8,1.0,3.7,5.4,3.6,6.7,2.1,3.4,2.4,2.6,3.6,7.1,4.7,7.0,2.2,3.6,4.2,3.3,4.8,1.5,9.9,3.0,4.2,4.2,9.9,2.4,0.3,8.0,3.4,3.8,7.9,2.6,3.5,8.4,5.9,0.9],"nr":[1.6,3.2,1.8,1.7,2.3,1.1,2.4,2.3,1.8,0.3,1.8,1.2,1.5,1.2,2.1,0.7,1.9,1.7,2.1,2.1,0.9,1.6,0.5,2.4,2.4,1.2,0.8,3.6,2.2,4.1,2.7,2.7,0.8,4.3,2.8,1.7,4.9,1.3,2.4,1.7,0.7,1.0,2.1,0.3,1.7,1.3,0.4,0.2,0.9,0.4,3.0,1.0,0.5,0.9,1.8,0.6,1.4,1.2,1.9,2.5,1.4,0.8,0.8,0.7,3.6,1.4,0.3,1.5,3.0,0.4,1.5,0.6,4.1,3.0,1.1,1.6,1.2,2.8,2.4,2.2,2.3,0.8,1.4,0.8,4.7,1.0,0.9,2.7,1.6,2.3,1.6,1.8,1.9,0.8,2.5,1.6,3.8,1.6,0.6,4.9,3.8,3.7,1.7,3.2,2.0,0.9,1.5,0.6,0.2,2.3,1.7,0.5,2.3,2.5,4.1,2.3,0.9,2.3,1.0,0.7,0.6,3.9,2.1,0.3,0.6,2.8,1.8,0.4,1.7,2.1,1.6,2.9,0.3,3.8,1.2,2.6,2.0,1.3,1.9,0.4,1.6,2.1,2.0,1.4,1.3,1.3,0.4,3.2,4.2,2.2,0.7,1.9,0.8,1.4,1.2,2.8,3.0,1.8,2.5,0.5,0.7,1.7,1.5,0.9,1.6,3.7,1.3,2.1,4.0,2.6,2.2,0.4,1.0,2.1,1.3,1.0,0.2,1.3,0.3,0.7,0.8,1.4,1.8,0.9,2.8,0.7,1.0,3.1,1.6,0.9,0.9,1.2,1.5,1.3,2.1,1.4,1.5,1.4,0.5,1.0,1.7,2.5,2.3,2.9,1.9,3.5,3.8,1.5,4.9,1.5,0.9,2.2,1.4,3.3,2.8,2.9,0.6,1.7,3.0,1.6,0.9,2.6,1.4,1.4,1.4,1.0,0.7,2.4,1.2,1.2,0.6,3.0,1.4,0.5,2.4,1.8,1.2,0.5,1.1,2.2,2.3,0.7,1.8,1.7,1.7,2.6,0.8,1.8,1.6,1.1,2.1,2.8,1.0,0.7,4.3,3.8,3.0,1.6,0.1,1.9,0.9,2.2,0.8,0.8,3.0,1.1,0.9,1.7,3.4,2.2,1.1,1.5,0.6,0.7,2.3,1.1,0.6,0.5,0.8,0.7,0.6,1.0,1.6,1.4,0.7,1.8,2.0,1.2,1.4,1.0,2.8,1.5,0.6,3.0,1.2,1.9,1.1,2.0,2.2,0.8,2.0,1.0,1.3,1.1,2.2,2.3,2.8,1.3,1.6,2.9,1.2,4.1,1.9,1.1,1.4,2.8,3.5,0.9,0.5,1.6,1.0,3.1,1.4,4.1,2.3,1.9,2.3,1.2,0.4,1.1,2.3,1.3,0.8,2.5,0.3,1.1,2.3,2.1,2.1,2.1,0.8,0.9,1.0,1.9,1.2,1.7,0.9,1.1,1.6,2.0,2.0,0.3,1.2,1.9,2.2,1.9,2.0,1.4,4.7,1.1,1.9,3.5,0.9,1.6,1.6,2.5,0.6,3.1,2.5,1.8,1.0,0.9,1.1,0.6,2.6,2.4,1.2,0.7,3.1,0.6,0.8,1.4,0.6,3.7,3.3,1.5,1.8,0.1,1.1,0.5,2.1,2.3,2.7,1.3,1.1,0.7,0.2,0.9,2.7,1.4,2.7,1.0,1.9,1.2,2.8,1.3,0.8,3.2,1.7,1.0,1.1,1.4,1.1,2.8,0.9,2.3,1.6,1.7,2.2,1.2,1.3,2.9,0.3,2.0,1.8,2.1,0.5,0.7,1.4,0.6,2.0,1.0,1.9,1.4,2.0,1.6,1.9,2.3,4.0,1.3,1.5,1.1,4.1,1.1,0.7,1.3,0.5,1.4,2.4,1.7,0.8,1.3,2.1,0.9,1.6,0.9,2.0,1.0,0.9,1.1,3.6,0.2,0.9,1.6,1.9,3.1,2.9,2.0,2.7,1.1,1.9,0.9,2.3,0.9,1.4,1.3,0.5,0.7,0.9,1.3,0.7,2.7,3.0,1.8,1.0,1.2,2.3,1.2,2.6,2.6,1.7,1.7,2.6,2.6,2.0,1.2,3.0,1.6,0.9,0.7,1.9,1.1,1.9,0.7,0.7,0.9,1.4,0.9,3.8,2.9,2.3,3.4,2.7,1.2,4.4,0.7,1.3,1.7,1.3,0.5,0.9,1.3,0.5,3.4,2.5,1.0,1.2,1.5,2.7,0.6,0.6,2.1,1.1,1.3,3.6,2.0,2.7,2.4,1.0,1.7,1.2,0.5,2.3,2.9,3.8,0.9,1.7,0.8,1.7,1.5,3.6,0.6,1.7,1.3,1.3,3.7,3.3,1.5,1.4,0.9,0.7,1.0,1.4,2.8,1.4,3.8,2.5,0.6,0.5,1.9,0.9,3.7,1.2,1.1,0.8,1.7,0.5,2.0,2.0,1.9,1.9,2.1,0.8,0.5,3.4,0.9,2.3,0.5,1.6,0.8,2.0,2.4,1.9,2.2,0.5,2.0,1.7,2.3,2.7,0.8,1.3,2.4,1.5,1.0,0.9,2.3,2.8,0.6,1.1,4.7,2.6,0.7,1.6,0.5,0.8,1.7,2.1,0.8,0.3,0.2,1.0,0.6,1.8,1.0,1.2,2.0,3.3,0.2,1.4,1.3,1.9,1.3,1.9,1.3,0.5,1.0,0.3,0.5,1.7,0.9,2.4,1.0,3.9,0.9,2.1,1.8,1.4,0.6,2.6,1.4,1.6,0.4,2.9,1.0,1.6,1.6,3.8,1.3,2.0,1.4,0.5,0.7,2.5,1.6,3.0,2.3,2.0,2.0,1.1,1.7,0.7,0.3,1.0,1.6,1.8,1.0,0.9,2.1,0.3,1.5,1.3,1.6,2.7,0.2,0.5,3.2,3.0,1.0,1.0,1.5,1.3,1.6,1.0,2.5,1.4,3.8,1.6,0.8,1.2,1.5,1.3,0.9,0.5,3.5,1.6,2.3,4.0,2.0,2.7,3.5,1.5,1.7,1.3,0.6,1.8,3.8,0.7,1.4,1.9,1.6,0.9,0.4,2.5,1.1,1.9,1.7,2.5,1.0,0.9,4.0,2.9,2.6,0.7,1.9,2.2,1.3,0.7,1.8,0.6,1.2,1.4,2.2,2.1,4.7,0.7,1.0,0.8,3.5,2.8,0.6,2.2,3.4,3.2,0.7,2.1,1.5,2.6,0.9,2.2,1.1,1.9,1.4,0.5,3.3,2.2,0.6,0.8,0.9,1.5,1.1,2.3,0.6,1.9,3.8,0.9,2.8,2.1,1.5,1.2,2.0,0.8,1.5,1.4,2.0,2.3,2.1,1.4,1.2,1.7,1.6,0.8,0.9,2.7,4.8,1.1,0.8,1.6,3.7,0.6,1.1,1.7,1.3,0.7,2.9,1.5,1.5,1.2,2.3,2.0,0.6,1.7,2.1,1.1,0.7,2.8,1.0,4.5,1.8,1.0,2.6,0.8,1.6,4.9,1.7,2.4,0.6,1.6,2.1,1.5,1.6,2.1,1.5,1.4,1.6,1.0,1.5,1.1,4.3,1.2,0.5,1.3,0.7,0.6,3.4,2.6,1.4,2.8,0.9,3.1,1.1,1.5,0.8,1.1,2.1,0.5,1.4,1.1,1.1,1.9,2.0,1.0,0.3,1.4,1.3,0.5,1.2,1.1,2.1,0.3,1.3,3.6,2.0,1.2,1.5,1.6,0.9,1.0,2.7,2.2,1.6,1.9,1.2,2.3,4.0,2.4,0.9,0.5,2.1,0.7,2.1,3.1,1.2,1.4,2.1,1.0,1.0,1.5,0.8,1.4,1.6,1.0,3.4,3.4,2.5,1.1,1.6,0.2,3.8,0.6,3.8,1.3,0.7,1.6,2.3,0.3,0.9,0.8,1.1,1.6,0.2,0.7,1.4,1.5,0.3,1.3,4.9,0.8,0.5,2.4,1.5,1.6,0.5,2.1,2.3,1.8,2.5,1.7,1.8,1.1,0.8,2.2,1.7,2.2,1.3,1.9,1.6,1.3,2.5,1.1,1.4,1.0,2.2,0.6,0.6,1.7,1.5,2.1,1.8,2.8,1.1,4.9,2.3,1.4,4.0,1.1,0.9,0.6,1.8,0.9,0.4,1.3,2.0,1.5,1.5,1.2,0.5,1.4,3.4,1.9,2.0,3.1,1.0,0.5,3.1,3.6,2.6,1.2,2.7,0.9,4.9,1.1,1.5,1.3,1.7,1.5,1.2,1.2,1.8,1.0,3.2],"ny":[0,1,1,0,1,0,1,1,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,1,1,0,0,1,1,1,0,1,0,1,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1,0,0,0,0,1,1,0,1,1,0,1,0,1,0,0,0,1,0,0,1,1,0,0,0,1,0,0,1,0,1,0,0,0,0,1,0,1,0,1,1,1,1,1,1,1,0,0,0,0,1,1,0,0,0,1,0,0,1,0,1,0,1,1,0,0,1,0,0,1,0,0,1,0,1,1,1,0,0,1,0,1,0,0,0,0,0,0,0,1,0,0,1,0,0,0,1,0,0,0,0,0,1,0,0,0,1,0,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,1,0,0,0,0,1,1,1,0,0,1,0,0,1,0,1,1,1,1,0,1,1,0,1,0,1,0,1,0,1,1,0,0,1,1,1,0,0,0,1,0,0,1,0,0,0,1,1,0,0,1,1,0,0,0,0,1,1,0,1,0,0,1,0,0,0,1,1,1,0,1,0,1,0,0,0,0,0,0,1,1,0,0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,1,1,1,1,0,1,0,1,1,0,1,0,1,0,0,0,0,1,0,1,1,1,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,1,0,0,1,1,0,0,0,1,1,0,1,0,1,1,0,1,0,0,0,1,0,1,1,0,0,0,0,0,1,1,0,0,1,0,0,0,0,1,1,0,0,0,0,0,0,1,0,0,1,0,1,0,0,0,1,0,1,0,1,0,1,1,0,0,0,0,1,0,0,1,0,0,0,0,0,1,0,1,0,1,0,0,0,0,1,1,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,0,1,1,0,0,1,1,1,1,0,1,0,1,0,1,1,1,0,0,0,0,1,0,1,1,1,1,0,1,0,1,1,0,0,1,1,0,0,1,1,1,0,0,0,1,0,0,0,0,0,1,1,1,1,1,0,1,0,1,0,1,0,1,1,0,1,0,0,1,0,1,0,0,1,0,1,1,1,1,0,0,0,1,0,0,1,1,0,0,0,0,0,1,0,0,0,1,1,1,1,0,0,0,0,0,1,0,1,1,1,0,1,0,1,0,0,0,1,0,0,0,0,1,1,0,0,1,0,0,0,0,1,0,1,1,1,1,0,1,0,1,0,0,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,1,0,1,0,0,1,1,1,1,0,0,1,0,1,0,0,0,1,1,1,1,1,0,0,1,0,0,0,1,0,0,0,1,1,0,1,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,1,0,1,0,1,1,0,0,0,1,1,1,0,0,0,0,1,0,1,0,0,1,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,1,1,0,0,0,1,1,0,1,1,1,0,1,0,1,0,0,0,0,0,0,1,0,0,1,0,1,0,1,0,1,1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,1,0,0,1,0,1,0,0,1,0,1,0,1,0,1,0,1,0,0,1,0,1,1,1,0,0,0,1,1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,1,1,0,0,0,1,0,1,0,0,1,0,0,1,0,1,0,0,0,1,1,0,0,0,0,0,1,1,0,0,1,1,0,0,1,0,0,1,0,1,1,1,0,0,1,0,0,1,1,0,1,0,0,0,0,0,0,0,1,1,0,0,0,0,1,0,1,1,1,0,0,0,1,1,0,0,0,1,0,0,0,1,1,0,0,1,0,1,0,0,1,0,1,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,1,1,1,0,1,1,0,1,0,0,0,1,0,0,0,0,0,0,0,0,1,1,0,0,1,0,0,1,1,1,0,1,1,1,0,1,0,0,1,0,0,1,0,0],"cc":[22.4,13.3,4.8,19.6,14.1,8.1,10.1,13.3,9.8,4.9,15.2,3.5,23.6,7.2,21.1,20.0,16.7,2.6,22.9,13.0,15.7,12.6,5.3,16.6,14.2,5.0,6.5,4.8,19.3,15.0],"cq":[35.4,30.5,22.6,30.4,37.7,28.4,28.3,30.1,23.8,25.9,31.3,26.4,41.7,23.6,31.8,39.0,32.8,26.5,37.6,30.6,31.9,34.6,26.7,32.7,35.5,27.8,32.8,26.6,35.1,27.2],"cy":[0,0,1,1,1,0,0,0,1,0,0,0,1,1,1,1,0,0,0,0,0,1,0,0,1,0,1,0,0,1]};
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g,",");s=fr?i+"."+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const sg=(v,d)=>(v>0&&+v.toFixed(d??1)!==0?"+":"")+f1(v,d);
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+const redraws=[];window.addEventListener("resize",()=>redraws.forEach(g=>g()));
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));b.forEach((x,i)=>x.onclick=()=>{b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);});return b;};
+function axes(svg,o){const FS=o.FS,L=o.x+(o.padL??FS*3.4),R=o.x+o.w-(o.padR??FS*0.9),T=o.y+(o.padT??FS*2.2),B=o.y+o.h-(o.padB??FS*2.6);
+  const sx=v=>L+(v-o.x0)/(o.x1-o.x0)*(R-L),sy=v=>B-(v-o.y0)/(o.y1-o.y0)*(B-T),g=el("g",null,svg);
+  for(const v of (o.yt||[])){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},g);txt(g,L-7,sy(v)+FS*0.3,(o.fy||(v=>f1(v,0)))(v),{"text-anchor":"end","font-size":FS*0.8});}
+  for(const v of (o.xt||[])){el("line",{x1:sx(v),x2:sx(v),y1:T,y2:B,class:"g-line","stroke-opacity":.55},g);
+    const s=(o.fx||(v=>f1(v,0)))(v),w=s.length*FS*0.8*0.62,X=sx(v);let a="middle",xx=X;if(X+w/2>o.x+o.w-3){a="end";xx=o.x+o.w-3;}else if(X-w/2<o.x+3){a="start";xx=o.x+3;}
+    txt(g,xx,B+FS*1.05,s,{"text-anchor":a,"font-size":FS*0.8});}
+  el("line",{x1:L,x2:R,y1:B,y2:B,class:"g-axis"},g);
+  if(o.xl)txt(g,R,o.y+o.h-FS*0.25,o.xl,{"text-anchor":"end","font-size":FS*0.85,class:"t-ink"});
+  if(o.yl)txt(g,L,T-FS*0.75,o.yl,{"font-size":FS*0.8,class:"t-ink"});
+  return {L,R,T,B,sx,sy,FS,o};}
+const dot=(g,x,y,r,fill,extra)=>el("circle",Object.assign({cx:x,cy:y,r,fill,stroke:"var(--point-ring)","stroke-width":r>6?2:1.2},extra||{}),g);
+const pathOf=P=>P.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join("");
+const clipRect=(svg,A)=>{const id="c"+Math.random().toString(36).slice(2,8);el("rect",{x:A.L,y:A.T,width:A.R-A.L,height:A.B-A.T},el("clipPath",{id},el("defs",null,svg)));return el("g",{"clip-path":`url(#${id})`},svg);};
+const arrow=(g,x1,y1,x2,y2,col,w,head)=>{const a=Math.atan2(y2-y1,x2-x1),h=head||12;el("line",{x1,y1,x2:x2-Math.cos(a)*h*0.6,y2:y2-Math.sin(a)*h*0.6,stroke:col,"stroke-width":w||3,"stroke-linecap":"round"},g);
+  el("path",{d:`M${x2} ${y2}L${x2-h*Math.cos(a-0.42)} ${y2-h*Math.sin(a-0.42)}L${x2-h*Math.cos(a+0.42)} ${y2-h*Math.sin(a+0.42)}Z`,fill:col},g);};
+const sig=z=>1/(1+Math.exp(-z));
+const J=D.J,NJ=J.length;
+const zOf=(w,j)=>w[0]*j[0]+w[1]*j[1]+w[2];
+const wrong=(w,j)=>(zOf(w,j)>0)!==(j[2]===1);
+const nWrong=w=>J.reduce((s,j)=>s+(wrong(w,j)?1:0),0);
+const IDEA=[1,0.2,-6],ETA=0.1;
+/* clip a polygon by the half-plane s·f(x,y) >= 0 */
+function clipHalf(P,f,s){const out=[];for(let i=0;i<P.length;i++){const A=P[i],B=P[(i+1)%P.length],fa=s*f(A),fb=s*f(B);if(fa>=0)out.push(A);if((fa>=0)!==(fb>=0)){const t=fa/(fa-fb);out.push([A[0]+t*(B[0]-A[0]),A[1]+t*(B[1]-A[1])]);}}return out;}
+function segIn(f,x0,x1,y0,y1){const C=[[x0,y0],[x1,y0],[x1,y1],[x0,y1]],pts=[];for(let i=0;i<4;i++){const A=C[i],B=C[(i+1)%4],fa=f(A),fb=f(B);if(fa===0)pts.push(A);if(fa*fb<0){const t=fa/(fa-fb);pts.push([A[0]+t*(B[0]-A[0]),A[1]+t*(B[1]-A[1])]);}}return pts.length>=2?[pts[0],pts[pts.length-1]]:null;}
+const area=P=>{let a=0;for(let i=0;i<P.length;i++){const A=P[i],B=P[(i+1)%P.length];a+=A[0]*B[1]-B[0]*A[1];}return Math.abs(a)/2;};
+const cent=P=>[P.reduce((s,p)=>s+p[0],0)/P.length,P.reduce((s,p)=>s+p[1],0)/P.length];
+/* frame for the days: harsh braking 0-10, hours 0-5 */
+function frame(svg){const nw=narrowOf(svg),W=nw?500:900,FS=nw?19:14,padL=FS*2.2,padR=FS*0.9,padT=FS*2,padB=FS*2.7,ph=(W-padL-padR)*(nw?0.95:0.5),H=padT+ph+padB;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+  const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0,x1:10,y0:0,y1:5,xt:[0,2,4,6,8,10],yt:[0,1,2,3,4,5],fy:v=>v+" h",xl:"harsh brakes per 100 km",yl:"idle hours",FS,padL,padR,padT,padB});
+  A.nw=nw;return A;}
+function regions(A,g,w,labels){const f=p=>w[0]*p[0]+w[1]*p[1]+w[2],R=[[0,0],[10,0],[10,5],[0,5]];
+  const pos=clipHalf(R,f,1),neg=clipHalf(R,f,-1),sc=P=>P.map(p=>[A.sx(p[0]),A.sy(p[1])]);
+  if(pos.length>2)el("path",{d:pathOf(sc(pos))+"Z",fill:"var(--point)","fill-opacity":.11},g);
+  if(neg.length>2)el("path",{d:pathOf(sc(neg))+"Z",fill:"var(--sample)","fill-opacity":.08},g);
+  if(labels){[[pos,1,"“review” zone","var(--point)"],[neg,-1,"“OK” zone","var(--sample)"]].forEach(([P,sd,s,c])=>{if(P.length>2&&area(P)>6){const q=labelSpot(A,w,f,sd,P,s);if(q)txt(g,q[0],q[1],s,Object.assign({"text-anchor":"middle","font-size":A.FS*0.85,"font-weight":700,style:`fill:${c}`,"fill-opacity":.85},halo(5)));}});}
+  return f;}
+/* spot for a zone label: inside the zone, away from the line and the dots, as close to the center as possible */
+function labelSpot(A,w,f,sd,P,s){const fs=A.FS*0.85,bw=s.length*fs*0.6,bh=fs,nr=Math.hypot(w[0],w[1])||1,ix=X=>(X-A.L)/(A.R-A.L)*10,iy=Y=>(A.B-Y)/(A.B-A.T)*5;
+  const rp=(A.nw?10:7)+8,pts=J.map(j=>[A.sx(j[0]),A.sy(j[1])]),[cx,cy]=cent(P),CX=A.sx(cx),CY=A.sy(cy);let best=null;
+  for(let i=0;i<=60;i++)for(let k=0;k<=30;k++){const X=A.L+(A.R-A.L)*i/60,Y=A.T+(A.B-A.T)*k/30,x0=X-bw/2,x1=X+bw/2,y0=Y-bh*0.8,y1=Y+bh*0.3;
+    if(x0<A.L+4||x1>A.R-4||y0<A.T+4||y1>A.B-4)continue;
+    if(![[x0,y0],[x1,y0],[x0,y1],[x1,y1]].every(([u,v])=>sd*f([ix(u),iy(v)])/nr>0.12))continue;
+    let cl=1e9;for(const [px,py] of pts){const dx=Math.max(x0-px,0,px-x1),dy=Math.max(y0-py,0,py-y1);cl=Math.min(cl,Math.hypot(dx,dy)-rp);}
+    const sc=Math.min(cl,A.FS*1.2)*1000-Math.hypot(X-CX,Y-CY);if(cl>0&&(!best||sc>best[2]))best=[X,Y,sc];}
+  return best;}
+function bline(A,g,w,col,width,dash){const s=segIn(p=>w[0]*p[0]+w[1]*p[1]+w[2],0,10,0,5);if(!s)return;el("line",{x1:A.sx(s[0][0]),y1:A.sy(s[0][1]),x2:A.sx(s[1][0]),y2:A.sy(s[1][1]),stroke:col,"stroke-width":width,"stroke-dasharray":dash||"none","stroke-linecap":"round"},g);}
+function jdots(A,g,w,ring){const r=A.nw?10:7;J.forEach(j=>{if(ring&&w&&wrong(w,j))el("circle",{cx:A.sx(j[0]),cy:A.sy(j[1]),r:r+6,fill:"none",stroke:"var(--warn)","stroke-width":A.nw?3.5:3},g);dot(g,A.sx(j[0]),A.sy(j[1]),r,j[2]?"var(--point)":"var(--sample)");});}
+/* one perceptron pass (same arithmetic as toys.py) */
+function pass(w,order){let k=0;for(const i of order){const j=J[i],s=j[2]?1:-1,z=w[0]*j[0]+w[1]*j[1]+w[2];if(s*z<=0){w[0]+=ETA*s*j[0];w[1]+=ETA*s*j[1];w[2]+=ETA*s;k++;}}return k;}
+const ORD=[...Array(NJ).keys()];
+const fw=v=>f1(v,2),fb=v=>f1(v,Math.abs(v*10-Math.round(v*10))<1e-6?1:2);
+
+/* ---------- toy ---------- */
+(function(){const svg=$("toy"),iw1=$("t-w1"),iw2=$("t-w2"),ib=$("t-b"),btr=$("t-tr"),bre=$("t-re");let W=IDEA.slice(),last="",trained=null,busy=false;
+  function setSl(){iw1.value=W[0];iw2.value=W[1];ib.value=W[2];}
+  function draw(){const A=frame(svg),g=clipRect(svg,A);regions(A,g,W,true);bline(A,g,W,"var(--mean)",A.nw?5:4);jdots(A,svg,W,true);
+    $("t-w1-o").textContent=fw(W[0]);$("t-w2-o").textContent=fw(W[1]);$("t-b-o").textContent=fb(W[2]);
+    const nw=nWrong(W),nrev=J.filter(j=>zOf(W,j)>0).length;
+    $("t-big").innerHTML=`<div><b style="color:${nw?"var(--warn)":"var(--good)"}">${nw} of ${NJ}</b><span>days on the wrong side</span></div><div><b>${nrev}</b><span>days the neuron sends for review (the manager marked 10)</span></div><div class="wide"><b style="font-size:1.05rem;line-height:1.35">${fw(W[0])} × brakes ${W[1]<0?"−":"+"} ${fw(Math.abs(W[1]))} × hours ${W[2]<0?"−":"+"} ${fb(Math.abs(W[2]))}</b><span>the neuron’s score: above 0 means review</span></div>`;
+    let m;const bad=J.map((j,i)=>[j,i]).filter(([j])=>wrong(W,j));
+    const ex=bad.length?bad[0]:null,exs=ex?`For example, day ${ex[1]+1} (${f1(ex[0][0],1)} harsh brakes, ${f1(ex[0][1],1)} h of idling) scores ${fw(W[0])} × ${f1(ex[0][0],1)} ${W[1]<0?"−":"+"} ${fw(Math.abs(W[1]))} × ${f1(ex[0][1],1)} ${W[2]<0?"−":"+"} ${fb(Math.abs(W[2]))} = <b>${f1(zOf(W,ex[0]),2)}</b> points: the neuron says “${zOf(W,ex[0])>0?"review":"OK"}”, but the manager marked it “${ex[0][2]?"review":"OK"}”.`:"";
+    if(trained&&trained[0]===0)m=`This line no longer gets any day wrong: the perceptron makes a whole pass without a mistake and changes nothing. It only learns when it is wrong.`;
+    else if(trained)m=`The neuron learned on its own: <b>${trained[0]} corrections</b> in ${trained[1]} passes through the 20 days, and now it gets none wrong. It now gives ${fw(W[0])} points per harsh brake and ${fw(W[1])} per hour of idling: ${W[1]>W[0]?"an hour of idling weighs more than a harsh brake":"each number has its own weight"}. Notice that the line passes very close to some days: the perceptron stops as soon as it stops making mistakes (idea 4).`;
+    else if(W[0]===IDEA[0]&&W[1]===IDEA[1]&&W[2]===IDEA[2])m=`With the manager’s first idea, <b>5 days</b> end up on the wrong side. ${exs} The line is almost upright: the rule barely looks at idling.`;
+    else if(!nw)m=`No days on the wrong side! You placed a line by hand that separates all 20. Many lines manage that: idea 4 explains why they are not all equally good.`;
+    else m=`${nw} ${nw===1?"day is":"days are"} on the wrong side. ${exs} ${last==="b"?"Moving the bias shifts the line in parallel: it fixes days on one side and breaks the ones on the other.":last?"Changing a weight turns the line around a point: try giving idling more points.":""}`;
+    $("t-msg").innerHTML=m;}
+  [[iw1,0,"w"],[iw2,1,"w"],[ib,2,"b"]].forEach(([i,k,t])=>i.addEventListener("input",()=>{if(busy)return;W[k]=+i.value;last=t;trained=null;draw();}));
+  bre.onclick=()=>{if(busy)return;W=IDEA.slice();last="";trained=null;setSl();draw();};
+  btr.onclick=()=>{if(busy)return;busy=true;btr.disabled=bre.disabled=true;let k=0,n=0;
+    const step=()=>{const c=pass(W,ORD);n++;k+=c;setSl();if(c===0||n>=400){trained=[k,n];busy=false;btr.disabled=bre.disabled=false;draw();return;}trained=null;draw();setTimeout(step,n<12?320:n<40?90:15);};step();};
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 1: inside the neuron ---------- */
+(function(){const svg=$("neu"),ix1=$("n-x1"),ix2=$("n-x2"),Wt=D.WT;
+  function draw(){const x1=+ix1.value,x2=+ix2.value,nw=narrowOf(svg),W=nw?600:900,H=nw?430:370,FS=nw?22:15;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const u=W/900,yIn=[H*0.22,H*0.5,H*0.8],xIn=nw?70:110,rIn=nw?44:36,xS=nw?262:470,rS=nw?52:52,xSt=nw?385:650,xOut=nw?540:812,yM=H*0.5;
+    const p1=Wt[0]*x1,p2=Wt[1]*x2,z=p1+p2+Wt[2],yes=z>0;
+    const ins=[[f1(x1,1),"brakes",Wt[0],p1],[f1(x2,1)+" h","idling",Wt[1],p2],["1","fixed",Wt[2],Wt[2]]];
+    ins.forEach(([v,lab,w,p],k)=>{const y=yIn[k];
+      el("line",{x1:xIn+rIn,y1:y,x2:xS-rS,y2:yM+(y-yM)*0.25,stroke:"var(--muted)","stroke-width":nw?3:2.4},svg);
+      const mx=xIn+rIn+(xS-rS-xIn-rIn)*0.5,my=y+(yM+(y-yM)*0.25-y)*0.5;
+      txt(svg,mx,my-FS*0.55,"× "+f1(w,k===2?1:2),Object.assign({"text-anchor":"middle","font-size":FS*0.85,"font-weight":700,style:"fill:var(--point)"},halo(6)));
+      el("circle",{cx:xIn,cy:y,r:rIn,fill:"var(--surface)",stroke:k===2?"var(--line)":"var(--ink)","stroke-width":2},svg);
+      txt(svg,xIn,y+FS*0.35,v,{"text-anchor":"middle","font-size":FS*(v.length>4?0.82:0.95),"font-weight":700,class:"t-ink"});
+      txt(svg,xIn,y-rIn-FS*0.35,lab,{"text-anchor":"middle","font-size":FS*0.75});});
+    el("circle",{cx:xS,cy:yM,r:rS,fill:"var(--surface)",stroke:"var(--mean)","stroke-width":3},svg);
+    txt(svg,xS,yM-FS*0.35,"Σ",{"text-anchor":"middle","font-size":FS*1.1,"font-weight":700,style:"fill:var(--mean)"});
+    txt(svg,xS,yM+FS*0.95,f1(z,2),{"text-anchor":"middle","font-size":FS*1.0,"font-weight":700,class:"t-ink"});
+    txt(svg,xS,yM+rS+FS*1.1,"score",{"text-anchor":"middle","font-size":FS*0.75});
+    arrow(svg,xS+rS+4,yM,xSt-(nw?47:54),yM,"var(--muted)",nw?3:2.4,nw?14:11);
+    const bw=nw?84:104,bh=nw?92:80;el("rect",{x:xSt-bw/2,y:yM-bh/2,width:bw,height:bh,rx:10,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":2},svg);
+    const sx0=xSt-bw/2+12,sx1=xSt+bw/2-12,sy0=yM+bh/2-14,sy1=yM-bh/2+14;
+    el("path",{d:`M${sx0} ${sy0}L${xSt} ${sy0}L${xSt} ${sy1}L${sx1} ${sy1}`,fill:"none",stroke:"var(--ink)","stroke-width":2.4},svg);
+    txt(svg,xSt,yM+bh/2+FS*1.1,"greater than 0?",{"text-anchor":"middle","font-size":FS*0.75});
+    arrow(svg,xSt+bw/2+4,yM,xOut-(nw?60:62),yM,"var(--muted)",nw?3:2.4,nw?14:11);
+    const ow=nw?100:120;el("rect",{x:xOut-ow/2,y:yM-FS*1.1,width:ow,height:FS*2.2,rx:FS*1.1,fill:yes?"var(--point)":"var(--sample)","fill-opacity":.2,stroke:yes?"var(--point)":"var(--sample)","stroke-width":2.4},svg);
+    txt(svg,xOut,yM+FS*0.35,yes?"review":"OK",{"text-anchor":"middle","font-size":FS*0.95,"font-weight":700,style:`fill:${yes?"var(--point)":"var(--sample)"}`});
+    $("n-x1-o").textContent=f1(x1,1);$("n-x2-o").textContent=f1(x2,1)+" h";
+    $("n-big").innerHTML=`<div><b>${f1(p1,2)}</b><span>from harsh braking: ${f1(Wt[0],2)} × ${f1(x1,1)}</span></div><div><b>${f1(p2,2)}</b><span>from idling: ${f1(Wt[1],2)} × ${f1(x2,1)}</span></div><div><b>${f1(Wt[2],2)}</b><span>to start (the bias)</span></div><div><b style="color:${yes?"var(--point)":"var(--sample)"}">${f1(z,2)}</b><span>score: ${yes?"greater than 0, review":"0 or less, OK"}</span></div>`;
+    let m;if(Math.abs(z)<0.3)m=`${f1(p1,2)} ${p2<0?"−":"+"} ${f1(Math.abs(p2),2)} − 6.00 = <b>${f1(z,2)}</b>: the day is almost on the boundary. A little more idling or harsh braking would change the decision. With the step, the neuron gives no warning that it is unsure; idea 2 fixes that.`;
+    else if(yes)m=`${f1(p1,2)} + ${f1(p2,2)} − 6.00 = <b>${f1(z,2)}</b> points: more than 0, so the neuron says <b>review</b>. ${p2>p1?"Idling contributes more than harsh braking.":"Harsh braking contributes more than idling."} For a day with no idling to be reviewed, it takes ${f1(-Wt[2]/Wt[0],1)} harsh brakes per 100 km; with no harsh braking, ${f1(-Wt[2]/Wt[1],1)} h of idling.`;
+    else m=`${f1(p1,2)} + ${f1(p2,2)} − 6.00 = <b>${f1(z,2)}</b> points: it doesn’t reach 0, so the neuron says <b>OK</b>. Each extra harsh brake adds ${f1(Wt[0],2)} and each hour of idling, ${f1(Wt[1],2)}: this day is ${f1(-z,2)} points short of being reviewed.`;
+    $("n-msg").innerHTML=m;}
+  [ix1,ix2].forEach(i=>i.addEventListener("input",draw));redraws.push(draw);draw();})();
+
+/* ---------- idea 2: step and sigmoid ---------- */
+(function(){const svg=$("sig"),ik=$("s-k"),Wt=D.WT,Z=J.map(j=>zOf(Wt,j)),HL=[8,17,1];
+  function draw(){const k=4**((+ik.value-50)/50),nw=narrowOf(svg),W=nw?600:900,H=nw?440:340,FS=nw?22:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:-8,x1:8,y0:0,y1:1,xt:[-8,-4,0,4,8],yt:[0,0.25,0.5,0.75,1],fy:v=>Math.round(v*100)+"%",xl:"day’s score",yl:"neuron’s answer",FS,padL:FS*3.2,padT:FS*2});
+    el("path",{d:pathOf([[A.sx(-8),A.sy(0)],[A.sx(0),A.sy(0)],[A.sx(0),A.sy(1)],[A.sx(8),A.sy(1)]]),fill:"none",stroke:"var(--muted)","stroke-width":2.4,"stroke-dasharray":"7 5"},svg);
+    const P=[];for(let i=0;i<=300;i++){const z=-8+16*i/300;P.push([A.sx(z),A.sy(sig(z))]);}
+    el("path",{d:pathOf(P),fill:"none",stroke:"var(--mean)","stroke-width":3.4},svg);
+    const r=nw?8:6.5;Z.forEach((z,i)=>{const zz=Math.max(-8,Math.min(8,k*z));dot(svg,A.sx(zz),A.sy(sig(k*z)),r,J[i][2]?"var(--point)":"var(--sample)");});
+    HL.forEach((i,n)=>{const zz=Math.max(-8,Math.min(8,k*Z[i])),X=A.sx(zz),Y=A.sy(sig(k*Z[i]));el("circle",{cx:X,cy:Y,r:r+5,fill:"none",stroke:"var(--ink)","stroke-width":2},svg);
+      const up=sig(k*Z[i])<0.5;txt(svg,Math.max(A.L+40,Math.min(A.R-40,X)),Y+(up?-FS*1.1:FS*1.7),"day "+(i+1),Object.assign({"text-anchor":"middle","font-size":FS*0.78,class:"t-ink"},halo(5)));});
+    $("s-k-o").textContent="× "+f1(k,2);
+    $("s-big").innerHTML=HL.map(i=>`<div><b style="color:${J[i][2]?"var(--point)":"var(--sample)"}">${f1(sig(k*Z[i])*100,1)}%</b><span>day ${i+1} (${f1(J[i][0],1)} harsh brakes, ${f1(J[i][1],1)} h): score ${f1(k*Z[i],2)}</span></div>`).join("");
+    let m;const pd=sig(k*Z[17]);
+    if(k<0.6)m=`With the weights multiplied by ${f1(k,2)}, all the scores move close to 0 and the neuron sees everything as uncertain: even day 9, with 7.5 harsh brakes and 2.8 h of idling, stays at ${f1(sig(k*Z[8])*100,0)}%. The line is the same; what changes is how confident it looks.`;
+    else if(k>2.2)m=`With the weights multiplied by ${f1(k,2)}, the scores move away from 0 and the sigmoid looks more and more like the step: almost everything is 0% or 100%. The line stays in the same place (where the score is 0), but the neuron no longer allows any doubt, not even for day 18 (${f1(pd*100,1)}%).`;
+    else m=`With the learned weights, day 9 is very far from the boundary (${f1(sig(k*Z[8])*100,1)}% for review), and so is day 2, but on the other side (${f1(sig(k*Z[1])*100,1)}%). Day 18 (6.6 harsh brakes, 0.4 h) falls almost right on the line: <b>${f1(pd*100,1)}%</b>. The step simply called it “OK”; the sigmoid says it is a coin toss.`;
+    $("s-msg").innerHTML=m;}
+  ik.addEventListener("input",draw);redraws.push(draw);draw();})();
+
+/* ---------- idea 3: the perceptron step by step ---------- */
+(function(){const svg=$("prc"),b1=$("p-1"),bf=$("p-f"),ba=$("p-a"),br=$("p-r");let S;
+  function reset(){S={w:IDEA.slice(),prev:null,i:-1,pas:1,k:0,fallosPas:0,last:null,done:false};}
+  function stepOne(){if(S.done)return false;S.i++;if(S.i>=NJ){if(S.fallosPas===0){S.done=true;S.i=NJ-1;S.last={end:true};return false;}S.i=0;S.pas++;S.fallosPas=0;}
+    const j=J[S.i],s=j[2]?1:-1,z=S.w[0]*j[0]+S.w[1]*j[1]+S.w[2],old=S.w.slice();
+    if(s*z<=0){S.prev=old;S.w[0]+=ETA*s*j[0];S.w[1]+=ETA*s*j[1];S.w[2]+=ETA*s;S.k++;S.fallosPas++;S.last={i:S.i,z,s,old,fix:true};return true;}
+    S.last={i:S.i,z,s,old,fix:false};
+    if(S.i===NJ-1&&S.fallosPas===0){S.done=true;S.last.end=true;}
+    return false;}
+  function draw(){const A=frame(svg),g=clipRect(svg,A);regions(A,g,S.w,false);if(S.prev)bline(A,g,S.prev,"var(--muted)",A.nw?3.5:2.6,"8 6");bline(A,g,S.w,"var(--mean)",A.nw?5:4);jdots(A,svg,S.w,true);
+    if(S.last&&S.last.i!=null){const j=J[S.last.i];el("circle",{cx:A.sx(j[0]),cy:A.sy(j[1]),r:A.nw?22:17,fill:"none",stroke:"var(--ink)","stroke-width":A.nw?4.5:3.5},svg);}
+    const nw=nWrong(S.w);
+    $("p-big").innerHTML=`<div><b>${S.pas}</b><span>pass through the 20 days</span></div><div><b>${S.k}</b><span>corrections made</span></div><div><b style="color:${nw?"var(--warn)":"var(--good)"}">${nw}</b><span>days on the wrong side now</span></div><div><b style="font-size:1.05rem;line-height:1.35">${fw(S.w[0])} · ${fw(S.w[1])} · ${fb(S.w[2])}</b><span>weights (brakes · hours) and bias</span></div>`;
+    let m;const L=S.last;
+    if(!L)m=`It starts from the first idea: 1 point per harsh brake, 0.2 per hour of idling and −6 to start (5 days on the wrong side). Press “Next day” to have the neuron look at day 1.`;
+    else if(S.done)m=`Pass ${S.pas} finished <b>without a single mistake</b>: the neuron stops. In total, <b>${S.k} corrections</b> (9 in the first pass, 5 in the second and 2 in each of the next three). The weights went from (1, 0.2) to (${fw(S.w[0])}, ${fw(S.w[1])}): it learned that idling weighed much more than the manager thought. The bias is back at ${fb(S.w[2])}.`;
+    else{const j=J[L.i],zs=f1(L.z,2),dij=L.z>0?"review":"OK",era=j[2]?"review":"OK";
+      const cuenta=`${fw(L.old[0])} × ${f1(j[0],1)} ${L.old[1]<0?"−":"+"} ${fw(Math.abs(L.old[1]))} × ${f1(j[1],1)} ${L.old[2]<0?"−":"+"} ${fb(Math.abs(L.old[2]))} = <b>${zs}</b>`;
+      if(L.fix){const sgn=L.s>0?"+":"−";m=`Day ${L.i+1} (${f1(j[0],1)} harsh brakes, ${f1(j[1],1)} h): ${cuenta} → it says “${L.z===0?"on the boundary":dij}”, but it was “${era}”. <b>Correction</b>: braking weight ${sgn} 0.1 × ${f1(j[0],1)} = ${fw(S.w[0])}; idling weight ${sgn} 0.1 × ${f1(j[1],1)} = ${fw(S.w[1])}; bias ${sgn} 0.1 = ${fb(S.w[2])}. The line ${L.s>0?"moves away from this day to leave it in the “review” zone":"moves away from this day to leave it in the “OK” zone"}.`;}
+      else m=`Day ${L.i+1} (${f1(j[0],1)} harsh brakes, ${f1(j[1],1)} h): ${cuenta} → it says “${dij}” and it was “${era}”. <b>Correct</b>: nothing changes.`;}
+    $("p-msg").innerHTML=m;b1.disabled=bf.disabled=ba.disabled=S.done;}
+  b1.onclick=()=>{stepOne();draw();};
+  bf.onclick=()=>{let n=0;while(!S.done&&!stepOne()&&n<500)n++;draw();};
+  ba.onclick=()=>{let n=0;while(!S.done&&n<5000){stepOne();n++;}draw();};
+  br.onclick=()=>{reset();draw();};
+  reset();redraws.push(draw);draw();})();
+
+/* ---------- idea 4: many valid lines ---------- */
+(function(){const svg=$("many"),bsh=$("m-sh"),bmid=$("m-mid"),bre=$("m-re"),NF=D.nf,NR=D.nr,NY=D.ny,NN=NY.length;let lines,mid=false,rng=mulberry32(7);
+  const acc=w=>{let c=0;for(let i=0;i<NN;i++)if(((w[0]*NF[i]+w[1]*NR[i]+w[2])>0)===(NY[i]===1))c++;return c/NN;};
+  const train=order=>{const w=IDEA.slice();for(let n=0;n<1000;n++){if(pass(w,order)===0)break;}return w;};
+  function reset(){lines=[train(ORD)];}
+  function draw(){const A=frame(svg),g=clipRect(svg,A);
+    for(let i=0;i<NN;i++)el("circle",{cx:A.sx(NF[i]),cy:A.sy(NR[i]),r:A.nw?2.6:2,fill:NY[i]?"var(--point)":"var(--sample)","fill-opacity":.45},g);
+    lines.slice(0,-1).forEach(w=>bline(A,g,w,"var(--sample)",A.nw?3:2.2));
+    if(mid)bline(A,g,D.svm,"var(--good)",A.nw?5:4,"10 7");
+    bline(A,g,lines[lines.length-1],"var(--mean)",A.nw?5:4);jdots(A,svg,null,false);
+    const a=lines.map(acc),la=a[a.length-1],mn=Math.min(...a),mx=Math.max(...a),am=acc(D.svm);
+    $("m-big").innerHTML=`<div><b style="color:var(--mean)">${f1(la*100,1)}%</b><span>accuracy of the latest line on the 1,000 new days</span></div><div><b>${lines.length}</b><span>${lines.length===1?"line tested":`lines tested: between ${f1(mn*100,1)}% and ${f1(mx*100,1)}%`}</span></div><div><b style="color:var(--good)">${mid?f1(am*100,1)+"%":"?"}</b><span>accuracy of the middle line${mid?"":" (press to see it)"}</span></div>`;
+    let m;if(lines.length===1&&!mid)m=`This is the toy’s line (the 20 days in their original order): it gets none of the 20 wrong and gets <b>${f1(la*100,1)}%</b> of the 1,000 new ones right. Press “Shuffle and train” several times: each order gives a different line.`;
+    else if(!mid)m=`${lines.length} lines, all with no mistakes on the 20 days, and on the new ones their accuracy ranges from <b>${f1(mn*100,1)}%</b> to <b>${f1(mx*100,1)}%</b>. The ones that barely graze some training day tend to make more mistakes on the new ones. Press “Show the middle line”.`;
+    else m=`The middle line leaves the most free space between itself and the closest days in each group, and it gets <b>${f1(am*100,1)}%</b> of the new ones right${lines.length>1?`, compared with ${f1(mn*100,1)}–${f1(mx*100,1)}% for the perceptron’s lines`:""}. The perceptron doesn’t look for that space: it settles for making no mistakes. <a href="support-vector-machines-en.html" target="_self">Support vector machines</a> and <a href="logistic-regression-en.html" target="_self">logistic regression</a> do take into account how close the line passes.`;
+    $("m-msg").innerHTML=m;}
+  bsh.onclick=()=>{const o=ORD.slice();for(let i=o.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[o[i],o[j]]=[o[j],o[i]];}lines.push(train(o));if(lines.length>14)lines.splice(0,1);draw();};
+  bmid.onclick=()=>{mid=!mid;bmid.setAttribute("aria-pressed",String(mid));draw();};
+  bre.onclick=()=>{reset();mid=false;bmid.setAttribute("aria-pressed","false");rng=mulberry32(7);draw();};
+  reset();redraws.push(draw);draw();})();
+
+/* ---------- idea 5: the band a line cannot separate ---------- */
+(function(){const svg=$("band"),im=$("b-m"),ia=$("b-a"),bb=$("b-best"),bt=$("b-two"),C=D.cc,Q=D.cq,Y=D.cy,N=Y.length;let side=1,two=false;
+  const errs=(m,a,s)=>{let e=0;for(let i=0;i<N;i++){const on=s*(Q[i]-(a+m*C[i]))>0;if(on!==(Y[i]===1))e++;}return e;};
+  const bandErr=()=>{let e=0;for(let i=0;i<N;i++){const on=Math.abs(Q[i]-(24+0.55*C[i]))>2.5;if(on!==(Y[i]===1))e++;}return e;};
+  function draw(){const m=+im.value,a=+ia.value,nw=narrowOf(svg),W=nw?600:900,H=nw?460:400,FS=nw?22:14;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=axes(svg,{x:0,y:0,w:W,h:H,x0:0,x1:25,y0:18,y1:42,xt:[0,5,10,15,20,25],yt:[20,25,30,35,40],fx:v=>v+" t",xl:"load (tonnes)",yl:"fuel use (L/100 km)",FS,padL:FS*2.4,padT:FS*2});
+    const g=clipRect(svg,A),R=[[0,18],[25,18],[25,42],[0,42]],sc=P=>P.map(p=>[A.sx(p[0]),A.sy(p[1])]);
+    let isOn;
+    if(two){const fu=p=>p[1]-(26.5+0.55*p[0]),fl=p=>(21.5+0.55*p[0])-p[1];
+      [clipHalf(R,fu,1),clipHalf(R,fl,1)].forEach(P=>{if(P.length>2)el("path",{d:pathOf(sc(P))+"Z",fill:"var(--point)","fill-opacity":.12},g);});
+      [26.5,21.5].forEach(c=>el("line",{x1:A.sx(0),y1:A.sy(c),x2:A.sx(25),y2:A.sy(c+0.55*25),stroke:"var(--mean)","stroke-width":nw?5:4},g));
+      isOn=i=>Math.abs(Q[i]-(24+0.55*C[i]))>2.5;}
+    else{const f=p=>side*(p[1]-(a+m*p[0]));const P=clipHalf(R,f,1);if(P.length>2)el("path",{d:pathOf(sc(P))+"Z",fill:"var(--point)","fill-opacity":.12},g);
+      el("line",{x1:A.sx(0),y1:A.sy(a),x2:A.sx(25),y2:A.sy(a+m*25),stroke:"var(--mean)","stroke-width":nw?5:4},g);
+      isOn=i=>side*(Q[i]-(a+m*C[i]))>0;}
+    const r=nw?9:7;let e=0,miss=0,extra=0;
+    for(let i=0;i<N;i++){const on=isOn(i),bad=on!==(Y[i]===1);if(bad){e++;if(Y[i])miss++;else extra++;el("circle",{cx:A.sx(C[i]),cy:A.sy(Q[i]),r:r+6,fill:"none",stroke:"var(--warn)","stroke-width":nw?3.5:3},svg);}
+      dot(svg,A.sx(C[i]),A.sy(Q[i]),r,Y[i]?"var(--point)":"var(--sample)");}
+    $("b-m-o").textContent=f1(m,2)+" L";$("b-a-o").textContent=f1(a,1)+" L";[im,ia].forEach(i=>i.disabled=two);
+    $("b-big").innerHTML=`<div><b style="color:${e?"var(--warn)":"var(--good)"}">${e} of ${N}</b><span>trips misclassified</span></div><div><b>${miss}</b><span>odd trips that get away (there are 12)</span></div><div><b>${extra}</b><span>extra alerts on normal trips</span></div>`;
+    let msg;if(two)msg=`With <b>two lines</b> (alert if the trip is above the upper one <em>or</em> below the lower one) there are no mistakes at all. But that is no longer one neuron: it is two neurons, one per line, plus a third that combines their answers. That is a network with a hidden layer, topic 3.`;
+    else if(e===6)msg=`<b>6 mistakes</b>: that is the best a straight line can do with these 30 trips (we checked by trying every possible line, including the ones these sliders can’t reach). It flags one side of the band correctly, but the 6 odd trips on the other side get away. Try “Try with two lines”.`;
+    else msg=`${e} mistakes: ${miss} odd trips get away and ${extra} normal trips raise an alert. However you turn the line, the odd trips are on both sides of normal. Press “Find the best line” to see the minimum.`;
+    $("b-msg").innerHTML=msg;}
+  seg(["b-up","b-dn"],i=>{side=i?-1:1;draw();});
+  bb.onclick=()=>{let best=[99];for(let k=0;k<=120;k++){const m=k*0.01;for(let q=0;q<=300;q++){const a=10+q*0.1;for(const s of [1,-1]){const e=errs(m,a,s);if(e<best[0])best=[e,m,a,s];}}}
+    two=false;bt.setAttribute("aria-pressed","false");im.value=best[1];ia.value=best[2];side=best[3];$("b-up").setAttribute("aria-pressed",String(side===1));$("b-dn").setAttribute("aria-pressed",String(side===-1));draw();};
+  bt.onclick=()=>{two=!two;bt.setAttribute("aria-pressed",String(two));draw();};
+  [im,ia].forEach(i=>i.addEventListener("input",draw));redraws.push(draw);draw();})();
+})();
+</script>
+</body>
+</html>

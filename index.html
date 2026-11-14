@@ -29,7 +29,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);fo
 header{padding:36px 0 32px;display:grid;gap:14px}
 h1{font-family:var(--f-display);font-weight:800;font-size:clamp(2.4rem,7vw,4.2rem);line-height:1.02;letter-spacing:-.02em;margin:0}
 .lede{color:var(--muted);max-width:60ch;margin:0;font-size:1.1rem}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:18px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
 @media (max-width:720px){.grid{grid-template-columns:1fr}}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px;display:grid;gap:12px;align-content:start}
 .card svg{width:100%;height:auto;display:block;border-radius:10px;background:var(--bg)}
@@ -54,7 +54,7 @@ footer{margin-top:36px;color:var(--muted);font-size:.9rem}
   <header>
     <p class="eyebrow" data-i="eyebrow">Aprender viendo · machine learning sin cajas negras</p>
     <h1 data-i="h1">Explicaciones visuales</h1>
-    <p class="lede" data-i="lede">Tres colecciones. Cada tema tiene una versión sencilla con gráficos interactivos y un vídeo corto, y una versión técnica con matemáticas y código verificado.</p>
+    <p class="lede" data-i="lede">Cuatro colecciones. Cada tema tiene una versión sencilla con gráficos interactivos y un vídeo corto, y una versión técnica con matemáticas y código verificado.</p>
   </header>
 
   <div class="grid">
@@ -97,6 +97,20 @@ footer{margin-top:36px;color:var(--muted);font-size:.9rem}
       <p class="meta" data-i="ml_m">14 temas · 28 páginas · 14 vídeos</p>
       <a class="go" data-href="ml" href="serie-ml-visual-es.html" data-i="open">Abrir la colección →</a>
     </article>
+    <article class="card">
+      <svg viewBox="0 0 320 120" aria-hidden="true">
+        <g stroke="var(--line)" stroke-width="1.5"><path d="M50 30L140 20M50 30L140 60M50 30L140 100M50 90L140 20M50 90L140 60M50 90L140 100M140 20L240 40M140 20L240 80M140 60L240 40M140 60L240 80M140 100L240 40M140 100L240 80M240 40L290 60M240 80L290 60"/></g>
+        <path d="M50 90L140 60L240 40L290 60" fill="none" stroke="var(--mean)" stroke-width="4" stroke-linecap="round"/>
+        <path d="M282 72Q220 118 150 108" fill="none" stroke="var(--point)" stroke-width="3" stroke-dasharray="6 4"/>
+        <g fill="var(--sample)"><circle cx="50" cy="30" r="8"/><circle cx="50" cy="90" r="8"/></g>
+        <g fill="var(--mean)"><circle cx="140" cy="20" r="8"/><circle cx="140" cy="60" r="8"/><circle cx="140" cy="100" r="8"/><circle cx="240" cy="40" r="8"/><circle cx="240" cy="80" r="8"/></g>
+        <circle cx="290" cy="60" r="9" fill="var(--point)"/>
+      </svg>
+      <h2 data-i="nn_t">Redes neuronales</h2>
+      <p data-i="nn_d">De la neurona a los transformers: activaciones, capas, pérdida, backpropagation, cómo se entrena una red, convolucionales, recurrentes, embeddings, atención y autoencoders.</p>
+      <p class="meta" data-i="nn_m">6 de 13 temas · 12 páginas · 6 vídeos</p>
+      <a class="go" data-href="nn" href="redes-neuronales-es.html" data-i="open">Abrir la colección →</a>
+    </article>
   </div>
 
   <footer><p data-i="foot">Los vídeos deben estar en esta misma carpeta que las páginas.</p></footer>
@@ -106,19 +120,21 @@ footer{margin-top:36px;color:var(--muted);font-size:.9rem}
 "use strict";
 var T={
  es:{title:"Aprender viendo · Explicaciones visuales",eyebrow:"Aprender viendo · machine learning sin cajas negras",h1:"Explicaciones visuales",
-  lede:"Tres colecciones. Cada tema tiene una versión sencilla con gráficos interactivos y un vídeo corto, y una versión técnica con matemáticas y código verificado.",
+  lede:"Cuatro colecciones. Cada tema tiene una versión sencilla con gráficos interactivos y un vídeo corto, y una versión técnica con matemáticas y código verificado.",
   ml_t:"Serie ML visual",ml_d:"Catorce algoritmos de machine learning: regresión, árboles, boosting, vecinos, k-means, PCA, SVM, Bayes, procesos gaussianos, Markov y Kalman.",ml_m:"14 temas · 28 páginas · 14 vídeos",
   dt_t:"Preparar los datos",dt_d:"Lo que va antes del modelo: separar el examen, explorar, limpiar, atípicos, huecos, clases raras, preparar variables y un proyecto completo.",dt_m:"8 temas · 16 páginas · 8 vídeos",
   mt_t:"Las matemáticas debajo del ML",mt_d:"Los cimientos: vectores, distancias, productos punto, matrices, estadística, probabilidad y el cálculo que hay detrás de cómo aprende un modelo.",mt_m:"16 de 16 temas · 32 páginas · 16 vídeos",
+  nn_t:"Redes neuronales",nn_d:"De la neurona a los transformers: activaciones, capas, pérdida, backpropagation, cómo se entrena una red, convolucionales, recurrentes, embeddings, atención y autoencoders.",nn_m:"6 de 13 temas · 12 páginas · 6 vídeos",
   open:"Abrir la colección →",foot:"Los vídeos deben estar en esta misma carpeta que las páginas.",
-  href:{ml:"serie-ml-visual-es.html",dt:"preparar-los-datos-es.html",mt:"matematicas-del-ml-es.html"}},
+  href:{ml:"serie-ml-visual-es.html",dt:"preparar-los-datos-es.html",mt:"matematicas-del-ml-es.html",nn:"redes-neuronales-es.html"}},
  en:{title:"Learn by seeing · Visual explainers",eyebrow:"Learn by seeing · machine learning, no black boxes",h1:"Visual explainers",
-  lede:"Three collections. Each topic has a simple version with interactive charts and a short video, and a technical version with the math and verified code.",
+  lede:"Four collections. Each topic has a simple version with interactive charts and a short video, and a technical version with the math and verified code.",
   ml_t:"Visual ML series",ml_d:"Fourteen machine learning algorithms: regression, trees, boosting, neighbors, k-means, PCA, SVM, Bayes, Gaussian processes, Markov and Kalman.",ml_m:"14 topics · 28 pages · 14 videos",
   dt_t:"Preparing the data",dt_d:"What comes before the model: setting the exam aside, exploring, cleaning, outliers, gaps, rare classes, preparing features and an end-to-end project.",dt_m:"8 topics · 16 pages · 8 videos",
   mt_t:"The math under ML",mt_d:"The foundations: vectors, distances, dot products, matrices, statistics, probability and the calculus behind how a model learns.",mt_m:"16 of 16 topics · 32 pages · 16 videos",
+  nn_t:"Neural networks",nn_d:"From the neuron to transformers: activations, layers, loss, backpropagation, how a network is trained, convolutional and recurrent networks, embeddings, attention and autoencoders.",nn_m:"6 of 13 topics · 12 pages · 6 videos",
   open:"Open the collection →",foot:"Videos must be in the same folder as the pages.",
-  href:{ml:"visual-ml-series-en.html",dt:"preparing-the-data-en.html",mt:"math-under-ml-en.html"}}
+  href:{ml:"visual-ml-series-en.html",dt:"preparing-the-data-en.html",mt:"math-under-ml-en.html",nn:"neural-networks-en.html"}}
 };
 function set(l){var t=T[l];document.documentElement.lang=l;document.title=t.title;
   document.querySelectorAll("[data-i]").forEach(function(e){e.textContent=t[e.getAttribute("data-i")];});
