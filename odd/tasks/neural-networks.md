@@ -41,6 +41,13 @@ AGENTS.md §5 lists this collection as the last missing piece. The build kit (`_
 - [x] T17 Translated R5/R6. Evidence: EN builds gave errors [] and phone 400. Parent fixes: R5 ES video «1 errores» changed to singular/plural and re-rendered (marks unchanged, 68.7 s); R6 toy pc() now rounds the fraction first, so 91.25 % shows as 91.2 % like the Python outputs (ES+EN). The R6 tanh note was added in both languages.
 - [x] T18 Synced. Hubs 6 of 13; counters 6/12/6; no broken links or placeholders; new pages at 400 px dark have scrollWidth 400 and no JS errors.
 
+### Pair 4: R7 + R8 (now in D:\Programacion\IA\Gauss)
+- [x] T19 R7 Spanish. Route: delegated writer. Evidence: parent rebuild gave errors [] and phone 400; video 65.2 s with AAC audio; fuel curve, parameter count and AdamW/Adam+L2 step re-derived by hand.
+- [x] T20 R8 Spanish. Route: delegated writer. Evidence: parent rebuild gave errors [] and phone 400; video 69.5 s with AAC audio; parameter counts and the threshold/weight-sum = 2.97 m/s² re-derived by hand.
+- [x] T21 Review done; no defects found in frames or numbers.
+- [x] T22 Translated R7/R8. Evidence: EN builds gave errors [] and phone 400; videos 65.2 s and 69.5 s; re-run outputs number-identical (R8 .pt models byte-identical).
+- [x] T23 Synced. Hubs 8 of 13; counters 8/16/8; no broken links or placeholders; new pages at 400 px dark have scrollWidth 400 and no JS errors.
+
 ## Acceptance
 - build.sh reports errors [] and phone scrollWidth 400, with no width lines, for every page.
 - Every code output comes from a real run, and the from-scratch module is verified against a reference.
@@ -48,6 +55,8 @@ AGENTS.md §5 lists this collection as the last missing piece. The build kit (`_
 - Numbers agree across the simple page, the technical page, the worked example and the video.
 
 ## Progress
+- 2026-11-14: R7+R8 complete in ES/EN and synced (Gauss).
+- 2026-11-14: The project moved to the Gauss repo (z1-ai-kb deleted). Kit paths repointed; branch feat/neural-networks recreated from main 2f7eff5. Started pair 4.
 - 2026-11-12: R5+R6 complete in ES/EN and synced.
 - 2026-11-12: R3+R4 complete in ES/EN and synced.
 - 2026-11-12: main and the branch pushed by Carlos. Review mode is off for this clone. Started pair 2 (R3+R4).
@@ -55,4 +64,4 @@ AGENTS.md §5 lists this collection as the last missing piece. The build kit (`_
 - 2026-11-07: Created branch `feat/neural-networks`. T1 and T2 done.
 
 ## Next step
-Carlos pushes and merges. Next pair: R7 (overfitting and regularization) + R8 (CNN).
+Carlos pushes and merges. Next pair: R9 (RNN and LSTM) + R10 (embeddings).
