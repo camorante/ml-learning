@@ -56,12 +56,12 @@ AGENTS.md §5 lists this collection as the last missing piece. The build kit (`_
 - [x] T28 Synced. Hubs 10 of 13; counters 10/20/10; no broken links or placeholders; phone 400 and no JS errors. Merged and pushed at Carlos's request.
 
 ### Final batch: R11 + R12 + R13 (Carlos asked for merge+push after pair 5, then the last 3)
-- [ ] T29 R11 Spanish (`atencion-y-transformers`). Route: delegated writer (`rn/r11`, `vr11`).
-- [ ] T30 R12 Spanish (`autoencoders`). Route: delegated writer (`rn/r12`, `vr12`).
-- [ ] T31 R13 Spanish (`proyecto-completo-con-redes`). Route: delegated writer (`rn/r13`, `vr13`). T29–T31 run in parallel on disjoint dirs.
-- [ ] T32 Review R11–R13.
-- [ ] T33 Translate R11–R13 (`attention-and-transformers`, `autoencoders`, `end-to-end-network-project`).
-- [ ] T34 Sync, check, commit, merge and push.
+- [x] T29 R11 Spanish. Route: delegated writer. Evidence: parent rebuild gave errors [] and phone 400; video 64.8 s with AAC audio; worked-example attention and the Transformer-base block parameter count re-derived by hand; video frame matches.
+- [x] T30 R12 Spanish. Route: delegated writer. Evidence: parent rebuild gave errors [] and phone 400; video 69.1 s with AAC audio; parameter count, precision/F1 and all four € costs re-derived by hand.
+- [x] T31 R13 Spanish. Route: delegated writer, run in parallel with T29/T30. Evidence: parent rebuild gave errors [] and phone 400; video 69.6 s with AAC audio; class weight, worked-example probability, € per truck and saving re-derived by hand. Honest result: the network does not beat the baselines.
+- [x] T32 Review done. R11 ES idea-1 chart titles overflowed at 400 px. The parent applied a smaller narrow font plus a shorter narrow wording in rn/r11/simple.js and rebuilt; no overflow in ES or EN.
+- [x] T33 Translated R11–R13. Evidence: EN builds gave errors [] and phone 400; videos 64.8 / 69.1 / 69.6 s; re-run outputs number-identical (R11/R12 retraining bit-identical). The parent ported the R13 idea-1 label overflow fix to ES and verified at the worst-case sliders.
+- [x] T34 Synced. Hubs 13 of 13; counters 13/26/13; no broken links or placeholders; new pages at 400 px dark have scrollWidth 400 and no JS errors. Merged and pushed.
 
 ## Acceptance
 - build.sh reports errors [] and phone scrollWidth 400, with no width lines, for every page.
@@ -70,6 +70,7 @@ AGENTS.md §5 lists this collection as the last missing piece. The build kit (`_
 - Numbers agree across the simple page, the technical page, the worked example and the video.
 
 ## Progress
+- 2026-11-22: R11–R13 complete in ES/EN, synced, merged and pushed. Collection complete (13/13).
 - 2026-11-21: R9+R10 complete in ES/EN, synced, merged and pushed.
 - 2026-11-14: R7+R8 complete in ES/EN and synced (Gauss).
 - 2026-11-14: The project moved to the Gauss repo (z1-ai-kb deleted). Kit paths repointed; branch feat/neural-networks recreated from main 2f7eff5. Started pair 4.
@@ -80,4 +81,4 @@ AGENTS.md §5 lists this collection as the last missing piece. The build kit (`_
 - 2026-11-07: Created branch `feat/neural-networks`. T1 and T2 done.
 
 ## Next step
-R11–R13 writers running (final batch).
+Collection complete. Pending, deferred by Carlos: verify every bibliography against primary sources, in all collections. AGENTS.md still describes the old cloud workflow and lists the neural networks collection as pending.
