@@ -48,6 +48,21 @@ AGENTS.md §5 lists this collection as the last missing piece. The build kit (`_
 - [x] T22 Translated R7/R8. Evidence: EN builds gave errors [] and phone 400; videos 65.2 s and 69.5 s; re-run outputs number-identical (R8 .pt models byte-identical).
 - [x] T23 Synced. Hubs 8 of 13; counters 8/16/8; no broken links or placeholders; new pages at 400 px dark have scrollWidth 400 and no JS errors.
 
+### Pair 5: R9 + R10
+- [x] T24 R9 Spanish. Route: delegated writer. Evidence: parent rebuild gave errors [] and phone 400; video 66.5 s with AAC audio; RNN/LSTM/GRU parameter counts and the worked-example output re-derived by hand.
+- [x] T25 R10 Spanish. Route: delegated writer. Evidence: parent rebuild gave errors [] and phone 400; video 70.8 s with AAC audio; parameter counts and the random-loss ln 19 re-derived by hand.
+- [x] T26 Review done. R10 video cosine scene: neighbour labels overlapped (B1325 and P0620 hidden). The parent added `separa()` label separation in the ES+EN scenes and re-rendered both (marks unchanged, 70.8 s).
+- [x] T27 Translated R9/R10. Evidence: EN builds gave errors [] and phone 400; videos 66.5 s and 70.8 s; re-run outputs number-identical.
+- [x] T28 Synced. Hubs 10 of 13; counters 10/20/10; no broken links or placeholders; phone 400 and no JS errors. Merged and pushed at Carlos's request.
+
+### Final batch: R11 + R12 + R13 (Carlos asked for merge+push after pair 5, then the last 3)
+- [ ] T29 R11 Spanish (`atencion-y-transformers`). Route: delegated writer (`rn/r11`, `vr11`).
+- [ ] T30 R12 Spanish (`autoencoders`). Route: delegated writer (`rn/r12`, `vr12`).
+- [ ] T31 R13 Spanish (`proyecto-completo-con-redes`). Route: delegated writer (`rn/r13`, `vr13`). T29–T31 run in parallel on disjoint dirs.
+- [ ] T32 Review R11–R13.
+- [ ] T33 Translate R11–R13 (`attention-and-transformers`, `autoencoders`, `end-to-end-network-project`).
+- [ ] T34 Sync, check, commit, merge and push.
+
 ## Acceptance
 - build.sh reports errors [] and phone scrollWidth 400, with no width lines, for every page.
 - Every code output comes from a real run, and the from-scratch module is verified against a reference.
@@ -55,6 +70,7 @@ AGENTS.md §5 lists this collection as the last missing piece. The build kit (`_
 - Numbers agree across the simple page, the technical page, the worked example and the video.
 
 ## Progress
+- 2026-11-21: R9+R10 complete in ES/EN, synced, merged and pushed.
 - 2026-11-14: R7+R8 complete in ES/EN and synced (Gauss).
 - 2026-11-14: The project moved to the Gauss repo (z1-ai-kb deleted). Kit paths repointed; branch feat/neural-networks recreated from main 2f7eff5. Started pair 4.
 - 2026-11-12: R5+R6 complete in ES/EN and synced.
@@ -64,4 +80,4 @@ AGENTS.md §5 lists this collection as the last missing piece. The build kit (`_
 - 2026-11-07: Created branch `feat/neural-networks`. T1 and T2 done.
 
 ## Next step
-Carlos pushes and merges. Next pair: R9 (RNN and LSTM) + R10 (embeddings).
+R11–R13 writers running (final batch).
