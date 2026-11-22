@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Embeddings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: misma identidad de la serie ML visual. Una columna de lectura + figuras vivas. Azul = el modelo, naranja = los datos, violeta = los errores */
+:root{
+  --bg:#F2F5FA; --surface:#FFFFFF; --ink:#16202E; --muted:#5A6678; --line:#D6DEE9;
+  --mean:#1D5FD1; --band:rgba(29,95,209,.13); --band-edge:rgba(29,95,209,.38);
+  --sample:#7563C9; --sq:rgba(117,99,201,.16); --point:#DD6A26; --point-ring:#FFFFFF; --hl:#FDEFE4; --good:#1C8A5A; --warn:#B4532A;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+    --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+    --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E131B; --surface:#161D28; --ink:#E4EAF3; --muted:#9BA7B9; --line:#2B3545;
+  --mean:#6EA6FF; --band:rgba(110,166,255,.15); --band-edge:rgba(110,166,255,.42);
+  --sample:#AE9FF3; --sq:rgba(174,159,243,.16); --point:#FF9A55; --point-ring:#0E131B; --hl:#2B1F15; --good:#4CC38A; --warn:#F08A5D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:18px;line-height:1.6;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:980px;margin:0 auto}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.08;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.4rem,6.6vw,4.4rem);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.6vw,2.2rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--mean)}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.25rem;color:var(--muted);max-width:42ch}
+.hero{display:grid;gap:16px;padding-block:56px 28px}
+section{display:grid;gap:18px;padding-block:44px;border-top:1px solid var(--line)}
+section.first{border-top:0;padding-top:8px}
+section>*,.stack>*{min-width:0}
+.stack{display:grid;gap:14px}
+.note{background:var(--hl);border-radius:10px;padding:14px 18px}
+figure{margin:0;min-width:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.fig svg{display:block;width:100%;height:auto;max-width:100%}
+figcaption{font-size:.92rem;color:var(--muted);padding:8px 4px 0}
+svg text{font-family:var(--f-mono);fill:var(--muted)}
+svg .t-ink{fill:var(--ink)}
+.g-line{stroke:var(--line);fill:none}
+.g-axis{stroke:var(--muted);stroke-width:1.2;fill:none;stroke-opacity:.5}
+.p-fit{fill:none;stroke:var(--mean);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.p-fit2{fill:none;stroke:var(--sample);stroke-width:2.4;stroke-dasharray:7 5}
+.p-res{stroke:var(--sample);stroke-width:2;stroke-linecap:round}
+.p-sq{fill:var(--sq);stroke:var(--sample);stroke-width:1;stroke-opacity:.6}
+.p-point{fill:var(--point);stroke:var(--point-ring);stroke-width:2.5}
+.p-new{fill:var(--surface);stroke:var(--sample);stroke-width:2.5}
+.hit{fill:transparent;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:.92rem;color:var(--muted);padding:2px 4px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend svg{width:28px;height:14px;flex:none}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px 28px;align-items:start}
+.slider{display:grid;gap:4px;min-width:0}
+.slider label{font-weight:700;font-size:.98rem;display:flex;justify-content:space-between;gap:8px}
+.slider output{font-family:var(--f-mono);font-weight:400;color:var(--muted);font-size:.85rem}
+.ends{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--mean)}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:.92rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:7px 15px;cursor:pointer}
+button:hover{border-color:var(--mean)}
+button[aria-pressed="true"]{background:var(--mean);border-color:var(--mean);color:var(--surface)}
+button.primary{background:var(--mean);border-color:var(--mean);color:var(--surface);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mean);outline-offset:2px}
+.status{font-size:.95rem;color:var(--muted)}
+.status b{color:var(--ink)}
+.meter{display:grid;gap:6px;font-size:.95rem}
+.meter .bar{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter .bar i{display:block;height:100%;background:var(--sample);border-radius:6px;transition:width .15s}
+.meter .bar.best i{background:var(--good)}
+.meter .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lab{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px}
+@media (max-width:820px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.lab{grid-template-columns:1fr}}
+@media (max-width:620px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:grid;gap:8px;align-content:start}
+.card svg.ic{width:40px;height:40px;stroke:var(--mean);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.card p{font-size:.98rem}
+ol.steps{list-style:none;padding:0;margin:0;display:grid;gap:12px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:42px 1fr;gap:14px;align-items:start}
+ol.steps li::before{content:counter(s);font-family:var(--f-display);font-weight:800;font-size:1.3rem;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--mean)}
+ul.pc{margin:0;padding-left:1.1em;display:grid;gap:8px}
+.pc-good h3{color:var(--good)} .pc-bad h3{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 22px}
+dt{font-weight:700} dd{margin:0;color:var(--muted)}
+@media (max-width:520px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+summary{cursor:pointer;font-weight:700}
+.formula{font-family:var(--f-mono);font-size:.9rem;overflow-x:auto;white-space:pre;padding:12px 0 4px;line-height:1.7}
+.video{margin:0;background:#0B0F16;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video video{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%;background:#0B0F16}
+</style>
+</head>
+<body>
+<style>
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:fit-content;max-width:100%}
+.seg button{border:0;border-radius:0;padding:7px 14px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.qcard{background:var(--hl);border-radius:10px;padding:12px 16px;min-height:3.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--surface);color:var(--ink);font:inherit;font-size:.92rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.situ{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:grid;gap:10px}
+.howto{font-size:.95rem;color:var(--muted);border-left:3px solid var(--line);padding-left:12px}
+.howto b{color:var(--ink)}
+.decs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.dec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 18px;display:grid;gap:10px;align-content:start}
+.dec h3{font-size:1.05rem}
+.dec p{font-size:.93rem;color:var(--muted)}
+.dec p b{color:var(--ink)}
+.try{margin:0;padding-left:22px;display:grid;gap:4px;font-size:.95rem}
+.big3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.big3 div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:grid;gap:4px;align-content:start}
+.big3 b{display:block;font-family:var(--f-display);font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums}
+.big3 span{font-size:.85rem;color:var(--muted)}
+.dec>*{min-width:0}
+.pick{width:100%;font:inherit;font-size:.95rem;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:7px 10px;max-width:100%}
+.pts{cursor:pointer}
+.vis{display:flex;flex-wrap:wrap;gap:6px 14px;font-family:var(--f-mono);font-size:.85rem}
+.vis span{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:3px 8px}
+.leg{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.88rem;color:var(--muted)}
+.leg i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+@media (max-width:620px){.seg{border-radius:14px}}
+</style>
+<main class="wrap">
+
+<header class="hero">
+  <p class="eyebrow"><a data-menu href="index.html#en" target="_self">← Main menu</a> · Neural networks · topic 10 · explained with drawings · <a href="embeddings-technical-en.html" target="_self">see the technical version</a> · <a href="neural-networks-en.html" target="_self">all topics</a> · <a href="embeddings-es.html" target="_self">en español</a></p>
+  <h1>Embeddings</h1>
+  <p class="lede">Categories and words turned into vectors. A network can only do arithmetic with numbers, but much of a fleet's data are names: the truck, the route, the driver, the fault code. An embedding gives each name a few numbers that the network learns on its own while it solves another task. And in the end something curious happens: names that are alike end up with similar numbers, even though nobody told the network how they are alike.</p>
+</header>
+
+<section class="first" aria-label="Interactive toy">
+  <div class="situ col">
+    <p class="eyebrow">The setup</p>
+    <p>When a truck comes into the maintenance shop, the diagnostic reader stores the <strong>fault codes</strong> it had on. Each code is a short label: “P0217” is engine overheating; “C0035”, a wheel sensor. The fleet in the example has <strong>20 codes</strong>, from four systems: engine, exhaust, brakes and electrical. A breakdown usually turns on several codes from the same system at once. This is how the first visits begin:</p>
+    <div class="vis" id="t-vis"></div>
+    <p>The network <strong>does not know</strong> which system each code belongs to: to it, each code is just a number from 0 to 19. We give it a game: we show it one code from a visit and it has to guess which other code is in that same visit. To play, each code has <strong>2 numbers</strong>, its embedding, which start out random and get adjusted along the way. With 2 numbers, each code is a point on a plane: the chart.</p>
+    <p>The network is trained on <strong>400 visits</strong> (2,188 pairs of codes) and we check it on another 1,000 it has not seen. The snapshots in the chart come from that training, done for real.</p>
+  </div>
+  <figure class="fig"><svg id="toy" role="img" aria-label="The 20 fault codes as points on a plane, placed by the 2 numbers of their embedding"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each point is a fault code: its position is the 2 numbers of its embedding. We add the colors so you can see each code's system: <b style="color:var(--point)">engine</b>, <b style="color:var(--sample)">exhaust</b>, <b style="color:var(--mean)">brakes</b> and <b style="color:var(--good)">electrical</b>; the network never sees them. The chosen code has a ring and a line from the center; the thin lines go to its <b>3 neighbors</b>, the codes that point in the most similar direction. Tap any point to choose it.</p>
+  <div class="decs">
+    <div class="dec">
+      <h3>Which code are you looking at?</h3>
+      <select class="pick" id="t-cod" aria-label="Fault code"></select>
+      <p id="t-desc"></p>
+    </div>
+    <div class="dec">
+      <h3>Color by system?</h3>
+      <div class="seg" role="group" aria-label="Colors"><button type="button" id="t-c0" aria-pressed="true">Yes, with colors</button><button type="button" id="t-c1" aria-pressed="false">No, all gray</button></div>
+      <p>Without colors you see the same as the network: points with no system name. The groups form all the same.</p>
+    </div>
+  </div>
+  <div class="controls col">
+    <div class="slider"><label for="t-ep">Point in training <output id="t-ep-o"></output></label><input type="range" id="t-ep" min="0" max="16" step="1" value="16"><div class="ends"><span>at the start (random)</span><span>epoch 60</span></div></div>
+    <div class="btns"><button type="button" class="primary" id="t-play">▶ Watch it form</button></div>
+  </div>
+  <div class="big3" id="t-big"></div>
+  <div class="col stack">
+    <p><strong>Try this, in order:</strong></p>
+    <ol class="try">
+      <li>Move the slider to the start. The points are random: of the 60 neighbors (3 per code), only 16 are from the same system, and the network has the companion code among its top 3 picks 15.0% of the time.</li>
+      <li>Press “Watch it form”. By epoch 5 there are already groups: 48 of 60 neighbors from the same system. At the end, 60 of 60, and the hits go up to 52.7%.</li>
+      <li>Turn the colors off and look again: four groups, each one in a direction. The network found them just by knowing which codes show up together.</li>
+      <li>Choose P0401, the EGR valve. It is an engine part that gets dirty with soot from the exhaust, and its point ends up between the two groups, closer to the exhaust.</li>
+      <li>Choose U0121, “lost communication with the ABS”: it fails because of the battery, but it shows in the brakes. It ends up between the electrical group and the brakes group.</li>
+    </ol>
+  </div>
+  <p class="qcard col" id="t-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">What you just saw</p>
+    <h2>A few numbers per category, learned</h2>
+    <p>An <strong>embedding</strong> is a short list of numbers that stands for a category: here 2 per code, in practice anywhere from 2 to a few hundred. At first they are random numbers. The network adjusts them just like it adjusts its weights, little by little, to do better at its task.</p>
+    <p>The interesting part is the side effect: to guess a code's companions, it pays for the network to give similar numbers to codes that show up with the same companions. That is why codes from the same system end up pointing in the same direction. And “same direction” is measured with the <a href="dot-product-and-cosine-en.html" target="_self">cosine</a>: 1 if two arrows point the same way, 0 if they are at a right angle, −1 if they point opposite ways.</p>
+    <p>The ideas that follow: why one-hot is not enough (1), what an embedding is on the inside (2), how it is learned (3), that directions mean something too (4), how many numbers to use (5) and how to look at embeddings with many numbers (6).</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 1 of 6</p>
+    <h2>One-hot: many columns and all equally far apart</h2>
+    <p>The most direct way to turn a category into numbers is <strong>one-hot</strong>, which already came up in <a href="preparing-features-en.html" target="_self">preparing features</a>: one column per category, with a 1 in its own and 0 in all the others. With 20 codes, 20 columns. It works, but it has two problems.</p>
+    <p>The first is size: a fleet with 5,000 routes needs 5,000 columns, almost all of them zero. The second is that one-hot says all categories are equally different: the <a href="vectors-and-distances-en.html" target="_self">distance</a> between any two codes is always the same.</p>
+  </div>
+  <figure class="fig"><svg id="oh" role="img" aria-label="The one-hot of two codes compared with their embeddings"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, the one-hot of two codes: 20 boxes, one per code, with the 1 in <b style="color:var(--point)">orange</b>. At the bottom, their embeddings from the toy as two arrows from the center: what matters is the angle between them.</p>
+  <div class="decs">
+    <div class="dec"><h3>First code</h3><select class="pick" id="o-a" aria-label="First code"></select></div>
+    <div class="dec"><h3>Second code</h3><select class="pick" id="o-b" aria-label="Second code"></select></div>
+  </div>
+  <div class="controls col">
+    <div class="slider"><label for="o-n">Different categories <output id="o-n-o"></output></label><input type="range" id="o-n" min="0" max="3" step="1" value="0"><div class="ends"><span>20 codes</span><span>50,000 words</span></div></div>
+  </div>
+  <div class="big3 col" id="o-big"></div>
+  <p class="qcard col" id="o-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 2 of 6</p>
+    <h2>On the inside: a row of a table</h2>
+    <p>The embeddings of the 20 codes are stored in a <strong>table</strong> with 20 rows and 2 columns. To give the network a code's embedding, you just take its row: there is nothing to compute.</p>
+    <p>And here is the link with one-hot: if you multiply a code's one-hot by the table, as with <a href="matrices-as-transformations-en.html" target="_self">matrices</a>, each row gets multiplied by its box of the one-hot. The 19 rows multiplied by 0 disappear and only the one with the 1 is left. So an embedding is an ordinary layer like the ones in <a href="the-multilayer-network-en.html" target="_self">topic 3</a>, with the table as its weights, where we skip the multiplications by zero.</p>
+  </div>
+  <figure class="fig"><svg id="tab" role="img" aria-label="A code's one-hot multiplied by the embedding table: only one row survives"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> Each row is a code. On the left, its box of the one-hot (0 or 1). In the middle, its row of the table: the 2 numbers it has learned. On the right, the row multiplied by its box. At the bottom, the sum of all of them: the embedding of the chosen code, in <b style="color:var(--point)">orange</b>. Tap a row to choose another code.</p>
+  <p class="qcard col" id="b-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 3 of 6</p>
+    <h2>How it is learned: only the row that was used moves</h2>
+    <p>To play the companion-guessing game, the network also has an answer vector for each code. A code's <strong>score</strong> as a companion is the <a href="dot-product-and-cosine-en.html" target="_self">dot product</a> of the seen code's embedding with that vector, and the scores are turned into probabilities with the softmax from <a href="output-and-loss-en.html" target="_self">topic 4</a>. If the network misses, the backpropagation from <a href="backpropagation-en.html" target="_self">topic 5</a> nudges the numbers so it does better next time.</p>
+    <p>What is special about an embedding is that in each step <strong>only the row of the code that was used changes</strong>: the others took no part and get no nudge. Here, with 3 codes so you can see it clearly: P0217 (overheating), P0128 (thermostat) and C0035 (wheel sensor). A visit has P0217 and another code. Which one?</p>
+  </div>
+  <figure class="fig"><svg id="paso" role="img" aria-label="One training step: the embedding of P0217 moves; the other two do not"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The filled points are the embeddings of the 3 codes. The hollow diamonds are their answer vectors (P0217 has none: it cannot be its own companion). When you take a step, the embedding of <b style="color:var(--point)">P0217</b> moves (the arrow) and the diamonds adjust a little; the embeddings of P0128 and C0035 stay put. The gray trail marks where it used to be.</p>
+  <div class="decs">
+    <div class="dec"><h3>Which other code was in the visit?</h3><div class="seg" role="group" aria-label="Companion code"><button type="button" id="p-y0" aria-pressed="true">P0128 (thermostat)</button><button type="button" id="p-y1" aria-pressed="false">C0035 (wheel)</button></div><p>The network has to learn that, with P0217, that code shows up.</p></div>
+    <div class="dec"><h3>Steps</h3><div class="btns"><button type="button" class="primary" id="p-go">Take a step</button><button type="button" id="p-re">Start over</button></div><p>Each step is one training pair.</p></div>
+  </div>
+  <div class="controls col">
+    <div class="slider"><label for="p-lr">Step size (learning rate) <output id="p-lr-o"></output></label><input type="range" id="p-lr" min="0.1" max="1" step="0.1" value="0.5"><div class="ends"><span>0.1: baby steps</span><span>1: long strides</span></div></div>
+  </div>
+  <div class="big3 col" id="p-big"></div>
+  <p class="qcard col" id="p-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 4 of 6</p>
+    <h2>Directions mean something too</h2>
+    <p>Another fleet splits its trips into 8 kinds of segment: 4 zones (downtown, industrial, road and highway), each one by day or by night. The network sees only the segment number and learns a 2-number embedding by predicting two things about each trip: fuel consumption (L/100 km) and idling minutes per hour. At night there is less traffic and less fuel is burned, but trucks wait longer at the loading docks with the engine running.</p>
+    <p>Nobody told the network what “night” is. Even so, going from day to night is almost <strong>the same arrow</strong> in all four zones: one direction of the plane means “night”.</p>
+  </div>
+  <figure class="fig"><svg id="dir" role="img" aria-label="The embeddings of the 8 segments and the day-to-night arrows"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> <b style="color:var(--mean)">Blue</b> points, the daytime segments; <b style="color:var(--sample)">purple</b>, the nighttime ones. Each arrow joins a zone by day with the same zone by night. The one for the chosen zone is in <b style="color:var(--point)">orange</b>.</p>
+  <div class="decs">
+    <div class="dec"><h3>Zone</h3><div class="chips" id="d-z" role="group" aria-label="Zone"></div></div>
+    <div class="dec"><h3>Add arrows?</h3><div class="seg" role="group" aria-label="Arrow sum"><button type="button" id="d-s0" aria-pressed="true">No</button><button type="button" id="d-s1" aria-pressed="false">Highway by day + downtown's arrow</button></div><p>Take downtown's “night” arrow and place it on the highway by day. Where does it land?</p></div>
+  </div>
+  <div class="big3 col" id="d-big"></div>
+  <p class="qcard col" id="d-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 5 of 6</p>
+    <h2>How many numbers per category?</h2>
+    <p>You decide the size of the embedding. With very few numbers, the differences don't fit; with too many, the network has more numbers to adjust with the same data and starts memorizing the quirks of the 400 visits. To choose, you try. Here, the same network trained for real with 1, 2, 3, 4, 8 and 16 numbers per code, and with one-hot instead of an embedding.</p>
+  </div>
+  <figure class="fig"><svg id="dim" role="img" aria-label="Loss on the test visits and neighbors from the same system for each embedding size"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> At the top, the <b>loss</b> on the 1,000 test visits: the network's average surprise when it sees the companion code (the cross-entropy from <a href="output-and-loss-en.html" target="_self">topic 4</a>); <b>the lower, the better</b>. The lower dashed line is the best possible (the true probabilities); the upper one, guessing at random. At the bottom, how many of the 60 neighbors are from the same system. The chosen column is in <b style="color:var(--point)">orange</b>.</p>
+  <div class="controls col">
+    <div class="slider"><label for="n-d">Numbers per code <output id="n-d-o"></output></label><input type="range" id="n-d" min="0" max="6" step="1" value="1"><div class="ends"><span>1</span><span>one-hot</span></div></div>
+  </div>
+  <div class="big3 col" id="n-big"></div>
+  <p class="qcard col" id="n-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Idea 6 of 6</p>
+    <h2>Looking at 16 numbers: projecting and finding groups</h2>
+    <p>A 2-number embedding can be drawn as it is. A 16-number one cannot: each code is a point in 16 dimensions. To see it you have to project it onto a plane, and the projection that loses the least is <a href="pca-en.html" target="_self">PCA</a>: it looks for the two directions in which the points are most spread out. You can also look for groups directly in the 16 numbers, with <a href="k-means-en.html" target="_self">k-means</a>, without drawing anything.</p>
+  </div>
+  <figure class="fig"><svg id="pca" role="img" aria-label="The 16-number embedding of the 20 codes, seen in two coordinates or with PCA"></svg></figure>
+  <p class="howto col"><b>How to read the chart.</b> The 20 codes with the 16-number embedding from idea 5. Choose what to look at: two of the 16 coordinates as they are, or the two PCA directions. The color can be the true system or the group k-means finds.</p>
+  <div class="decs">
+    <div class="dec"><h3>What do we look at?</h3><div class="chips" id="c-v" role="group" aria-label="View"></div></div>
+    <div class="dec"><h3>Colors</h3><div class="seg" role="group" aria-label="Colors"><button type="button" id="c-k0" aria-pressed="true">True system</button><button type="button" id="c-k1" aria-pressed="false">k-means groups</button></div></div>
+  </div>
+  <p class="qcard col" id="c-msg"></p>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Putting it all together</p>
+    <h2>How an embedding is used</h2>
+    <ol class="steps">
+      <li><div><strong>Number the categories</strong>: each code, route or truck gets a row number. Keep one row for “unknown”: the new code the manufacturer releases tomorrow will go there.</div></li>
+      <li><div><strong>Create the table</strong>: one row per category and as many numbers as you like (2 here; in practice, from 4 to a few hundred), at random.</div></li>
+      <li><div><strong>Pick a task</strong> that needs to understand the categories: guessing the companion code, a segment's fuel consumption or a route's delay.</div></li>
+      <li><div><strong>Train</strong>: in each step, the network takes the rows it needs and backpropagation adjusts them along with the rest of the weights (topics 5 and 6).</div></li>
+      <li><div><strong>Use the numbers</strong>: as input to other models, to find similar categories by cosine or to find groups.</div></li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">In the real world</p>
+    <h2>Where it shows up in fleet telemetry</h2>
+  </div>
+  <div class="grid2">
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="9" width="28" height="20" rx="3"/><path d="M11 16h8M11 22h12M27 15v8"/></svg><h3>Fault codes</h3><p>With thousands of codes from several manufacturers, the embedding groups the ones that show up together. A new or rare code is understood through its neighbors, and a network that predicts the next breakdown starts from those numbers instead of thousands of columns of zeros.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M6 32c6-2 6-10 14-12s8-10 14-12"/><circle cx="6" cy="32" r="2.5"/><circle cx="34" cy="8" r="2.5"/></svg><h3>Routes, depots and drivers</h3><p>To predict a trip's delay or fuel consumption, each route, depot, truck model and driver has its own embedding. Routes with the same kind of traffic end up close together, and the network learns from all of them at once.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M7 9h26v17H18l-7 6v-6H7z"/><path d="M12 15h16M12 20h10"/></svg><h3>Shop notes</h3><p>“Noise in front wheel”, “leaking oil”: words are categories too. With word embeddings, a network reads the mechanics' notes and the drivers' messages. Language models start the same way: each piece of a word is a row of a huge table.</p></div>
+    <div class="card"><svg class="ic" viewBox="0 0 40 40" aria-hidden="true"><path d="M5 25h20v-9h6l4 5v4h-3"/><circle cx="11" cy="27" r="3"/><circle cx="29" cy="27" r="3"/><path d="M5 16h14"/></svg><h3>Similar trucks</h3><p>With one embedding per truck, learned from its trips, you can find the most similar trucks by cosine: they are useful for comparing fuel consumption with peers or for estimating it for a newly arrived truck. The same numbers are reused in other models.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Connections</p>
+    <h2>With the other topics</h2>
+    <p>The math in this topic is the usual: each embedding is a vector (the <a href="vectors-and-distances-en.html" target="_self">distances</a> of math topic 1), similarity is measured with the <a href="dot-product-and-cosine-en.html" target="_self">cosine</a> of topic 2, and looking up a row is multiplying the one-hot by a <a href="matrices-as-transformations-en.html" target="_self">matrix</a> from topic 3. The starting one-hot is in <a href="preparing-features-en.html" target="_self">preparing features</a>; to look at large embeddings, <a href="pca-en.html" target="_self">PCA</a>, and to group them, <a href="k-means-en.html" target="_self">k-means</a>.</p>
+    <p>In this collection, the companion-guessing task is a softmax with cross-entropy from <a href="output-and-loss-en.html" target="_self">topic 4</a>; the rows are adjusted with <a href="backpropagation-en.html" target="_self">backpropagation</a> and trained with mini-batches and Adam, as in <a href="training-well-en.html" target="_self">topic 6</a>. The <a href="recurrent-networks-and-lstm-en.html" target="_self">recurrent networks</a> of topic 9 read sequences of codes or words, and each element of the sequence goes in as an embedding. Topic 11, attention and Transformers, also starts with an embedding table: the one for the words a language model reads.</p>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">To be fair</p>
+    <h2>What it gives you and what to watch out for</h2>
+  </div>
+  <div class="grid2">
+    <div class="card pc-good"><h3>What it gives you</h3><ul class="pc">
+      <li>Few numbers per category: the toy network learns 100 numbers; with one-hot, 420. With thousands of categories, the difference is huge.</li>
+      <li>Similar categories end up close together, and the cosine measures how close.</li>
+      <li>The network learns it on its own, as a side effect of its task, without labeling anything by hand.</li>
+      <li>The numbers can be reused: in other models, to find similar items or to group them.</li>
+    </ul></div>
+    <div class="card pc-bad"><h3>What to watch out for</h3><ul class="pc">
+      <li>A category that was not there during training has no row: you need to keep an “unknown” row.</li>
+      <li>Rare categories show up little and their numbers end up poorly fitted.</li>
+      <li>The numbers only reflect the task: if the task does not need a difference, the embedding does not learn it.</li>
+      <li>With too many numbers and little data, the neighbors get noisy: with 16 numbers, 55 of 60 neighbors are from the same system; with 2, all 60.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="col stack">
+    <p class="eyebrow">Mini glossary</p>
+    <h2>The jargon, in plain English</h2>
+    <dl>
+      <dt>Category</dt><dd>A value that is a name and not an amount: a fault code, a route, a truck.</dd>
+      <dt>One-hot</dt><dd>One column per category, with a 1 in its own and 0 in the others.</dd>
+      <dt>Embedding</dt><dd>A short list of numbers that stands for a category and that the network learns.</dd>
+      <dt>Embedding table</dt><dd>All those lists together, one row per category.</dd>
+      <dt>Dimension</dt><dd>How many numbers each embedding has.</dd>
+      <dt>Cosine</dt><dd>How alike the directions of two arrows are: 1 the same, 0 at a right angle, −1 opposite.</dd>
+      <dt>Neighbors</dt><dd>The categories with the highest cosine with a given one.</dd>
+      <dt>“Unknown” row</dt><dd>A row kept for the categories that were not seen during training.</dd>
+      <dt>Token</dt><dd>The piece of a word that a language model turns into an embedding.</dd>
+      <dt>Projection</dt><dd>Turning many numbers into two so you can draw them, losing something along the way.</dd>
+    </dl>
+  </div>
+  <details class="col">
+    <summary>For the curious: the math behind it</summary>
+    <p style="padding-top:10px">You don't need them to understand the idea. E is the table (one row per code), u the answer vectors:</p>
+    <div class="formula">look up a row:      embedding(i) = row i of E = one-hot(i) × E
+score:              z_j = embedding(seen) · u_j + b_j
+probability:        p_j = e^z_j / sum of e^z over the other codes (softmax)
+loss:               −ln p(the code that really showed up)
+cosine:             cos(a, b) = a·b / (|a|·|b|)
+
+the toy:     20 codes × 2 numbers = 40 in the table
+             + 20 answer vectors × 2 + 20 biases = 100 numbers
+             one-hot instead: 20 × 20 + 20 = 420 numbers
+             400 visits (2,188 pairs), Adam, 60 epochs
+             test loss 2.490 (one-hot 2.550; best possible 2.394)
+             neighbors from the same system: 16 of 60 at random → 60 of 60
+
+one step (idea 3):  p(P0128) 0.490 → 0.724
+                    cos(P0217, P0128) 0.496 → 0.806
+first layer of 64 neurons with 5,000 categories:
+             one-hot 5,000·64 + 64 = 320,064 weights
+             8-number embedding: 5,000·8 + 8·64 + 64 = 40,576</div>
+  </details>
+</section>
+
+<section aria-label="Summary video">
+  <div class="col stack">
+    <p class="eyebrow">To wrap up</p>
+    <h2 id="v-h">All in one minute</h2>
+    <p>An animated recap: one-hot and its columns of zeros, the table you take a row from, the map of the fault codes forming during training, the neighbors by cosine and words as categories. It has music, so turn the volume up.</p>
+  </div>
+  <figure class="video">
+    <video controls playsinline preload="metadata" poster="data:image/jpeg;base64,/9j//gAPTGF2YzYzLjEuMTAyAP/bAEMACAYGBwYHCAgICAgICQkJCgoKCQkJCQoKCgoKCgwMDAoKCgoKCgoMDAwMDQ4NDQ0MDQ4ODw8PEhIRERUVFRkZH//EAKMAAQACAwEBAQAAAAAAAAAAAAAGBwgFBAMCAQEBAQEBAAAAAAAAAAAAAAAAAAECAxABAAIBAwIDAwQJDgsHBAEFAAECAwQRBRIGITETB0EiUWEUMnE2c7SBckIVlBezUiM0dTNUkXShslWxNRZikqLE0oII0TfUJEOFk0aD01PjJmO1lcHDoxEBAAIDAQEBAQAAAAAAAAAAAAERQSExEgLRYf/AABEIBDgHgAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AKSAdHMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbDhOF1vcPIY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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/Z" aria-label="Animation: embeddings">
+      <source src="embeddings-with-audio-en.mp4" type="video/mp4">
+      Your browser cannot play this video.
+    </video>
+  </figure>
+</section>
+
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---- librería compartida: árboles CART 2D + dibujo ---- */
+const NS="http://www.w3.org/2000/svg";let clipN=0;
+function el(tag,a,p){const e=document.createElementNS(NS,tag);if(a)for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function txt(p,x,y,s,a){const t=el("text",Object.assign({x,y},a||{}),p);t.textContent=s;return t;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0;while(u===0)u=r();const v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+class Plot{
+  constructor(svg,o){this.svg=svg;this.o=Object.assign({W:900,H:380,pad:{l:16,r:16,t:16,b:16},x0:0,x1:10,y0:0,y1:10,xt:[],yt:[],xl:"",yl:"",fx:v=>v,fy:v=>v},o);
+    const {W,H,pad}=this.o;svg.setAttribute("viewBox",`0 0 ${W} ${H}`);const id="tr"+(++clipN);const cp=el("clipPath",{id},el("defs",null,svg));el("rect",{x:pad.l,y:pad.t,width:W-pad.l-pad.r,height:H-pad.t-pad.b},cp);
+    this.clip=`url(#${id})`;this.gBack=el("g",{"clip-path":this.clip},svg);this.gGrid=el("g",null,svg);
+    for(const v of this.o.yt){el("line",{x1:pad.l,x2:W-pad.r,y1:this.sy(v),y2:this.sy(v),class:"g-line"},this.gGrid);txt(this.gGrid,pad.l-7,this.sy(v)+4,this.o.fy(v),{"text-anchor":"end","font-size":12});}
+    for(const v of this.o.xt)txt(this.gGrid,this.sx(v),H-pad.b+19,this.o.fx(v),{"text-anchor":"middle","font-size":12});
+    if(this.o.xl)txt(this.gGrid,W-pad.r,H-3,this.o.xl,{"text-anchor":"end","font-size":12,class:"t-ink"});if(this.o.yl)txt(this.gGrid,pad.l+6,pad.t+12,this.o.yl,{"font-size":12,class:"t-ink"});
+    this.g=el("g",{"clip-path":this.clip},svg);this.top=el("g",null,svg);}
+  sx(x){const {W,pad,x0,x1}=this.o;return pad.l+(x-x0)/(x1-x0)*(W-pad.l-pad.r);}
+  sy(y){const {H,pad,y0,y1}=this.o;return pad.t+(y1-y)/(y1-y0)*(H-pad.t-pad.b);}
+  ix(px){const {W,pad,x0,x1}=this.o;return x0+(px-pad.l)/(W-pad.l-pad.r)*(x1-x0);}
+  iy(py){const {H,pad,y0,y1}=this.o;return y1-(py-pad.t)/(H-pad.t-pad.b)*(y1-y0);}
+  fpath(f,a,b,n){a=a??this.o.x0;b=b??this.o.x1;n=n||300;let d="";for(let i=0;i<=n;i++){const x=a+(b-a)*i/n;d+=(i?"L":"M")+this.sx(x).toFixed(1)+" "+this.sy(f(x)).toFixed(1);}return d;}
+  ppath(P){return P.map((p,i)=>(i?"L":"M")+this.sx(p[0]).toFixed(1)+" "+this.sy(p[1]).toFixed(1)).join("");}
+  toSvg(e){const pt=this.svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const c=this.svg.getScreenCTM();return c?pt.matrixTransform(c.inverse()):null;}
+}
+const giniC=(c0,c1)=>{const n=c0+c1;return n?1-(c0/n)**2-(c1/n)**2:0;};
+/* P: [[x0,x1,clase],...]; devuelve nodo raíz con hijos y caja */
+function buildTree(P,o){o=Object.assign({maxDepth:4,minLeaf:1,box:[0,10,0,10],maxSplits:Infinity},o);let splits=0;
+  function node(idx,depth,box){const c1=idx.reduce((a,i)=>a+P[i][2],0),c0=idx.length-c1,nd={n:idx.length,c0,c1,box,depth,gini:giniC(c0,c1)};
+    if(depth>=o.maxDepth||nd.gini===0||idx.length<2*o.minLeaf||splits>=o.maxSplits)return nd;
+    let best={s:Infinity};
+    for(let j=0;j<2;j++){const ord=idx.slice().sort((a,b)=>P[a][j]-P[b][j]);let l0=0,l1=0;
+      for(let k=1;k<ord.length;k++){const pr=P[ord[k-1]];if(pr[2])l1++;else l0++;const xa=pr[j],xb=P[ord[k]][j];if(xa===xb||k<o.minLeaf||ord.length-k<o.minLeaf)continue;
+        const r0=c0-l0,r1=c1-l1,s=(k*giniC(l0,l1)+(ord.length-k)*giniC(r0,r1))/ord.length;if(s<best.s-1e-12)best={s,j,t:(xa+xb)/2};}}
+    if(!isFinite(best.s)||best.s>=nd.gini-1e-12)return nd;
+    splits++;nd.j=best.j;nd.t=best.t;nd.gain=nd.gini-best.s;
+    const L=idx.filter(i=>P[i][best.j]<=best.t),R=idx.filter(i=>P[i][best.j]>best.t);
+    const bl=box.slice(),br=box.slice();if(best.j===0){bl[1]=best.t;br[0]=best.t;}else{bl[3]=best.t;br[2]=best.t;}
+    nd.L=node(L,depth+1,bl);nd.R=node(R,depth+1,br);return nd;}
+  return node(P.map((_,i)=>i),0,o.box);}
+const leaves=n=>n.L?[...leaves(n.L),...leaves(n.R)]:[n];
+const predictT=(n,x,y)=>{while(n.L)n=((n.j===0?x:y)<=n.t)?n.L:n.R;return n;};
+function drawPartition(pl,g,root,opts){g.textContent="";opts=opts||{};
+  for(const lf of leaves(root)){const [a,b,c,d]=lf.box,p1=lf.n?lf.c1/lf.n:0.5,maj=p1>0.5?1:p1<0.5?0:-1,pur=Math.abs(p1-0.5)*2;
+    el("rect",{x:pl.sx(a),y:pl.sy(d),width:pl.sx(b)-pl.sx(a),height:pl.sy(c)-pl.sy(d),fill:maj===1?"var(--point)":maj===0?"var(--sample)":"var(--muted)","fill-opacity":(0.06+0.26*pur).toFixed(3),stroke:"var(--ink)","stroke-opacity":.35,"stroke-width":1.2},g);}
+  (function walk(n){if(!n.L)return;const [a,b,c,d]=n.box;if(n.j===0)el("line",{x1:pl.sx(n.t),x2:pl.sx(n.t),y1:pl.sy(c),y2:pl.sy(d),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);else el("line",{x1:pl.sx(a),x2:pl.sx(b),y1:pl.sy(n.t),y2:pl.sy(n.t),stroke:"var(--ink)","stroke-width":Math.max(1.2,3.4-n.depth*0.5)},g);walk(n.L);walk(n.R);})(root);}
+/* diagrama del árbol */
+function drawTree(svg,root,o){o=Object.assign({W:520,H:400,names:["x","y"],fmt:v=>v.toFixed(1),yes:"sí",no:"no",labels:null},o);svg.textContent="";svg.setAttribute("viewBox",`0 0 ${o.W} ${o.H}`);
+  const L=leaves(root);if(L.length>16){txt(svg,o.W/2,o.H/2-8,`${L.length} hojas`,{"text-anchor":"middle","font-size":22,class:"t-ink"});txt(svg,o.W/2,o.H/2+18,"demasiado grande para dibujarlo bien",{"text-anchor":"middle","font-size":13});return;}
+  let depth=0;(function d(n){depth=Math.max(depth,n.depth);if(n.L){d(n.L);d(n.R);}})(root);depth-=root.depth;
+  let k=0;const pos=new Map();(function lay(n){if(!n.L){pos.set(n,k++);return;}lay(n.L);lay(n.R);pos.set(n,(pos.get(n.L)+pos.get(n.R))/2);})(root);
+  const X=n=>24+(pos.get(n)+0.5)/L.length*(o.W-48),Y=n=>34+(n.depth-root.depth)/Math.max(1,depth)*(o.H-82);
+  const bw=Math.min(118,(o.W-48)/L.length-6),fs=bw<70?10:12;
+  (function edges(n){if(!n.L)return;for(const [c,lab] of [[n.L,o.yes],[n.R,o.no]]){el("line",{x1:X(n),y1:Y(n)+14,x2:X(c),y2:Y(c)-16,stroke:"var(--muted)","stroke-width":1.4},svg);txt(svg,(X(n)+X(c))/2+(c===n.L?-6:6),(Y(n)+Y(c))/2,lab,{"font-size":10,"text-anchor":c===n.L?"end":"start"});}edges(n.L);edges(n.R);})(root);
+  (function nodes(n){const x=X(n),y=Y(n);if(n.L){const lab=o.labels?o.labels(n):`${o.names[n.j]} ≤ ${o.fmt(n.t,n.j)}?`,w=Math.max(bw,lab.length*fs*0.62+16);el("rect",{x:x-w/2,y:y-15,width:w,height:30,rx:8,fill:"var(--surface)",stroke:"var(--ink)","stroke-width":1.4},svg);txt(svg,x,y+4,lab,{"text-anchor":"middle","font-size":fs,class:"t-ink"});nodes(n.L);nodes(n.R);}
+    else{const p1=n.n?n.c1/n.n:0;el("rect",{x:x-bw/2,y:y-16,width:bw,height:32,rx:16,fill:p1>=0.5?"var(--point)":"var(--sample)","fill-opacity":.22,stroke:p1>=0.5?"var(--point)":"var(--sample)","stroke-width":1.6},svg);
+      txt(svg,x,y-1,o.leafName?o.leafName(p1):(p1>=0.5?"naranja":"violeta"),{"text-anchor":"middle","font-size":fs,class:"t-ink"});txt(svg,x,y+11,`${Math.max(n.c0,n.c1)} de ${n.n}`,{"text-anchor":"middle","font-size":fs-2});}})(root);}
+function dotsP(pl,g,P,r){for(const [x,y,c] of P)el("circle",{cx:pl.sx(x),cy:pl.sy(y),r:r||6,fill:c?"var(--point)":"var(--sample)",stroke:"var(--point-ring)","stroke-width":2},g);}
+
+const D={"cod":["P0217","P0128","P0524","P0087","P0299","P2002","P2463","P20EE","P20B9","P0401","C0035","C0040","C0110","C0265","C0561","P0562","P0620","B1325","U0100","U0121"],"desc":["engine overheating","thermostat: engine does not warm up","low oil pressure","low fuel pressure","turbo: low boost pressure","particulate filter: low efficiency","particulate filter: too much soot","SCR catalyst: low efficiency","AdBlue heater","EGR valve: low flow","left front wheel sensor","right front wheel sensor","ABS pump","ABS valve relay","stability control disabled","low system voltage","alternator: control circuit","battery: low voltage at cranking","lost communication with the engine control unit","lost communication with the ABS"],"sis":["engine","exhaust","brakes","electrical"],"s":[0,0,0,0,0,1,1,1,1,1,2,2,2,2,2,3,3,3,3,3],"pert":[[1.0,0.0,0.0,0.0],[1.0,0.0,0.0,0.0],[1.0,0.0,0.0,0.0],[1.0,0.0,0.0,0.0],[1.0,0.0,0.0,0.0],[0.0,1.0,0.0,0.0],[0.0,1.0,0.0,0.0],[0.0,1.0,0.0,0.0],[0.0,1.0,0.0,0.0],[0.45,0.55,0.0,0.0],[0.0,0.0,1.0,0.0],[0.0,0.0,1.0,0.0],[0.0,0.0,1.0,0.0],[0.0,0.0,1.0,0.0],[0.0,0.0,1.0,0.0],[0.0,0.0,0.0,1.0],[0.0,0.0,0.0,1.0],[0.0,0.0,0.0,1.0],[0.45,0.0,0.0,0.55],[0.0,0.0,0.45,0.55]],"fotos":[0,1,2,3,4,5,6,7,8,9,10,12,15,20,30,40,60],"E":{"0":[[-2.3104,-0.3733],[-1.0608,0.9995],[-0.884,-1.2755],[-0.6232,-0.8664],[-1.2956,1.5236],[0.3237,2.0177],[1.1357,-1.2269],[0.0714,0.338],[0.1535,-0.6333],[-1.2609,-0.727],[-0.02,0.2103],[0.1772,-0.8305],[0.797,0.2117],[0.1356,-0.0339],[0.4605,1.1174],[0.369,-0.1872],[-0.0137,-0.1996],[-1.6564,0.9139],[1.1547,-0.0861],[-1.9612,0.2209]],"1":[[-2.3104,-0.3733],[-1.0608,0.9995],[-0.884,-1.2755],[-0.6232,-0.8664],[-1.2956,1.5236],[0.3237,2.0177],[1.1357,-1.2269],[0.0714,0.338],[0.1535,-0.6333],[-1.2609,-0.727],[-0.02,0.2103],[0.1772,-0.8305],[0.797,0.2117],[0.1356,-0.0339],[0.4605,1.1174],[0.369,-0.1872],[-0.0137,-0.1996],[-1.6564,0.9139],[1.1547,-0.0861],[-1.9612,0.2209]],"2":[[-2.0942,-0.562],[-0.9099,0.7309],[-1.1553,-0.9578],[-0.6367,-0.8913],[-1.3788,1.2945],[0.4207,1.9804],[1.0385,-0.7023],[-0.0918,0.7609],[0.1383,-0.1822],[-1.1087,-0.1956],[0.1602,-0.0877],[0.092,-0.9016],[0.7004,-0.0591],[0.4003,-0.4414],[0.4874,0.692],[0.7948,-0.1883],[0.3679,0.0268],[-1.1275,0.45],[0.851,0.1988],[-1.463,-0.037]],"3":[[-2.2554,-0.6679],[-1.4353,0.4932],[-1.5936,-0.8084],[-1.0746,-0.9031],[-1.8593,1.1775],[0.5462,2.3751],[1.194,-0.2726],[0.25,1.2032],[0.446,0.2577],[-0.8652,0.2698],[0.6381,-0.5684],[0.4865,-1.3101],[1.0174,-0.5715],[0.7526,-0.9425],[0.9198,0.2436],[0.8635,-0.3253],[0.3627,0.0457],[-0.8048,0.1342],[0.3476,0.1647],[-0.9686,-0.2776]],"4":[[-2.3398,-0.5786],[-1.8127,0.3919],[-1.7917,-0.6712],[-1.3898,-0.6875],[-2.1619,0.9515],[0.5848,2.3523],[1.1226,0.4522],[0.5506,1.7036],[0.7393,0.8674],[-0.5494,0.8064],[1.0319,-1.1733],[0.7083,-1.7506],[1.3233,-1.0405],[0.9875,-1.4407],[1.4089,-0.4229],[0.6401,-0.562],[0.1408,-0.07],[-0.585,-0.2255],[-0.2341,-0.0093],[-0.4296,-0.7882]],"5":[[-2.2655,-0.3639],[-1.9657,0.4282],[-1.8641,-0.5168],[-1.6775,-0.4965],[-2.3604,0.6911],[0.582,2.2927],[1.0893,1.0778],[0.5343,1.7004],[0.9068,1.3434],[-0.382,1.1124],[1.2,-1.5123],[0.7023,-1.8039],[1.5627,-1.2322],[1.0571,-1.7521],[1.6708,-0.9236],[0.1922,-0.5847],[-0.0947,-0.4008],[-0.4579,-0.6266],[-0.6711,-0.2246],[-0.0935,-1.0839]],"6":[[-2.1971,-0.1737],[-2.0292,0.4331],[-1.8545,-0.3812],[-1.7434,-0.2927],[-2.3443,0.575],[0.5319,2.0266],[0.9845,1.3501],[0.5515,1.5496],[0.7876,1.5547],[-0.4403,1.2963],[1.3054,-1.4735],[0.8082,-1.5956],[1.733,-1.2037],[1.1627,-1.7758],[1.7658,-1.1731],[-0.1763,-0.7908],[-0.2463,-0.5673],[-0.4562,-0.8763],[-0.8097,-0.3915],[0.0617,-1.2491]],"7":[[-2.2138,0.0035],[-1.974,0.5793],[-1.7751,-0.1576],[-1.8454,-0.1095],[-2.2908,0.5464],[0.5989,1.8811],[0.9523,1.4613],[0.6835,1.5001],[0.8328,1.6756],[-0.4243,1.2883],[1.407,-1.4148],[0.9354,-1.5444],[1.6653,-1.0921],[1.2852,-1.7775],[1.77,-1.2345],[-0.3974,-1.016],[-0.3901,-0.7125],[-0.5547,-1.0232],[-0.9756,-0.5162],[0.0827,-1.2464]],"8":[[-2.175,0.1435],[-2.0,0.6167],[-1.7271,-0.0187],[-1.7539,0.0042],[-2.3025,0.5593],[0.7768,1.7741],[0.877,1.4532],[0.6365,1.3938],[0.7917,1.7896],[-0.4098,1.377],[1.4787,-1.2568],[0.9732,-1.3664],[1.7676,-1.0222],[1.4005,-1.6833],[1.7384,-1.2575],[-0.51,-1.166],[-0.5752,-0.8558],[-0.6425,-1.2421],[-1.0471,-0.5739],[0.1152,-1.3208]],"9":[[-2.1888,0.2157],[-1.941,0.7125],[-1.7384,0.1712],[-1.7478,0.0919],[-2.2274,0.6157],[0.7988,1.752],[0.8072,1.4245],[0.6325,1.3456],[0.7594,1.831],[-0.3703,1.437],[1.6075,-1.1833],[1.1328,-1.2815],[1.8262,-0.8487],[1.4649,-1.5295],[1.7819,-1.2906],[-0.7637,-1.3179],[-0.6425,-1.0092],[-0.7596,-1.3226],[-1.0642,-0.5645],[0.1329,-1.3966]],"10":[[-2.1175,0.3571],[-1.9096,0.7015],[-1.584,0.2149],[-1.6822,0.2053],[-2.2077,0.7064],[0.8173,1.7205],[0.7741,1.4632],[0.6064,1.3783],[0.7274,1.8307],[-0.3825,1.3729],[1.6692,-1.1162],[1.2602,-1.1541],[1.9461,-0.8004],[1.611,-1.4192],[1.6179,-1.2251],[-0.7831,-1.5078],[-0.731,-1.1389],[-0.8449,-1.4645],[-1.1267,-0.6045],[0.1955,-1.4312]],"12":[[-2.0817,0.4989],[-1.9213,0.7984],[-1.4541,0.4029],[-1.4822,0.3108],[-2.199,0.6953],[0.8169,1.6901],[0.7248,1.4394],[0.6221,1.3226],[0.7155,1.8656],[-0.3473,1.4019],[1.6475,-0.998],[1.2502,-0.9262],[1.9912,-0.6629],[1.6579,-1.2281],[1.7018,-1.2051],[-0.9252,-1.6591],[-0.8557,-1.2561],[-0.9291,-1.5423],[-1.2068,-0.6199],[0.1173,-1.45]],"15":[[-1.9883,0.4085],[-1.8105,0.7578],[-1.3777,0.4084],[-1.4018,0.2982],[-2.1117,0.819],[0.8885,1.7199],[0.6581,1.4612],[0.5946,1.3302],[0.6848,1.911],[-0.3146,1.3444],[1.7338,-0.969],[1.2006,-0.8357],[1.9609,-0.6086],[1.6964,-1.1079],[1.7166,-1.1534],[-1.0033,-1.7137],[-0.9786,-1.3514],[-0.9994,-1.4954],[-1.2122,-0.6258],[0.1302,-1.4578]],"20":[[-1.9297,0.4777],[-1.7805,0.7252],[-1.2876,0.4014],[-1.3853,0.2294],[-2.0439,0.8101],[0.8608,1.7368],[0.6337,1.3652],[0.6036,1.3343],[0.6426,1.8428],[-0.2788,1.3362],[1.6465,-0.9739],[1.2762,-0.8773],[1.9882,-0.5865],[1.7745,-1.0515],[1.7174,-1.138],[-0.9507,-1.6674],[-0.9516,-1.2813],[-0.9202,-1.561],[-1.2587,-0.624],[0.1294,-1.4588]],"30":[[-1.8892,0.4945],[-1.7684,0.7581],[-1.1989,0.3927],[-1.4296,0.2649],[-1.976,0.696],[0.8213,1.6304],[0.6516,1.4285],[0.5434,1.2511],[0.6996,1.8548],[-0.2835,1.2751],[1.5966,-0.8707],[1.2298,-0.87],[1.956,-0.6111],[1.6791,-1.0321],[1.6954,-1.1165],[-0.9675,-1.6984],[-0.9158,-1.3211],[-0.9936,-1.5515],[-1.1727,-0.6344],[0.1718,-1.4181]],"40":[[-1.8624,0.4459],[-1.7395,0.6767],[-1.2034,0.4411],[-1.335,0.2494],[-1.9933,0.7091],[0.8087,1.6178],[0.6904,1.3841],[0.5463,1.2607],[0.6654,1.7044],[-0.2866,1.2464],[1.6281,-0.9446],[1.211,-0.8668],[1.92,-0.5939],[1.6247,-0.9776],[1.6695,-1.0856],[-0.8592,-1.5929],[-0.9173,-1.2633],[-0.908,-1.5435],[-1.2574,-0.5816],[0.1686,-1.41]],"60":[[-1.7838,0.3902],[-1.5997,0.6849],[-1.186,0.387],[-1.2856,0.2806],[-1.8944,0.6721],[0.6911,1.6266],[0.6206,1.2637],[0.512,1.17],[0.6559,1.7703],[-0.2508,1.2559],[1.544,-0.8819],[1.2314,-0.8129],[1.8362,-0.5481],[1.5398,-0.929],[1.577,-1.0719],[-0.8814,-1.6303],[-0.836,-1.2251],[-0.8383,-1.4586],[-1.0519,-0.6604],[0.1624,-1.3725]]},"hist":{"0":[3.1821,0.1503],"1":[2.8738,0.2512],"2":[2.7237,0.3478],"3":[2.5758,0.4421],"4":[2.5204,0.4923],"5":[2.5035,0.5119],"6":[2.4988,0.5103],"7":[2.4976,0.5028],"8":[2.4913,0.522],"9":[2.4862,0.5222],"10":[2.4865,0.522],"12":[2.4874,0.5284],"15":[2.4891,0.5268],"20":[2.4867,0.5255],"30":[2.4881,0.5249],"40":[2.4899,0.5224],"60":[2.4895,0.5268]},"vis":[[15,18],[7,9],[6,7,8,9],[11,15,17,19],[16,19],[6,7]],"nvis":400,"npar":2188,"npte":5454,"nv":[116,112,78,108,115,139,150,139,89,157,103,96,66,65,82,124,108,98,121,122],"tramos":{"zonas":["downtown","industrial","road","highway"],"E":[[-2.821,0.6234],[-1.7343,-0.2902],[-0.7554,-1.2954],[-0.0682,-1.7806],[-1.3299,2.2139],[-0.2898,1.12],[0.8617,0.0494],[1.1633,-0.6083]],"pred":[[37.88,15.99],[33.98,11.16],[30.3,6.1],[27.91,3.41],[34.98,20.61],[31.05,15.13],[26.82,9.61],[25.39,6.67]]},"dims":{"1":{"param":60,"te":2.6446,"pureza":30},"2":{"param":100,"te":2.4895,"pureza":60},"3":{"param":140,"te":2.439,"pureza":60},"4":{"param":180,"te":2.4429,"pureza":58},"8":{"param":340,"te":2.4639,"pureza":57},"16":{"param":660,"te":2.4728,"pureza":55},"one-hot":{"param":420,"te":2.5501,"pureza":null}},"ref":2.3939,"azar":2.9444,"E16":[[-1.4562,0.0308,-0.5615,0.3604,-0.1371,-0.6545,0.4124,-0.134,-0.1898,0.017,0.1398,1.6819,0.1306,-0.3163,0.1784,-0.0013],[-0.9003,-0.0573,-0.9663,-0.7718,0.227,0.3419,0.1515,-0.2328,-0.0279,-0.3655,-0.5912,0.5959,-0.769,0.9975,-0.1039,0.019],[-0.3889,0.6163,0.2948,-0.8427,-0.3914,-0.3929,-0.4965,0.3311,-0.0584,0.1548,-0.4318,1.7148,0.2463,0.3902,-0.2121,-0.025],[-1.5396,-0.0351,0.4415,-0.3756,-0.2405,0.1531,0.2881,0.5392,-0.2423,-0.7643,-0.3754,0.2621,0.3624,0.4453,0.0853,0.0367],[-0.7508,0.3356,-0.0816,-0.7742,0.115,0.5484,-0.1792,0.1283,0.1966,-0.1446,-0.2873,1.4149,-0.1603,1.4533,-0.2514,0.0411],[-0.1674,1.0818,-0.4613,0.3493,0.0183,0.479,-0.4602,-0.6607,0.0829,0.3712,0.4033,-0.776,-0.183,0.1209,-0.5098,0.0888],[0.2594,0.5656,-0.3109,0.8152,0.787,-0.3828,-0.8366,-0.2309,0.022,-0.2388,0.1792,-0.7682,-0.003,0.5062,-0.6759,-0.0568],[-0.1732,0.5943,-0.3521,0.8961,1.0271,0.4187,-0.0847,-0.6727,0.063,-0.0717,0.7456,-0.1542,0.0207,0.071,0.7483,-0.0046],[-0.0528,0.7393,-1.1332,0.3238,0.4477,0.5302,-0.7418,-0.4046,0.221,-1.1147,-0.0449,-0.4454,0.1407,-1.6391,-1.1739,-0.0171],[-0.1125,0.6253,-0.5597,-0.2257,-0.697,-0.2946,-0.1696,-1.6585,-0.4992,-0.2494,-0.055,-0.1948,0.4144,0.1516,-0.1718,-0.0168],[0.5711,-0.819,0.9803,-0.0331,-1.0541,0.2772,-1.3067,-0.0158,0.2532,0.2651,0.0048,0.019,-0.309,-0.5337,0.1593,0.0197],[-0.2798,-0.5331,1.2356,-0.2431,0.1083,0.3218,0.3263,-0.3228,0.5123,0.6332,-0.3389,0.2929,-0.0992,-1.5999,0.5596,-0.0344],[-0.3941,-0.568,-0.2695,0.038,-0.0738,0.173,-0.9297,0.4651,-0.3583,0.8213,-1.6454,-1.4956,0.1346,-0.7844,0.6953,0.0254],[-0.043,-0.9146,1.2092,-0.1824,-0.5216,0.1218,-0.3895,-0.3505,-0.4545,0.6879,-0.5492,-0.3765,1.3303,0.0958,0.2192,-0.0224],[-0.033,-0.42,2.1028,0.1026,0.0404,-0.6525,-0.4247,0.5902,0.0718,0.3137,-0.7687,-0.8989,-0.2295,-0.2682,-0.1428,-0.0098],[0.2557,-1.9199,-0.2878,0.3724,0.185,-0.0447,0.7898,0.5552,-0.3974,-0.276,0.4175,-0.0378,0.196,0.3343,-0.9957,-0.0406],[0.5208,-0.2623,-0.3218,1.0734,0.0328,-0.2239,1.5238,0.9115,-0.1683,-0.5122,-0.0171,0.2618,-0.422,-0.1016,-0.4084,0.0459],[0.7932,-1.0785,-0.5384,0.0118,0.1947,-0.0178,0.6078,0.6755,0.5124,0.1146,0.6079,0.0529,1.7652,0.5659,0.1907,0.0464],[-0.0754,-0.2251,-0.3363,0.27,-0.869,0.0595,0.708,0.8754,0.5092,-0.499,0.123,0.0443,-0.1939,0.7667,0.3337,-0.038],[0.6401,-1.0187,0.5173,-0.4039,0.5246,-0.9076,-0.4357,0.8858,-0.2109,0.2591,0.7539,-0.4055,-0.363,-0.1144,-0.0128,-0.0153]],"pca16":[[-1.402,0.6123],[-1.5738,0.266],[-0.8446,0.7997],[-0.5666,0.779],[-1.5839,0.8718],[-0.4949,-1.639],[-0.2159,-1.3251],[-0.636,-1.0996],[-0.6008,-2.2659],[-0.753,-1.1393],[1.4917,-0.0764],[1.2777,0.0642],[1.6762,-0.9127],[1.5295,0.4057],[2.0987,0.2088],[0.1951,1.1495],[-0.4211,0.704],[0.148,1.1194],[-0.5186,0.932],[1.1944,0.5458]],"var16":[0.2249,0.1787],"km16":[2,2,2,2,2,1,1,1,1,1,3,3,3,3,3,0,0,0,0,3]};
+const f1=(v,d)=>{d=d??1;let s=Math.abs(v).toFixed(d);let [i,fr]=s.split(".");if(i.length>3)i=i.replace(/\B(?=(\d{3})+(?!\d))/g,",");s=fr?i+"."+fr:i;return (v<0&&+Math.abs(v).toFixed(d)!==0?"−":"")+s;};
+const pc=(p,d)=>f1(100*+p.toFixed((d??1)+2),d??1)+"%"; // round the fraction first, like Python
+const $=id=>document.getElementById(id);
+const narrowOf=svg=>svg.clientWidth>0&&svg.clientWidth<560;
+const halo=w=>({"paint-order":"stroke",stroke:"var(--surface)","stroke-width":w||6});
+const redraws=[];window.addEventListener("resize",()=>redraws.forEach(g=>g()));
+function chips(box,labels,cb,sel){sel=sel??0;const bs=labels.map((l,i)=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=l;b.setAttribute("aria-pressed",String(i===sel));b.onclick=()=>{bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));cb(i);};box.appendChild(b);return b;});return i=>bs.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));}
+const seg=(ids,cb)=>{const b=ids.map(i=>$(i));const set=i=>b.forEach((y,j)=>y.setAttribute("aria-pressed",String(j===i)));b.forEach((x,i)=>x.onclick=()=>{set(i);cb(i);});return set;};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const SC=["var(--point)","var(--sample)","var(--mean)","var(--good)"];
+const V=D.cod.length;
+/* cosine and neighbors with the same order of sums as modelos.py */
+function coseno(E){const n=E.map(r=>{let a=0;for(const v of r)a+=v*v;return Math.sqrt(a);});
+  return E.map((r,i)=>E.map((q,j)=>{let a=0;for(let k=0;k<r.length;k++)a+=r[k]*q[k];return a/(n[i]*n[j]);}));}
+const vecinos=(S,i,k)=>[...Array(S.length).keys()].filter(j=>j!==i).sort((a,b)=>(S[i][b]-S[i][a])||(a-b)).slice(0,k??3);
+const pureza=E=>{const S=coseno(E);let ok=0;for(let i=0;i<E.length;i++)for(const j of vecinos(S,i))if(D.s[j]===D.s[i])ok++;return ok;};
+const sisDe=i=>{const p=D.pert[i],on=p.map((v,k)=>[v,k]).filter(x=>x[0]>0).sort((a,b)=>b[0]-a[0]);return on.length>1?`between ${D.sis[on[0][1]]} and ${D.sis[on[1][1]]}`:D.sis[on[0][1]];};
+/* a plane with the same scale on both axes (angles look as they are) */
+function plano(svg,b,xr,yr,FS,o){o=o||{};const pad=o.pad??FS*0.8,w=b.w-2*pad,h=b.h-2*pad,s=Math.min(w/(xr[1]-xr[0]),h/(yr[1]-yr[0]));
+  const cx=b.x+b.w/2,cy=b.y+b.h/2,mx=(xr[0]+xr[1])/2,my=(yr[0]+yr[1])/2;
+  const sx=v=>cx+(v-mx)*s,sy=v=>cy-(v-my)*s,L=sx(xr[0]),R=sx(xr[1]),T=sy(yr[1]),B=sy(yr[0]);
+  el("rect",{x:L,y:T,width:R-L,height:B-T,fill:"none",stroke:"var(--line)"},svg);
+  if(o.ejes!==false){if(xr[0]<0&&xr[1]>0)el("line",{x1:sx(0),x2:sx(0),y1:T,y2:B,class:"g-line"},svg);if(yr[0]<0&&yr[1]>0)el("line",{x1:L,x2:R,y1:sy(0),y2:sy(0),class:"g-line"},svg);}
+  return {sx,sy,L,R,T,B,s};}
+/* labels without overlapping: try 8 positions around the point; the priority ones are always placed */
+function etiquetas(svg,items,A,FS){const boxes=[],pts=items.map(it=>[it.x,it.y,it.r||4]);
+  const hit=(x0,y0,x1,y1)=>x0<A.L+2||x1>A.R-2||y0<A.T+2||y1>A.B-2||boxes.some(b=>x0<b[2]&&x1>b[0]&&y0<b[3]&&y1>b[1])||pts.some(p=>p[0]+p[2]>x0&&p[0]-p[2]<x1&&p[1]+p[2]>y0&&p[1]-p[2]<y1);
+  items.slice().sort((a,b)=>(b.pri||0)-(a.pri||0)).forEach(it=>{const fz=it.fz||(FS>20?FS*0.8:FS*0.72),w=it.s.length*fz*0.6,h=fz,r=(it.r||4)+3;
+    const C=[[r,-h*0.5],[-r-w,-h*0.5],[-w/2,-r-h],[-w/2,r],[r*0.7,-r*0.7-h],[r*0.7,r*0.7],[-r*0.7-w,-r*0.7-h],[-r*0.7-w,r*0.7]];
+    let pick=null;for(const [dx,dy] of C){const x0=it.x+dx,y0=it.y+dy;if(!hit(x0,y0,x0+w,y0+h)){pick=[x0,y0];break;}}
+    if(!pick&&it.pri){for(const [dx,dy] of C){const x0=it.x+dx,y0=it.y+dy;if(x0>=A.L&&x0+w<=A.R&&y0>=A.T&&y0+h<=A.B){pick=[x0,y0];break;}}}
+    if(!pick)return;boxes.push([pick[0],pick[1],pick[0]+w,pick[1]+h]);
+    txt(svg,pick[0],pick[1]+h*0.82,it.s,Object.assign({"font-size":fz,"font-weight":it.bold?700:400,style:`fill:${it.col||"var(--ink)"}`},halo(4)));});}
+const flecha=(svg,x1,y1,x2,y2,col,w,extra)=>{const a=Math.atan2(y2-y1,x2-x1),h=w*3.2;el("line",Object.assign({x1,y1,x2:x2-Math.cos(a)*h*0.8,y2:y2-Math.sin(a)*h*0.8,stroke:col,"stroke-width":w},extra||{}),svg);
+  el("path",{d:`M${x2} ${y2}L${x2-h*Math.cos(a-0.45)} ${y2-h*Math.sin(a-0.45)}L${x2-h*Math.cos(a+0.45)} ${y2-h*Math.sin(a+0.45)}Z`,fill:col},svg);};
+function selectCod(sel,i0,cb){D.cod.forEach((c,i)=>{const o=document.createElement("option");o.value=i;o.textContent=`${c} · ${D.desc[i]}`;sel.appendChild(o);});sel.value=i0;sel.addEventListener("change",()=>cb(+sel.value));return i=>{sel.value=i;};}
+const listaV=(S,i)=>vecinos(S,i).map(j=>`<b>${D.cod[j]}</b> (${f1(S[i][j],3)})`).join(", ");
+
+/* ---------- toy: the map of the codes ---------- */
+(function(){const svg=$("toy"),inE=$("t-ep");let sel=D.cod.indexOf("P0401"),col=true,timer=null;
+  $("t-vis").innerHTML=D.vis.map(v=>`<span>${v.map(c=>D.cod[c]).join(" · ")}</span>`).join("");
+  const setSel=selectCod($("t-cod"),sel,i=>{sel=i;draw();});
+  seg(["t-c0","t-c1"],i=>{col=!i;draw();});inE.addEventListener("input",()=>{stop();draw();});
+  let R=0;D.fotos.forEach(ep=>D.E[ep].forEach(r=>r.forEach(v=>{R=Math.max(R,Math.abs(v));})));R=Math.ceil(R*2+0.4)/2;
+  const play=$("t-play");
+  function stop(){if(timer){clearInterval(timer);timer=null;play.textContent="▶ Watch it form";}}
+  play.onclick=()=>{if(timer){stop();return;}inE.value=0;draw();play.textContent="■ Stop";timer=setInterval(()=>{if(+inE.value>=16){stop();return;}inE.value=+inE.value+1;draw();},550);};
+  function draw(){const nw=narrowOf(svg),FS=nw?24:14,W=nw?600:900,H=nw?640:600,k=+inE.value,ep=D.fotos[k],E=D.E[ep],S=coseno(E),vs=vecinos(S,sel);
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const A=plano(svg,{x:0,y:0,w:W,h:H},[-R,R],[-R,R],FS);
+    txt(svg,A.L+6,A.T+FS*0.95,`epoch ${ep}`,Object.assign({"font-size":FS*0.85,"font-weight":700,class:"t-ink"},halo(4)));
+    txt(svg,A.R-6,A.B-FS*0.45,"number 1 →",{"font-size":FS*0.7,"text-anchor":"end"});
+    txt(svg,A.sx(0)+6,A.T+FS*0.95,"↑ number 2",Object.assign({"font-size":FS*0.7},halo(4)));
+    const o=[A.sx(0),A.sy(0)];
+    vs.forEach(j=>el("line",{x1:o[0],y1:o[1],x2:A.sx(E[j][0]),y2:A.sy(E[j][1]),stroke:col?SC[D.s[j]]:"var(--muted)","stroke-width":nw?2:1.4,"stroke-dasharray":"5 4"},svg));
+    el("line",{x1:o[0],y1:o[1],x2:A.sx(E[sel][0]),y2:A.sy(E[sel][1]),stroke:"var(--ink)","stroke-width":nw?3.5:2.5},svg);
+    const r=nw?8:6,items=[];
+    E.forEach((p,i)=>{const x=A.sx(p[0]),y=A.sy(p[1]),c=col?SC[D.s[i]]:"var(--muted)";
+      el("circle",{cx:x,cy:y,r:i===sel?r*1.25:r,fill:c,stroke:"var(--surface)","stroke-width":1.5},svg);
+      if(i===sel)el("circle",{cx:x,cy:y,r:r*2.1,fill:"none",stroke:"var(--ink)","stroke-width":nw?3:2.2},svg);
+      const h=el("circle",{cx:x,cy:y,r:nw?20:13,fill:"transparent",class:"pts"},svg);h.addEventListener("click",()=>{sel=i;setSel(i);draw();});
+      items.push({x,y,s:D.cod[i],r:i===sel?r*2.1:r,pri:i===sel?3:vs.includes(i)?2:0,bold:i===sel||vs.includes(i),col:i===sel?"var(--ink)":col?SC[D.s[i]]:"var(--muted)"});});
+    etiquetas(svg,items,A,FS);
+    const ok=pureza(E),[ce,t3]=D.hist[ep];
+    $("t-ep-o").textContent=ep?`epoch ${ep} of 60`:"before training";
+    $("t-desc").innerHTML=`<b>${D.cod[sel]}</b>: ${D.desc[sel]}. System: ${sisDe(sel)}. It is the seen code in ${D.nv[sel]} training pairs.`;
+    $("t-big").innerHTML=`<div><b>${pc(t3)}</b><span>hits: the companion code is among the 3 the network finds most likely (test visits)</span></div><div><b>${ok} of 60</b><span>neighbors from the same system (3 per code)</span></div><div><b>${f1(S[sel][vs[0]],3)}</b><span>cosine of ${D.cod[sel]} with its nearest neighbor, ${D.cod[vs[0]]}</span></div>`;
+    let m=`<b>${D.cod[sel]}</b> (${D.desc[sel]}) is now at (${f1(E[sel][0],2)}, ${f1(E[sel][1],2)}). Its 3 neighbors: ${listaV(S,sel)}. `;
+    const mismo=vs.filter(j=>D.s[j]===D.s[sel]).length;
+    if(ep===0)m+=`At the start, the numbers are random and the neighbors have nothing to do with it: by chance, ${mismo} of 3 are from its system. Press “Watch it form”.`;
+    else if(k<5)m+=`The network has trained for ${ep} epoch${ep>1?"s":""} and the points start to move: the codes that show up together get closer. There are still ${60-ok} neighbors from another system.`;
+    else if(D.cod[sel]==="P0401")m+=`The EGR valve sends exhaust gases back into the engine: it fails with breakdowns of both systems. Its point sits between the engine and the exhaust, closer to the exhaust, and its cosines (around 0.8) are lower than those inside a group (almost 1).`;
+    else if(D.cod[sel]==="U0121")m+=`“Lost communication with the ABS” shows up with electrical breakdowns (a weak battery), but also with brake ones. Its point sits between the two groups; its neighbors are electrical, with cosines from 0.75 to 0.82.`;
+    else if(D.cod[sel]==="U0100")m+=`“Lost communication with the engine control unit” shows up with electrical and engine breakdowns. Its direction sits between the two groups, closer to the electrical one.`;
+    else m+=`${mismo===3?"All three are from its own system":"Not all of them are from its system"}: ${D.cod[sel]} shows up in visits with the same companions as they do, and the network has given them almost the same directions. Compare with the opposite group: the cosine with ${D.cod[vecinos(S.map(r=>r.map(v=>-v)),sel,1)[0]]} is ${f1(Math.min(...S[sel]),3)}.`;
+    $("t-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 1: one-hot ---------- */
+(function(){const svg=$("oh"),inN=$("o-n"),E=D.E["60"];let a=0,b=1;
+  selectCod($("o-a"),a,i=>{a=i;draw();});selectCod($("o-b"),b,i=>{b=i;draw();});inN.addEventListener("input",draw);
+  const NS=[20,500,5000,50000],NN=["20 codes","500 trucks","5,000 routes","50,000 words"];
+  function draw(){const nw=narrowOf(svg),FS=nw?24:14,W=nw?600:900,n=NS[+inN.value];
+    const top=nw?FS*1.4:FS*1.6,cw=nw?(W-20)/20:(W-150)/20,rh=nw?cw*1.1:30,x0=nw?10:130,lh=nw?FS*1.3:0;
+    const y1=top+lh,y2=y1+rh+FS*0.9+lh,yb=y2+rh+FS*1.6,Hb=nw?360:330,H=yb+Hb;
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    txt(svg,x0,top-FS*0.5,"one-hot: one box per code",{"font-size":FS*0.8,class:"t-ink"});
+    [[a,y1],[b,y2]].forEach(([c,y],r)=>{if(nw)txt(svg,x0,y-FS*0.35,D.cod[c],{"font-size":FS*0.75,"font-weight":700,class:"t-ink"});else txt(svg,x0-12,y+rh*0.68,D.cod[c],{"font-size":FS*0.9,"font-weight":700,"text-anchor":"end",class:"t-ink"});
+      for(let i=0;i<20;i++){const on=i===c;el("rect",{x:x0+i*cw+1.5,y,width:cw-3,height:rh,rx:4,fill:on?"var(--point)":"var(--surface)",stroke:on?"var(--point)":"var(--line)"},svg);
+        txt(svg,x0+i*cw+cw/2,y+rh*0.68,on?"1":"0",{"text-anchor":"middle","font-size":FS*0.72,style:on?"fill:#fff":"",class:on?"":"t-ink","font-weight":on?700:400});}});
+    /* bottom: the embeddings as arrows */
+    let R=0;E.forEach(r=>r.forEach(v=>{R=Math.max(R,Math.abs(v));}));R=Math.ceil(R*2)/2;
+    const A=plano(svg,{x:nw?0:W*0.15,y:yb,w:nw?W:W*0.7,h:Hb},[-R,R],[-R,R],FS,{pad:FS*0.4});
+    txt(svg,A.L+6,A.T+FS*0.95,"their embeddings (2 numbers)",Object.assign({"font-size":FS*0.75,class:"t-ink"},halo(4)));
+    E.forEach((p,i)=>el("circle",{cx:A.sx(p[0]),cy:A.sy(p[1]),r:nw?4:3,fill:"var(--muted)","fill-opacity":.45},svg));
+    const S=coseno(E);
+    [[a,"var(--point)"],[b,"var(--mean)"]].forEach(([c,cl])=>{flecha(svg,A.sx(0),A.sy(0),A.sx(E[c][0]),A.sy(E[c][1]),cl,nw?4:3);});
+    etiquetas(svg,[a,b].map((c,r)=>({x:A.sx(E[c][0]),y:A.sy(E[c][1]),s:D.cod[c],r:8,pri:2-r,bold:true,col:r?"var(--mean)":"var(--point)"})),A,FS);
+    const cs=a===b?1:S[a][b],dOH=a===b?0:Math.SQRT2;
+    $("o-n-o").textContent=NN[+inN.value];
+    $("o-big").innerHTML=`<div><b>${f1(dOH,2)}</b><span>distance between their one-hots (√2 for any two different codes)</span></div><div><b>${a===b?"1":"0"}</b><span>cosine of their one-hots</span></div><div><b style="color:var(--point)">${f1(cs,3)}</b><span>cosine of their embeddings</span></div><div><b>${f1(n*64+64,0)}</b><span>weights in a 64-neuron layer with one-hot (${NN[+inN.value]})</span></div><div><b>${f1(n*8+8*64+64,0)}</b><span>with an 8-number embedding in front</span></div>`;
+    let m;
+    if(a===b)m=`It is the same code: distance 0 and cosine 1, in the one-hot and in the embedding. Pick another one in the second list.`;
+    else m=`In the one-hot, ${D.cod[a]} and ${D.cod[b]} are 1.41 apart and their cosine is 0, like any other pair: the one-hot knows nothing about similarity. Their embeddings say something else: cosine <b>${f1(cs,3)}</b>, ${cs>0.9?"almost the same direction: they show up in the same visits":cs>0.3?"similar directions":cs>-0.3?"almost at a right angle: little in common":"opposite directions: they don't show up together"} (${D.cod[a]}: ${sisDe(a)}; ${D.cod[b]}: ${sisDe(b)}). `;
+    m+=n===20?`And the size: with 20 codes, each row has 19 zeros and a 64-neuron layer needs ${f1(n*64+64,0)} weights. Move the slider.`:`With ${NN[+inN.value]}, each one-hot would have ${f1(n,0)} boxes, ${f1(n-1,0)} of them zero, and the first layer ${f1(n*64+64,0)} weights; with an 8-number embedding in front, ${f1(n*8+8*64+64,0)}: ${f1((n*64+64)/(n*8+8*64+64),1)} times fewer.`;
+    $("o-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 2: the table ---------- */
+(function(){const svg=$("tab"),E=D.E["60"];let sel=0;
+  function draw(){const nw=narrowOf(svg),FS=nw?22:13,W=nw?600:900,rh=nw?30:22,top=FS*2.2,H=top+20*rh+FS*3.2;
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const X=nw?{c:6,o:150,e1:255,e2:345,p1:450,p2:540}:{c:120,o:270,e1:400,e2:490,p1:640,p2:730},hdr={"o":"one-hot","e1":"table row","p1":"row × box"};
+    txt(svg,X.o,top-FS*0.7,hdr.o,{"font-size":FS*0.82,"text-anchor":"middle",class:"t-ink","font-weight":700});
+    txt(svg,(X.e1+X.e2)/2,top-FS*0.7,hdr.e1,{"font-size":FS*0.82,"text-anchor":"middle",class:"t-ink","font-weight":700});
+    txt(svg,(X.p1+X.p2)/2,top-FS*0.7,hdr.p1,{"font-size":FS*0.82,"text-anchor":"middle",class:"t-ink","font-weight":700});
+    for(let i=0;i<20;i++){const y=top+i*rh,on=i===sel,yc=y+rh*0.68,g=el("g",{class:"pts"},svg);
+      el("rect",{x:X.c-4,y:y+1,width:X.p2+60-X.c,height:rh-2,rx:5,fill:on?"var(--point)":"transparent","fill-opacity":on?.14:0},g);
+      txt(g,X.c,yc,D.cod[i],{"font-size":FS*0.8,"font-weight":on?700:400,style:`fill:${SC[D.s[i]]}`});
+      txt(g,X.o,yc,on?"1":"0",{"font-size":FS*0.85,"text-anchor":"middle","font-weight":on?700:400,style:on?"fill:var(--point)":"fill:var(--muted)"});
+      txt(g,(X.o+X.e1)/2-8,yc,"×",{"font-size":FS*0.8,"text-anchor":"middle",style:"fill:var(--muted)"});
+      txt(g,X.e1,yc,f1(E[i][0],2),{"font-size":FS*0.85,"text-anchor":"middle",class:"t-ink"});txt(g,X.e2,yc,f1(E[i][1],2),{"font-size":FS*0.85,"text-anchor":"middle",class:"t-ink"});
+      txt(g,(X.e2+X.p1)/2,yc,"→",{"font-size":FS*0.8,"text-anchor":"middle",style:"fill:var(--muted)"});
+      [0,1].forEach(k=>txt(g,k?X.p2:X.p1,yc,on?f1(E[i][k],2):"0",{"font-size":FS*0.85,"text-anchor":"middle","font-weight":on?700:400,style:on?"fill:var(--point)":"fill:var(--muted)"}));
+      g.addEventListener("click",()=>{sel=i;draw();});}
+    const yS=top+20*rh+FS*0.4;el("line",{x1:X.p1-40,x2:X.p2+40,y1:yS,y2:yS,stroke:"var(--ink)","stroke-width":1.5},svg);
+    txt(svg,X.e2+30,yS+FS*1.5,"sum of all the rows =",{"font-size":FS*0.85,"text-anchor":"end",class:"t-ink"});
+    [0,1].forEach(k=>txt(svg,k?X.p2:X.p1,yS+FS*1.5,f1(E[sel][k],2),{"font-size":FS*0.95,"text-anchor":"middle","font-weight":700,style:"fill:var(--point)"}));
+    $("b-msg").innerHTML=`The one-hot of <b>${D.cod[sel]}</b> has a 1 in row ${sel+1} and 0 in the other 19. Multiplied by the table, 19 rows give (0, 0) and the sum is row ${sel+1} as it is: <b>(${f1(E[sel][0],2)}, ${f1(E[sel][1],2)})</b>, the embedding of ${D.cod[sel]}. The network does the same without multiplying: it goes to row ${sel+1} and copies it. The toy's table has 20 × 2 = 40 numbers; with a 16-number embedding it would have 320, and with 5,000 routes and 16 numbers, 80,000, but each trip would use only 16 of them.`;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 3: one training step ---------- */
+(function(){const svg=$("paso"),inL=$("p-lr"),C=["P0217","P0128","C0035"];
+  const E0=[[0.6,0.2],[0.1,0.5],[0.4,-0.3]],U0=[[0.5,0.5],[0.3,0.8],[0.7,-0.2]];let E,U,b,y=1,n,tray,last;
+  const reset=()=>{E=E0.map(r=>r.slice());U=U0.map(r=>r.slice());b=[0,0,0];n=0;tray=[E[0].slice()];last=null;};reset();
+  const cos=(u,v)=>(u[0]*v[0]+u[1]*v[1])/(Math.hypot(u[0],u[1])*Math.hypot(v[0],v[1]));
+  function probs(){const h=E[0],z=[-Infinity,U[1][0]*h[0]+U[1][1]*h[1]+b[1],U[2][0]*h[0]+U[2][1]*h[1]+b[2]],mx=Math.max(z[1],z[2]),e=z.map(v=>Math.exp(v-mx)),s=e[1]+e[2];return [z,e.map(v=>v/s)];}
+  function paso(){const lr=+inL.value,h=E[0].slice(),[z,p]=probs(),dz=[0,p[1]-(y===1?1:0),p[2]-(y===2?1:0)];
+    const dh=[dz[1]*U[1][0]+dz[2]*U[2][0],dz[1]*U[1][1]+dz[2]*U[2][1]];
+    for(const j of [1,2]){U[j][0]-=lr*dz[j]*h[0];U[j][1]-=lr*dz[j]*h[1];b[j]-=lr*dz[j];}
+    E[0][0]-=lr*dh[0];E[0][1]-=lr*dh[1];n++;tray.push(E[0].slice());last={p:p[y],h,dh,z};}
+  seg(["p-y0","p-y1"],i=>{y=i+1;reset();draw();});
+  $("p-go").onclick=()=>{paso();draw();};$("p-re").onclick=()=>{reset();draw();};inL.addEventListener("input",draw);
+  function draw(){const nw=narrowOf(svg),FS=nw?24:14,W=nw?600:900,H=nw?560:440;
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const all=[...E,...U.slice(1),...tray,[0,0]];let x0=Math.min(...all.map(p=>p[0])),x1=Math.max(...all.map(p=>p[0])),y0=Math.min(...all.map(p=>p[1])),y1=Math.max(...all.map(p=>p[1]));
+    x0=Math.min(-0.2,Math.floor(x0*5-1)/5);x1=Math.max(1,Math.ceil(x1*5+1)/5);y0=Math.min(-0.5,Math.floor(y0*5-1)/5);y1=Math.max(1,Math.ceil(y1*5+1)/5);
+    const A=plano(svg,{x:0,y:0,w:W,h:H},[x0,x1],[y0,y1],FS),r=nw?9:7;
+    if(tray.length>1)el("path",{d:tray.map((p,i)=>(i?"L":"M")+A.sx(p[0]).toFixed(1)+" "+A.sy(p[1]).toFixed(1)).join(""),fill:"none",stroke:"var(--muted)","stroke-width":nw?3:2,"stroke-dasharray":"3 4"},svg);
+    tray.slice(0,-1).forEach(p=>el("circle",{cx:A.sx(p[0]),cy:A.sy(p[1]),r:r*0.55,fill:"var(--muted)","fill-opacity":.6},svg));
+    if(tray.length>1){const p=tray[tray.length-2],q=tray[tray.length-1];flecha(svg,A.sx(p[0]),A.sy(p[1]),A.sx(q[0]),A.sy(q[1]),"var(--point)",nw?4:3);}
+    const items=[],cols=["var(--point)","var(--mean)","var(--good)"];
+    [1,2].forEach(j=>{const x=A.sx(U[j][0]),yy=A.sy(U[j][1]),s=r*1.1;el("path",{d:`M${x} ${yy-s}L${x+s} ${yy}L${x} ${yy+s}L${x-s} ${yy}Z`,fill:"none",stroke:cols[j],"stroke-width":nw?3:2.2},svg);items.push({x,y:yy,s:`answer ${C[j]}`,r:s,pri:1,col:cols[j]});});
+    E.forEach((p,i)=>{const x=A.sx(p[0]),yy=A.sy(p[1]);el("circle",{cx:x,cy:yy,r,fill:cols[i],stroke:"var(--surface)","stroke-width":1.5},svg);items.push({x,y:yy,s:C[i],r,pri:2,bold:true,col:cols[i]});});
+    el("circle",{cx:A.sx(0),cy:A.sy(0),r:3,fill:"var(--muted)"},svg);
+    etiquetas(svg,items,A,FS);
+    const [z,p]=probs(),cy=cos(E[0],E[y]),co=cos(E[0],E[3-y]);
+    $("p-lr-o").textContent=f1(+inL.value,1);
+    $("p-big").innerHTML=`<div><b style="color:var(--point)">${last?pc(last.p,1)+" → ":""}${pc(p[y],1)}</b><span>probability the network gives ${C[y]} as P0217's companion</span></div><div><b>${f1(cos(E[0],E[1]),3)}</b><span>cosine of P0217 with P0128</span></div><div><b>${f1(cos(E[0],E[2]),3)}</b><span>cosine of P0217 with C0035</span></div><div><b>${n} · 1 of 3</b><span>steps taken · table rows that change in each step</span></div>`;
+    let m;
+    if(!n)m=`At the start, the network gives P0128 ${pc(p[1],1)} and C0035 ${pc(p[2],1)}: almost a coin toss. Each one's score is the dot product of P0217's embedding, (0.60, 0.20), with its diamond. Press “Take a step”.`;
+    else{const pr=tray[tray.length-2];m=`Step ${n}: the network gave ${C[y]} ${pc(last.p,1)}; now, <b>${pc(p[y],1)}</b>. P0217's embedding has moved from (${f1(pr[0],2)}, ${f1(pr[1],2)}) to (${f1(E[0][0],2)}, ${f1(E[0][1],2)}): it has turned toward ${C[y]}'s diamond and away from the other one. Its cosine with ${C[y]} is now ${f1(cy,3)}, and with ${C[3-y]}, ${f1(co,3)}. The embeddings of P0128 and C0035 have not moved: the network did not use them for this pair.`;
+      if(n>=6)m+=` If you keep going, the probability gets close to 100%: with a single pair, the network learns it by heart. In real training, thousands of different pairs pull in different directions and the point ends up where it suits most of them.`;
+      else if(+inL.value>=0.9)m+=` With such long steps, each pair moves the point a lot: real training uses shorter steps.`;}
+    $("p-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 4: directions ---------- */
+(function(){const svg=$("dir"),T=D.tramos,E=T.E;let zi=0,suma=false;
+  chips($("d-z"),T.zonas,i=>{zi=i;draw();},0);seg(["d-s0","d-s1"],i=>{suma=!!i;draw();});
+  function draw(){const nw=narrowOf(svg),FS=nw?24:14,W=nw?600:900,H=nw?560:440;
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const q=[E[3][0]+E[4][0]-E[0][0],E[3][1]+E[4][1]-E[0][1]],all=[...E,q];
+    const xr=[Math.floor(Math.min(...all.map(p=>p[0]))*2-1)/2,Math.ceil(Math.max(...all.map(p=>p[0]))*2+1)/2],yr=[Math.floor(Math.min(...all.map(p=>p[1]))*2-1)/2,Math.ceil(Math.max(...all.map(p=>p[1]))*2+1)/2];
+    const A=plano(svg,{x:0,y:0,w:W,h:H},xr,yr,FS),r=nw?8:6,items=[];
+    for(let k=0;k<4;k++){const on=k===zi&&!suma;flecha(svg,A.sx(E[k][0]),A.sy(E[k][1]),A.sx(E[k+4][0]),A.sy(E[k+4][1]),on?"var(--point)":"var(--muted)",on?(nw?4.5:3.2):(nw?2.5:1.8),{"stroke-opacity":on?1:.7});}
+    if(suma){flecha(svg,A.sx(E[0][0]),A.sy(E[0][1]),A.sx(E[4][0]),A.sy(E[4][1]),"var(--point)",nw?4:3);
+      flecha(svg,A.sx(E[3][0]),A.sy(E[3][1]),A.sx(q[0]),A.sy(q[1]),"var(--point)",nw?4:3,{"stroke-dasharray":"7 5"});
+      el("circle",{cx:A.sx(q[0]),cy:A.sy(q[1]),r:r*1.6,fill:"none",stroke:"var(--point)","stroke-width":nw?3:2.2},svg);
+      items.push({x:A.sx(q[0]),y:A.sy(q[1]),s:"sum",r:r*1.6,pri:3,bold:true,col:"var(--point)"});}
+    E.forEach((p,c)=>{const x=A.sx(p[0]),y=A.sy(p[1]),noche=c>=4;el("circle",{cx:x,cy:y,r,fill:noche?"var(--sample)":"var(--mean)",stroke:"var(--surface)","stroke-width":1.5},svg);
+      items.push({x,y,s:`${T.zonas[c%4]} ${noche?"night":"day"}`,r,pri:(c%4===zi)?2:1,bold:c%4===zi,col:noche?"var(--sample)":"var(--mean)"});});
+    etiquetas(svg,items,A,FS);
+    const v=[E[zi+4][0]-E[zi][0],E[zi+4][1]-E[zi][1]],P=T.pred,d=E.map(p=>Math.hypot(p[0]-q[0],p[1]-q[1])),ord=d.map((x,i)=>[x,i]).sort((a,b)=>a[0]-b[0]);
+    $("d-big").innerHTML=suma?`<div><b style="color:var(--point)">${f1(ord[0][0],2)}</b><span>distance from the sum to ${T.zonas[ord[0][1]%4]} ${ord[0][1]>=4?"night":"day"}, the nearest segment</span></div><div><b>${f1(ord[1][0],2)}</b><span>to the next one, ${T.zonas[ord[1][1]%4]} ${ord[1][1]>=4?"night":"day"}</span></div>`
+      :`<div><b style="color:var(--point)">${f1(Math.hypot(v[0],v[1]),2)}</b><span>length of the day-to-night arrow (${T.zonas[zi]})</span></div><div><b>${f1(Math.atan2(v[1],v[0])*180/Math.PI,1)}°</b><span>its angle with the horizontal axis</span></div><div><b>${f1(P[zi][0],1)} → ${f1(P[zi+4][0],1)}</b><span>L/100 km the network predicts, by day and by night</span></div><div><b>${f1(P[zi][1],1)} → ${f1(P[zi+4][1],1)}</b><span>idling minutes per hour, by day and by night</span></div>`;
+    const ang=[0,1,2,3].map(k=>f1(Math.atan2(E[k+4][1]-E[k][1],E[k+4][0]-E[k][0])*180/Math.PI,1)+"°");
+    $("d-msg").innerHTML=suma?`Downtown's “night” arrow, placed on the highway by day, lands ${f1(ord[0][0],2)} from <b>highway night</b>, the nearest segment (road night is ${f1(ord[1][0],2)} away). It is the fleet version of a famous word-embedding trick: “king − man + woman” lands close to “queen”. It is not exact, because each zone changes a bit differently at night and the data are noisy, but the direction is there.`
+      :`In the “${T.zonas[zi]}” zone, the network predicts ${f1(P[zi][0],1)} L/100 km by day and ${f1(P[zi+4][0],1)} by night, and idling goes from ${f1(P[zi][1],1)} to ${f1(P[zi+4][1],1)} minutes per hour. The four day-to-night arrows point almost the same way (${ang.join(", ")}) and have similar lengths: the network uses one direction of the plane for “night” and another for “quieter zone”. Nobody gave it those directions: they come from the fact that at night everything changes in roughly the same way.`;}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 5: the dimension ---------- */
+(function(){const svg=$("dim"),inD=$("n-d"),K=["1","2","3","4","8","16","one-hot"],NM=["1","2","3","4","8","16","one-hot"];
+  inD.addEventListener("input",draw);
+  function draw(){const nw=narrowOf(svg),FS=nw?24:14,W=nw?600:900,H=nw?640:470,k=+inD.value,dm=D.dims;
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const L=nw?FS*3.2:FS*4.2,R=W-FS*0.8,h1=H*0.5,T1=FS*2.2,B1=h1-FS*1.6,T2=h1+FS*1.6,B2=H-FS*3.4,xs=i=>L+(i+0.5)*(R-L)/7;
+    const y0=2.35,y1=3.0,sy=v=>B1-(v-y0)/(y1-y0)*(B1-T1);
+    txt(svg,L,T1-FS*0.8,"test loss (lower is better)",{"font-size":FS*0.8,class:"t-ink"});
+    for(const v of [2.4,2.6,2.8,3.0]){el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),class:"g-line"},svg);txt(svg,L-6,sy(v)+FS*0.3,f1(v,1),{"font-size":FS*0.75,"text-anchor":"end"});}
+    [[D.ref,"best possible"],[D.azar,"random guess"]].forEach(([v,s])=>{el("line",{x1:L,x2:R,y1:sy(v),y2:sy(v),stroke:"var(--good)","stroke-width":1.6,"stroke-dasharray":"6 5"},svg);txt(svg,R-4,v<2.5?sy(v)+FS*0.95:sy(v)-FS*0.35,`${s}: ${f1(v,3)}`,Object.assign({"font-size":FS*0.72,"text-anchor":"end",style:"fill:var(--good)"},halo(4)));});
+    el("path",{d:K.slice(0,6).map((key,i)=>(i?"L":"M")+xs(i)+" "+sy(dm[key].te)).join(""),fill:"none",stroke:"var(--muted)","stroke-width":nw?3:2},svg);
+    K.forEach((key,i)=>{const on=i===k;el("circle",{cx:xs(i),cy:sy(dm[key].te),r:on?(nw?11:8):(nw?7:5),fill:on?"var(--point)":"var(--muted)",stroke:"var(--surface)","stroke-width":1.5},svg);
+      if(on)txt(svg,xs(i),sy(dm[key].te)-FS*0.9,f1(dm[key].te,3),Object.assign({"font-size":FS*0.8,"text-anchor":"middle","font-weight":700,style:"fill:var(--point)"},halo(4)));});
+    txt(svg,L,T2-FS*0.8,"neighbors from the same system (of 60)",{"font-size":FS*0.8,class:"t-ink"});
+    const sy2=v=>B2-v/70*(B2-T2),bw=(R-L)/7*0.55;
+    for(const v of [0,30,60]){el("line",{x1:L,x2:R,y1:sy2(v),y2:sy2(v),class:"g-line"},svg);txt(svg,L-6,sy2(v)+FS*0.3,String(v),{"font-size":FS*0.75,"text-anchor":"end"});}
+    K.forEach((key,i)=>{const on=i===k,p=dm[key].pureza;
+      if(p==null)txt(svg,xs(i),B2-FS*0.4,"—",{"font-size":FS*0.9,"text-anchor":"middle",style:"fill:var(--muted)"});
+      else{el("rect",{x:xs(i)-bw/2,y:sy2(p),width:bw,height:B2-sy2(p),fill:on?"var(--point)":"var(--muted)","fill-opacity":on?1:.5},svg);txt(svg,xs(i),sy2(p)-FS*0.35,String(p),{"font-size":FS*0.75,"text-anchor":"middle","font-weight":on?700:400,class:"t-ink"});}
+      txt(svg,xs(i),B2+FS*1.15,NM[i],{"font-size":i===6&&nw?FS*0.66:FS*0.8,"text-anchor":"middle","font-weight":on?700:400,class:on?"t-ink":""});});
+    txt(svg,L,H-FS*0.4,"numbers per code",{"font-size":FS*0.78,class:"t-ink"});
+    const key=K[k],x=dm[key];
+    $("n-d-o").textContent=k===6?"one-hot (no embedding)":`${key} number${key==="1"?"":"s"}`;
+    $("n-big").innerHTML=`<div><b>${x.param}</b><span>numbers the whole network learns</span></div><div><b style="color:var(--point)">${f1(x.te,3)}</b><span>loss on the test visits</span></div><div><b>${x.pureza==null?"—":x.pureza+" of 60"}</b><span>neighbors from the same system</span></div>`;
+    const MS={"1":`With <b>1 number</b>, each code is a point on a line: the four systems don't fit apart, and only 30 of 60 neighbors are from their system. The loss, ${f1(x.te,3)}, is the worst of the embeddings.`,
+      "2":`With <b>2 numbers</b>, the toy: 100 numbers in total, loss ${f1(x.te,3)} and all 60 neighbors from their system. Four groups fit in a plane, one in each direction.`,
+      "3":`With <b>3 numbers</b>, the best loss, ${f1(x.te,3)}, very close to the best possible (${f1(D.ref,3)}), with only 140 numbers. There is room for the four groups and for the codes that sit halfway.`,
+      "4":`With <b>4 numbers</b>, ${f1(x.te,3)}: the same as with 3. There is nothing more to learn from the visits, and each extra number only gives more room to chance.`,
+      "8":`With <b>8 numbers</b>, the loss goes up to ${f1(x.te,3)}: the network learns details of the 400 visits that do not repeat in the test ones. The neighbors start to fail: ${x.pureza} of 60.`,
+      "16":`With <b>16 numbers</b>, 660 in total, loss ${f1(x.te,3)} and ${x.pureza} of 60 neighbors from their system. There are more numbers to fit than data to fit them with: part of what is left is noise from the starting point.`,
+      "one-hot":`With <b>one-hot</b>, no embedding, each code has its own row of 20 scores: 420 numbers. Its loss, ${f1(x.te,3)}, is worse than that of any embedding with 2 or more numbers: it learns each pair separately and overfits the 400 visits. And it gives no map and no neighbors.`};
+    $("n-msg").innerHTML=MS[key]+(k===1||k===2?" Rule of thumb: start with few numbers, try more, and keep the smallest one that does not make the loss worse on data the network has not seen.":"");}
+  redraws.push(draw);draw();})();
+
+/* ---------- idea 6: 16 numbers, projected ---------- */
+(function(){const svg=$("pca"),E=D.E16,P=D.pca16;let vi=2,km=false;
+  chips($("c-v"),["coordinates 1 and 2","coordinates 3 and 4","PCA"],i=>{vi=i;draw();},2);seg(["c-k0","c-k1"],i=>{km=!!i;draw();});
+  /* each k-means group is drawn with the color of the system that appears most in it */
+  const kc=[0,1,2,3].map(c=>{const n=[0,0,0,0];D.km16.forEach((g,i)=>{if(g===c)n[D.s[i]]++;});return n.indexOf(Math.max(...n));});
+  function draw(){const nw=narrowOf(svg),FS=nw?24:14,W=nw?600:900,H=nw?600:480;
+    svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.textContent="";
+    const XY=vi===2?P:E.map(r=>vi?[r[2],r[3]]:[r[0],r[1]]);
+    const xr=[Math.floor(Math.min(...XY.map(p=>p[0]))*2-1)/2,Math.ceil(Math.max(...XY.map(p=>p[0]))*2+1)/2],yr=[Math.floor(Math.min(...XY.map(p=>p[1]))*2-1)/2,Math.ceil(Math.max(...XY.map(p=>p[1]))*2+1)/2];
+    const A=plano(svg,{x:0,y:0,w:W,h:H},xr,yr,FS),r=nw?8:6,items=[];
+    txt(svg,A.L+6,A.T+FS*0.95,vi===2?`PCA: ${pc(D.var16[0]+D.var16[1],1)} of the variation`:`coordinates ${vi?"3 and 4":"1 and 2"} of 16`,Object.assign({"font-size":FS*0.8,"font-weight":700,class:"t-ink"},halo(4)));
+    XY.forEach((p,i)=>{const x=A.sx(p[0]),y=A.sy(p[1]),c=km?SC[kc[D.km16[i]]]:SC[D.s[i]],dist=km&&kc[D.km16[i]]!==D.s[i];
+      el("circle",{cx:x,cy:y,r,fill:c,stroke:"var(--surface)","stroke-width":1.5},svg);
+      if(dist)el("circle",{cx:x,cy:y,r:r*2,fill:"none",stroke:"var(--ink)","stroke-width":2,"stroke-dasharray":"3 3"},svg);
+      items.push({x,y,s:D.cod[i],r:dist?r*2:r,pri:dist?2:0,col:c});});
+    etiquetas(svg,items,A,FS);
+    const out=D.km16.map((g,i)=>kc[g]!==D.s[i]?i:-1).filter(i=>i>=0);
+    let m=vi===2?`PCA keeps ${pc(D.var16[0]+D.var16[1],1)} of the variation of the 16 numbers (${pc(D.var16[0],1)} + ${pc(D.var16[1],1)}). Engine, exhaust and brakes look separate; the electrical codes stay stuck to the engine. It is not that the network mixes them up: the plane that best summarizes the 16 numbers just has no room to separate everything.`
+      :`Two single coordinates out of the 16, as they are. You can guess something, but the groups mix: each coordinate on its own means nothing, because the network spreads each difference across several of them. That is why you need a projection like PCA.`;
+    m+=km?` <b>k-means</b>, working on the 16 numbers (normalized, to compare directions), finds 4 groups that match the systems except ${out.map(i=>D.cod[i]).join(", ")} (ringed), which k-means puts with the ${D.sis[kc[D.km16[out[0]]]]} codes: it also shows up in brake breakdowns.`:` Press “k-means groups” to see the groups that come out of the 16 numbers, without projecting.`;
+    $("c-msg").innerHTML=m;}
+  redraws.push(draw);draw();})();
+
+})();
+</script>
+</body>
+</html>
